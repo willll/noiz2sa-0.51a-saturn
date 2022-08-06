@@ -38,4 +38,4 @@ build/*
 
 src/bulletml/bin/*
 SDL/SDL-1.2-release-1.2.5/*
-SDL/SDL_mixer-1.2.7/*
+SDL_mixer/SDL_mixer-1.2.7/*
