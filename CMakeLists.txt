@@ -18,10 +18,9 @@ set(SEGASGL $ENV{SATURN_SGL})
 set(SATURN_COMMON $ENV{SATURN_COMMON})
 set(SATURN_CMAKE $ENV{SATURN_CMAKE})
 
-set(TARGET_NAME noiz2sa)
-set(TARGET_PATH noiz2sa)
+add_subdirectory(src/bulletml)
 
-project( ${TARGET_NAME} VERSION 1.0
+project( noiz2sa VERSION 1.0
                   DESCRIPTION "Sega Saturn noiz2sa"
                   LANGUAGES C CXX ASM)
 
@@ -41,7 +40,7 @@ set(cxx_flags
         -Wdeprecated-declarations   # FIXME!
          )
 
-set(SOURCES
+set(SOURCES_NOIZ2SA
 
   SDL/src/SDL.c
   SDL/src/SDL_error.c
@@ -126,10 +125,10 @@ add_compile_definitions(MODEL_S
                         NO_SIGNAL_H
                         )
 
-add_executable( ${TARGET_NAME}.elf ${SOURCES} )
+add_executable( noiz2sa.elf ${SOURCES_NOIZ2SA} )
 
 target_include_directories(
-    ${TARGET_NAME}.elf PUBLIC
+    noiz2sa.elf PUBLIC
     .
     src
     sdl
@@ -139,11 +138,11 @@ target_include_directories(
     #${SEGALIB}/include
     )
 
-target_compile_options(${TARGET_NAME}.elf PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
+target_compile_options(noiz2sa.elf PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
                                                  $<$<COMPILE_LANGUAGE:C>:${c_flags}> )
 
-target_link_options(${TARGET_NAME}.elf PUBLIC
-    "SHELL:-Xlinker -Map -Xlinker ${TARGET_NAME}.map"
+target_link_options(noiz2sa.elf PUBLIC
+    "SHELL:-Xlinker -Map -Xlinker noiz2sa.map"
     "SHELL:-Xlinker --strip-debug"
     "SHELL:-Xlinker -fno-lto"
     "SHELL:-m2 -nostartfiles"
@@ -151,12 +150,12 @@ target_link_options(${TARGET_NAME}.elf PUBLIC
     "SHELL:-lc -lgcc -lm"
 )
 
-target_link_libraries (${TARGET_NAME}.elf PUBLIC ${BULLETML_LIBRARIES})
+target_link_libraries (noiz2sa.elf PUBLIC bulletml)
 
-#target_link_libraries(${TARGET_NAME}.elf PUBLIC ${SEGASGL}/lib/libsgl.a )
-#target_link_libraries(${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_scl.a )
-#target_link_libraries(${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_mth.a )
-#target_link_libraries(${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_spr.a )
-#target_link_libraries(${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_cdc.a )
-#target_link_libraries(${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_per.a )
-#target_link_libraries(${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_int.a )
+#target_link_libraries(noiz2sa.elf PUBLIC ${SEGASGL}/lib/libsgl.a )
+#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_scl.a )
+#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_mth.a )
+#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_spr.a )
+#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_cdc.a )
+#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_per.a )
+#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_int.a )
