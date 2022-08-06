@@ -9,16 +9,19 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 set(CMAKE_STATIC_LIBRARY_SUFFIX ".a")
 set(CMAKE_STATIC_LIBRARY_PREFIX "")
 
-set(BULLETML_INSTALL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/bulletml/")
-set(BULLETML_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/src/bulletml/lib/bulletml.a")
-
 set(SEGALIB $ENV{SATURN_SBL}/segalib)
 set(SEGASGL $ENV{SATURN_SGL})
 
 set(SATURN_COMMON $ENV{SATURN_COMMON})
 set(SATURN_CMAKE $ENV{SATURN_CMAKE})
 
+set(SDL_LIB ${CMAKE_SOURCE_DIR}/SDL)
+set(SDL_MIXER_LIB ${CMAKE_SOURCE_DIR}/SDL_mixer)
+
+
 add_subdirectory(src/bulletml)
+add_subdirectory(${SDL_LIB})
+add_subdirectory(${SDL_MIXER_LIB})
 
 project( noiz2sa VERSION 1.0
                   DESCRIPTION "Sega Saturn noiz2sa"
@@ -41,48 +44,6 @@ set(cxx_flags
          )
 
 set(SOURCES_NOIZ2SA
-
-  SDL/src/SDL.c
-  SDL/src/SDL_error.c
-  SDL/src/SDL_fatal.c
-  SDL/src/file/SDL_rwops.c
-  SDL/src/video/SDL_surface.c
-  SDL/src/video/SDL_video.c
-  SDL/src/video/SDL_pixels.c
-  SDL/src/video/SDL_bmp.c
-  SDL/src/video/SDL_cursor.c
-  SDL/src/video/SDL_RLEaccel.c
-  SDL/src/video/SDL_blit.c
-  SDL/src/video/SDL_blit_0.c
-  SDL/src/video/SDL_blit_1.c
-  SDL/src/video/SDL_blit_N.c
-  SDL/src/video/SDL_blit_A.c
-  SDL/src/timer/SDL_timer.c
-  SDL/src/timer/saturn/SDL_systimer.c
-  SDL/src/audio/SDL_audio.c
-  SDL/src/audio/SDL_wave.c
-  SDL/src/audio/SDL_mixer.c
-  SDL/src/audio/SDL_audiomem.c
-  SDL/src/audio/SDL_audiocvt.c
-  SDL/src/thread/SDL_thread.c
-  SDL/src/thread/saturn/SDL_systhread.c
-  SDL/src/thread/saturn/SDL_syscond.c
-  SDL/src/thread/saturn/SDL_sysmutex.c
-  SDL/src/thread/saturn/SDL_syssem.c
-  SDL/src/events/SDL_events.c
-  SDL/src/events/SDL_keyboard.c
-  SDL/src/events/SDL_mouse.c
-  SDL/src/events/SDL_active.c
-  SDL/src/events/SDL_quit.c
-  SDL/src/events/SDL_resize.c
-  SDL/src/endian/SDL_endian.c
-  SDL/src/joystick/SDL_joystick.c
-  SDL/src/joystick/saturn/SDL_sysjoystick.c
-
-  SDL/SDL_mixer/music.c
-  SDL/SDL_mixer/effects_internal.c
-  SDL/SDL_mixer/mixer.c
-  SDL/SDL_mixer/load_aiff.c
 
   ${SATURN_COMMON}/crt0.s
 
@@ -113,16 +74,6 @@ set(CD_FILES
 
 add_compile_definitions(MODEL_S
                         _SH
-                        DISABLE_AUDIO
-                        DISABLE_VIDEO
-                        DISABLE_JOYSTICK
-                        DISABLE_CDROM
-                        DISABLE_TIMERS
-                        DISABLE_THREADS
-                        DISABLE_EVENTS
-                        DISABLE_ENDIAN
-                        DISABLE_FILE
-                        NO_SIGNAL_H
                         )
 
 add_executable( noiz2sa.elf ${SOURCES_NOIZ2SA} )
@@ -133,7 +84,7 @@ target_include_directories(
     src
     sdl
     SDL/include
-    SDL/SDL_mixer
+    SDL_mixer
     ${BULLETML_INCLUDE_DIRS}
     #${SEGALIB}/include
     )
@@ -150,7 +101,7 @@ target_link_options(noiz2sa.elf PUBLIC
     "SHELL:-lc -lgcc -lm"
 )
 
-target_link_libraries (noiz2sa.elf PUBLIC bulletml)
+target_link_libraries (noiz2sa.elf PUBLIC bulletml sdl sdl_mixer)
 
 #target_link_libraries(noiz2sa.elf PUBLIC ${SEGASGL}/lib/libsgl.a )
 #target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_scl.a )
