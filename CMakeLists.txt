@@ -101,7 +101,7 @@ target_link_options(noiz2sa.elf PUBLIC
     "SHELL:-lc -lgcc -lm"
 )
 
-target_link_libraries (noiz2sa.elf PUBLIC bulletml sdl sdl_mixer)
+target_link_libraries (noiz2sa.elf PUBLIC bulletml sdl_mixer sdl )
 
 #target_link_libraries(noiz2sa.elf PUBLIC ${SEGASGL}/lib/libsgl.a )
 #target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_scl.a )
