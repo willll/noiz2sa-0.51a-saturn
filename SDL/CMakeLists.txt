@@ -48,6 +48,10 @@ set(SOURCES
   src/video/SDL_blit_1.c
   src/video/SDL_blit_N.c
   src/video/SDL_blit_A.c
+  src/video/SDL_bmp.c
+  src/video/dummy/SDL_nullevents.c
+  src/video/dummy/SDL_nullmouse.c
+  src/video/dummy/SDL_nullvideo.c
   src/timer/SDL_timer.c
   src/timer/saturn/SDL_systimer.c
   src/audio/SDL_audio.c
@@ -75,14 +79,15 @@ set(SOURCES
 add_compile_definitions(MODEL_S
                         _SH
                         DISABLE_AUDIO
-                        DISABLE_VIDEO
+  #                      DISABLE_VIDEO
+                        ENABLE_DUMMYVIDEO
                         DISABLE_JOYSTICK
                         DISABLE_CDROM
                         DISABLE_TIMERS
                         DISABLE_THREADS
                         DISABLE_EVENTS
                         DISABLE_ENDIAN
-                        DISABLE_FILE
+  #                      DISABLE_FILE
                         NO_SIGNAL_H
                         )
 
@@ -93,6 +98,8 @@ target_include_directories(
     sdl PUBLIC
     .
     src
+    src/events
+    src/video
     include
     )
 
