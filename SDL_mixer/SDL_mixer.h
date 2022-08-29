@@ -126,8 +126,8 @@ extern DECLSPEC int SDLCALL Mix_AllocateChannels(int numchans);
 extern DECLSPEC int SDLCALL Mix_QuerySpec(int *frequency,Uint16 *format,int *channels);
 
 /* Load a wave file or a music (.mod .s3m .it .xm) file */
-extern DECLSPEC Mix_Chunk * SDLCALL Mix_LoadWAV_RW(SDL_RWops *src, int freesrc);
-#define Mix_LoadWAV(file)	Mix_LoadWAV_RW(SDL_RWFromFile(file, "rb"), 1)
+//extern DECLSPEC Mix_Chunk * SDLCALL Mix_LoadWAV_RW(SDL_RWops *src, int freesrc);
+//#define Mix_LoadWAV(file)	Mix_LoadWAV_RW(SDL_RWFromFile(file, "rb"), 1)
 extern DECLSPEC Mix_Music * SDLCALL Mix_LoadMUS(const char *file);
 
 /* Load a music file from an SDL_RWop object (Ogg and MikMod specific currently)
@@ -172,9 +172,9 @@ extern DECLSPEC void * SDLCALL Mix_GetMusicHookData(void);
 
 /*
  * Add your own callback when a channel has finished playing. NULL
- *  to disable callback. The callback may be called from the mixer's audio 
+ *  to disable callback. The callback may be called from the mixer's audio
  *  callback or it could be called as a result of Mix_HaltChannel(), etc.
- *  do not call SDL_LockAudio() from this callback; you will either be 
+ *  do not call SDL_LockAudio() from this callback; you will either be
  *  inside the audio callback, or SDL_mixer will explicitly lock the audio
  *  before calling your callback.
  */
@@ -255,7 +255,7 @@ typedef void (*Mix_EffectDone_t)(int chan, void *udata);
  *
  * After all these effects have finished processing, the callback registered
  *  through Mix_SetPostMix() runs, and then the stream goes to the audio
- *  device. 
+ *  device.
  *
  * DO NOT EVER call SDL_LockAudio() from your callback function!
  *

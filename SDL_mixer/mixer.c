@@ -394,110 +394,110 @@ int Mix_QuerySpec(int *frequency, Uint16 *format, int *channels)
  */
 
 /* Load a wave file */
-Mix_Chunk *Mix_LoadWAV_RW(SDL_RWops *src, int freesrc)
-{
-	Uint32 magic;
-	Mix_Chunk *chunk;
-	SDL_AudioSpec wavespec, *loaded;
-	SDL_AudioCVT wavecvt;
-	int samplesize;
-
-	/* rcg06012001 Make sure src is valid */
-	if ( ! src ) {
-		SDL_SetError("Mix_LoadWAV_RW with NULL src");
-		return(NULL);
-	}
-
-	/* Make sure audio has been opened */
-	if ( ! audio_opened ) {
-		SDL_SetError("Audio device hasn't been opened");
-		if ( freesrc && src ) {
-			SDL_RWclose(src);
-		}
-		return(NULL);
-	}
-
-	/* Allocate the chunk memory */
-	chunk = (Mix_Chunk *)malloc(sizeof(Mix_Chunk));
-	if ( chunk == NULL ) {
-		SDL_SetError("Out of memory");
-		if ( freesrc ) {
-			SDL_RWclose(src);
-		}
-		return(NULL);
-	}
-
-	/* Find out what kind of audio file this is */
-	magic = SDL_ReadLE32(src);
-	/* Seek backwards for compatibility with older loaders */
-	SDL_RWseek(src, -(int)sizeof(Uint32), SEEK_CUR);
-
-	switch (magic) {
-		case WAVE:
-		case RIFF:
-			loaded = SDL_LoadWAV_RW(src, freesrc, &wavespec,
-					(Uint8 **)&chunk->abuf, &chunk->alen);
-			break;
-		case FORM:
-			loaded = Mix_LoadAIFF_RW(src, freesrc, &wavespec,
-					(Uint8 **)&chunk->abuf, &chunk->alen);
-			break;
-#ifdef OGG_MUSIC
-		case OGGS:
-			loaded = Mix_LoadOGG_RW(src, freesrc, &wavespec,
-					(Uint8 **)&chunk->abuf, &chunk->alen);
-			break;
-#endif
-		case CREA:
-			loaded = Mix_LoadVOC_RW(src, freesrc, &wavespec,
-					(Uint8 **)&chunk->abuf, &chunk->alen);
-			break;
-		default:
-			SDL_SetError("Unrecognized sound file type");
-			return(0);
-	}
-	if ( !loaded ) {
-		free(chunk);
-		return(NULL);
-	}
-
-#if 0
-	PrintFormat("Audio device", &mixer);
-	PrintFormat("-- Wave file", &wavespec);
-#endif
-
-	/* Build the audio converter and create conversion buffers */
-	if ( SDL_BuildAudioCVT(&wavecvt,
-			wavespec.format, wavespec.channels, wavespec.freq,
-			mixer.format, mixer.channels, mixer.freq) < 0 ) {
-		SDL_FreeWAV(chunk->abuf);
-		free(chunk);
-		return(NULL);
-	}
-	samplesize = ((wavespec.format & 0xFF)/8)*wavespec.channels;
-	wavecvt.len = chunk->alen & ~(samplesize-1);
-	wavecvt.buf = (Uint8 *)malloc(wavecvt.len*wavecvt.len_mult);
-	if ( wavecvt.buf == NULL ) {
-		SDL_SetError("Out of memory");
-		SDL_FreeWAV(chunk->abuf);
-		free(chunk);
-		return(NULL);
-	}
-	memcpy(wavecvt.buf, chunk->abuf, chunk->alen);
-	SDL_FreeWAV(chunk->abuf);
-
-	/* Run the audio converter */
-	if ( SDL_ConvertAudio(&wavecvt) < 0 ) {
-		free(wavecvt.buf);
-		free(chunk);
-		return(NULL);
-	}
-	chunk->allocated = 1;
-	chunk->abuf = wavecvt.buf;
-	chunk->alen = wavecvt.len_cvt;
-	chunk->volume = MIX_MAX_VOLUME;
-	return(chunk);
-}
+// Mix_Chunk *Mix_LoadWAV_RW(SDL_RWops *src, int freesrc)
+// {
+// 	Uint32 magic;
+// 	Mix_Chunk *chunk;
+// 	SDL_AudioSpec wavespec, *loaded;
+// 	SDL_AudioCVT wavecvt;
+// 	int samplesize;
+//
+// 	/* rcg06012001 Make sure src is valid */
+// 	if ( ! src ) {
+// 		SDL_SetError("Mix_LoadWAV_RW with NULL src");
+// 		return(NULL);
+// 	}
+//
+// 	/* Make sure audio has been opened */
+// 	if ( ! audio_opened ) {
+// 		SDL_SetError("Audio device hasn't been opened");
+// 		if ( freesrc && src ) {
+// 			SDL_RWclose(src);
+// 		}
+// 		return(NULL);
+// 	}
+//
+// 	/* Allocate the chunk memory */
+// 	chunk = (Mix_Chunk *)malloc(sizeof(Mix_Chunk));
+// 	if ( chunk == NULL ) {
+// 		SDL_SetError("Out of memory");
+// 		if ( freesrc ) {
+// 			SDL_RWclose(src);
+// 		}
+// 		return(NULL);
+// 	}
+//
+// 	/* Find out what kind of audio file this is */
+// 	magic = SDL_ReadLE32(src);
+// 	/* Seek backwards for compatibility with older loaders */
+// 	SDL_RWseek(src, -(int)sizeof(Uint32), SEEK_CUR);
+//
+// 	switch (magic) {
+// 		case WAVE:
+// 		case RIFF:
+// 			loaded = SDL_LoadWAV_RW(src, freesrc, &wavespec,
+// 					(Uint8 **)&chunk->abuf, &chunk->alen);
+// 			break;
+// 		case FORM:
+// 			loaded = Mix_LoadAIFF_RW(src, freesrc, &wavespec,
+// 					(Uint8 **)&chunk->abuf, &chunk->alen);
+// 			break;
+// #ifdef OGG_MUSIC
+// 		case OGGS:
+// 			loaded = Mix_LoadOGG_RW(src, freesrc, &wavespec,
+// 					(Uint8 **)&chunk->abuf, &chunk->alen);
+// 			break;
+// #endif
+// 		case CREA:
+// 			loaded = Mix_LoadVOC_RW(src, freesrc, &wavespec,
+// 					(Uint8 **)&chunk->abuf, &chunk->alen);
+// 			break;
+// 		default:
+// 			SDL_SetError("Unrecognized sound file type");
+// 			return(0);
+// 	}
+// 	if ( !loaded ) {
+// 		free(chunk);
+// 		return(NULL);
+// 	}
+//
+// #if 0
+// 	PrintFormat("Audio device", &mixer);
+// 	PrintFormat("-- Wave file", &wavespec);
+// #endif
+//
+// 	/* Build the audio converter and create conversion buffers */
+// 	if ( SDL_BuildAudioCVT(&wavecvt,
+// 			wavespec.format, wavespec.channels, wavespec.freq,
+// 			mixer.format, mixer.channels, mixer.freq) < 0 ) {
+// 		SDL_FreeWAV(chunk->abuf);
+// 		free(chunk);
+// 		return(NULL);
+// 	}
+// 	samplesize = ((wavespec.format & 0xFF)/8)*wavespec.channels;
+// 	wavecvt.len = chunk->alen & ~(samplesize-1);
+// 	wavecvt.buf = (Uint8 *)malloc(wavecvt.len*wavecvt.len_mult);
+// 	if ( wavecvt.buf == NULL ) {
+// 		SDL_SetError("Out of memory");
+// 		SDL_FreeWAV(chunk->abuf);
+// 		free(chunk);
+// 		return(NULL);
+// 	}
+// 	memcpy(wavecvt.buf, chunk->abuf, chunk->alen);
+// 	SDL_FreeWAV(chunk->abuf);
+//
+// 	/* Run the audio converter */
+// 	if ( SDL_ConvertAudio(&wavecvt) < 0 ) {
+// 		free(wavecvt.buf);
+// 		free(chunk);
+// 		return(NULL);
+// 	}
+// 	chunk->allocated = 1;
+// 	chunk->abuf = wavecvt.buf;
+// 	chunk->alen = wavecvt.len_cvt;
+// 	chunk->volume = MIX_MAX_VOLUME;
+// 	return(chunk);
+// }
 
 /* Load a wave file of the mixer format from a memory buffer */
 Mix_Chunk *Mix_QuickLoad_WAV(Uint8 *mem)
