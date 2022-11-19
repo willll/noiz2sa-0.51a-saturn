@@ -30,6 +30,8 @@ static char rcsid =
 #ifndef _SDL_types_h
 #define _SDL_types_h
 
+#include "sega_xpt.h"
+
 /* The number of elements in a table */
 #define SDL_TABLESIZE(table)	(sizeof(table)/sizeof(table[0]))
 
@@ -38,12 +40,6 @@ typedef enum {
 	SDL_FALSE = 0,
 	SDL_TRUE  = 1
 } SDL_bool;
-typedef unsigned char	Uint8;
-typedef signed char	Sint8;
-typedef unsigned short	Uint16;
-typedef signed short	Sint16;
-typedef unsigned int	Uint32;
-typedef signed int	Sint32;
 
 /* Figure out how to support 64-bit datatypes */
 #if !defined(__STRICT_ANSI__)
@@ -54,10 +50,6 @@ typedef signed int	Sint32;
 #endif
 #endif /* !__STRICT_ANSI__ */
 
-/* The 64-bit type isn't available on EPOC/Symbian OS */
-#ifdef __SYMBIAN32__
-#undef SDL_HAS_64BIT_TYPE
-#endif
 
 /* The 64-bit datatype isn't supported on all platforms */
 #ifdef SDL_HAS_64BIT_TYPE
@@ -99,5 +91,13 @@ SDL_COMPILE_TIME_ASSERT(enum, sizeof(SDL_DUMMY_ENUM) == sizeof(int));
 
 /* General keyboard/mouse state definitions */
 enum { SDL_PRESSED = 0x01, SDL_RELEASED = 0x00 };
+
+#ifndef ACTION_REPLAY
+#define MAX_OPEN        24 // Do not modify
+#define MAX_DIR         96 // TBD : 384
+#else
+#define MAX_OPEN        2
+#define MAX_DIR         1
+#endif
 
 #endif
