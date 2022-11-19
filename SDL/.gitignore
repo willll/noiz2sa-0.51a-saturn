@@ -38,6 +38,3 @@ build/*
 
 Makefile.am
 .cvsignore
-
-SDL-1.2-release-1.2.5/*
-SDL-1.2-release-1.2.5.zip
