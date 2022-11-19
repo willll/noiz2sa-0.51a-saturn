@@ -9,6 +9,9 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 set(CMAKE_STATIC_LIBRARY_SUFFIX ".a")
 set(CMAKE_STATIC_LIBRARY_PREFIX "")
 
+set(SEGALIB $ENV{SATURN_SBL}/segalib)
+set(SEGASGL $ENV{SATURN_SGL})
+
 set(SATURN_COMMON $ENV{SATURN_COMMON})
 set(SATURN_CMAKE $ENV{SATURN_CMAKE})
 
@@ -36,6 +39,8 @@ set(SOURCES
   src/SDL.c
   src/SDL_error.c
   src/SDL_fatal.c
+  src/cdrom/SDL_cdrom.c
+  src/cdrom/saturn/SDL_syscdrom.c
   src/file/SDL_rwops.c
   src/video/SDL_surface.c
   src/video/SDL_video.c
@@ -100,7 +105,10 @@ target_include_directories(
     src
     src/events
     src/video
+    src/cdrom
     include
+    ${SEGALIB}/include
+    ${SEGASGL}/include
     )
 
 target_compile_options(sdl PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
@@ -114,6 +122,15 @@ target_link_options(sdl PUBLIC
     "SHELL:-T${SATURN_COMMON}/Saturn.lnk"
     "SHELL:-lc -lgcc -lm"
 )
+
+target_link_libraries(sdl PUBLIC ${SEGASGL}/lib/libsgl.a )
+target_link_libraries(sdl PUBLIC ${SEGALIB}/lib/sega_mth.a )
+target_link_libraries(sdl PUBLIC ${SEGALIB}/lib/sega_gfs.a )
+target_link_libraries(sdl PUBLIC ${SEGALIB}/lib/sega_csh.a )
+target_link_libraries(sdl PUBLIC ${SEGALIB}/lib/sega_cdc.a )
+target_link_libraries(sdl PUBLIC ${SEGALIB}/lib/sega_dma.a )
+target_link_libraries(sdl PUBLIC ${SEGALIB}/lib/sega_int.a )
+target_link_libraries(sdl PUBLIC ${SEGALIB}/lib/sega_sys.a )
 
 set_target_properties(sdl PROPERTIES PREFIX "")
 
