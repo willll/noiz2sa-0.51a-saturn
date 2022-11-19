@@ -37,7 +37,8 @@ set(cxx_flags
         -fno-builtin -funit-at-a-time -Wwrite-strings
         -Wl,--strip-all -Wl,--verbose -mno-fsrra
         -Wno-padded
-        -maccumulate-outgoing-args -fomit-frame-pointer
+        -maccumulate-outgoing-args
+        -fomit-frame-pointer
         -fno-rtti
         -fno-exceptions
         -Wdeprecated-declarations   # FIXME!

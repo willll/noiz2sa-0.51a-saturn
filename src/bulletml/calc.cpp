@@ -67,7 +67,6 @@
 
 
 /* First part of user prologue.  */
-#line 3 "calc.yy"
 
 typedef double NumType;
 
@@ -107,7 +106,6 @@ namespace {
 }
 
 
-#line 111 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -1114,102 +1112,79 @@ yyreduce:
   switch (yyn)
     {
   case 5: /* line: exp '\n'  */
-#line 57 "calc.yy"
             { formula = f(yyvsp[-1]); return 0; }
-#line 1120 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 6: /* exp: NUM  */
-#line 60 "calc.yy"
             {
 	        yyval = formulas.size();
 	        formulas.push_back(new CalcFormula(new CalcNumber(yyvsp[0])));
         }
-#line 1129 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 7: /* exp: RAND  */
-#line 64 "calc.yy"
                {
 	        yyval = formulas.size();
             formulas.push_back(new CalcFormula(new CalcRandom()));
         }
-#line 1138 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 8: /* exp: RANK  */
-#line 68 "calc.yy"
                {
 			yyval = formulas.size();
 			formulas.push_back(new CalcFormula(new CalcRank()));
 		}
-#line 1147 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 9: /* exp: PARAM  */
-#line 72 "calc.yy"
                 {
 			yyval = formulas.size();
 			formulas.push_back(new CalcFormula(new CalcParam(paramId)));
 		}
-#line 1156 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 10: /* exp: exp '+' exp  */
-#line 76 "calc.yy"
                       {
 		    yyval = formulas.size();
 			formulas.push_back(new CalcFormula(f(yyvsp[-2]), op_add, f(yyvsp[0])));
 		}
-#line 1165 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 11: /* exp: exp '-' exp  */
-#line 80 "calc.yy"
                       {
 		    yyval = formulas.size();
 			formulas.push_back(new CalcFormula(f(yyvsp[-2]), op_sub, f(yyvsp[0])));
 		}
-#line 1174 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 12: /* exp: exp '*' exp  */
-#line 84 "calc.yy"
                       {
 		    yyval = formulas.size();
 			formulas.push_back(new CalcFormula(f(yyvsp[-2]), op_mul, f(yyvsp[0])));
 		}
-#line 1183 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 13: /* exp: exp '/' exp  */
-#line 88 "calc.yy"
                       {
 		    yyval = formulas.size();
 			formulas.push_back(new CalcFormula(f(yyvsp[-2]), op_div, f(yyvsp[0])));
 		}
-#line 1192 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 14: /* exp: '-' exp  */
-#line 92 "calc.yy"
                              {
 		    yyval = yyvsp[0];
 			f(yyvsp[0])->setHeadSub();
 		}
-#line 1201 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
   case 15: /* exp: '(' exp ')'  */
-#line 96 "calc.yy"
                       {
 		    yyval = yyvsp[-1];
 		}
-#line 1209 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
     break;
 
 
-#line 1213 "/saturn/noiz2sa-0.51a-saturn/src/bulletml/calc.cpp"
 
       default: break;
     }
@@ -1402,7 +1377,6 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 100 "calc.yy"
 
 
 /**
