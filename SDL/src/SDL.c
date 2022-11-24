@@ -51,8 +51,6 @@ extern int  SDL_TimerInit(void);
 extern void SDL_TimerQuit(void);
 #endif
 
-extern unsigned char initcddone;
-
 /* The current SDL version */
 static SDL_version version =
 	{ SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL };
@@ -152,32 +150,26 @@ int SDL_InitSubSystem(Uint32 flags)
 
 int SDL_Init(Uint32 flags)
 {
-#ifndef ACTION_REPLAY
-	if(initcddone==0)
-	{
-		InitCD();
-		InitCDBlock();
-		initcddone=1;
+#if !defined(DISABLE_THREADS) && defined(ENABLE_PTH)
+	if (!pth_init()) {
+		return -1;
 	}
 #endif
 
-  /* Clear the error message */
-  SDL_ClearError();
-  //	DMA_ScuInit();
-  //	SPR_InitSlaveSH();
+	/* Clear the error message */
+	SDL_ClearError();
+
+	/* Initialize the desired subsystems */
 	if ( SDL_InitSubSystem(flags) < 0 ) {
-    // TODO : Added error !
-   return(-1);
- }
+		return(-1);
+	}
 
- /* Everything is initialized */
- if ( !(flags & SDL_INIT_NOPARACHUTE) ) {
-   SDL_InstallParachute();
- }
-
-	return 0;
+	/* Everything is initialized */
+	if ( !(flags & SDL_INIT_NOPARACHUTE) ) {
+		SDL_InstallParachute();
+	}
+	return(0);
 }
-
 
 void SDL_QuitSubSystem(Uint32 flags)
 {
