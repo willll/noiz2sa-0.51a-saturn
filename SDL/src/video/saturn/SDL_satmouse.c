@@ -25,22 +25,16 @@ static char rcsid =
  "@(#) $Id$";
 #endif
 
-#ifndef _SDL_nullvideo_h
-#define _SDL_nullvideo_h
+#include <stdio.h>
 
+#include "SDL_error.h"
 #include "SDL_mouse.h"
-#include "SDL_sysvideo.h"
-#include "SDL_mutex.h"
+#include "SDL_events_c.h"
 
-/* Hidden "this" pointer for the video functions */
-#define _THIS	SDL_VideoDevice *this
+#include "SDL_satmouse_c.h"
 
 
-/* Private display data */
-
-struct SDL_PrivateVideoData {
-    int w, h;
-    void *buffer;
+/* The implementation dependent data for the window manager cursor */
+struct WMcursor {
+	int unused;
 };
-
-#endif /* _SDL_nullvideo_h */

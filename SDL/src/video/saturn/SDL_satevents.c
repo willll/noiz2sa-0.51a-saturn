@@ -31,18 +31,17 @@ static char rcsid =
 #include "SDL.h"
 #include "SDL_sysevents.h"
 #include "SDL_events_c.h"
-#include "SDL_nullvideo.h"
-#include "SDL_nullevents_c.h"
+#include "SDL_satvideo.h"
+#include "SDL_satevents_c.h"
 
-void DUMMY_PumpEvents(_THIS)
+void SAT_PumpEvents(_THIS)
 {
 	/* do nothing. */
 }
 
-void DUMMY_InitOSKeymap(_THIS)
+void SAT_InitOSKeymap(_THIS)
 {
 	/* do nothing. */
 }
 
 /* end of SDL_nullevents.c ... */
-

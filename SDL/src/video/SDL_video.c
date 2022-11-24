@@ -120,6 +120,9 @@ static VideoBootStrap *bootstrap[] = {
 #ifdef ENABLE_DC
 	&DC_bootstrap,
 #endif
+#ifdef ENABLE_SATURN
+	&SAT_bootstrap,
+#endif
 	NULL
 };
 

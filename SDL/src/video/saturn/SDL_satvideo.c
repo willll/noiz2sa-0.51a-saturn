@@ -25,19 +25,7 @@ static char rcsid =
  "@(#) $Id$";
 #endif
 
-/* Dummy SDL video driver implementation; this is just enough to make an
- *  SDL-based application THINK it's got a working video driver, for
- *  applications that call SDL_Init(SDL_INIT_VIDEO) when they don't need it,
- *  and also for use as a collection of stubs when porting SDL to a new
- *  platform for which you haven't yet written a valid video driver.
- *
- * This is also a great way to determine bottlenecks: if you think that SDL
- *  is a performance problem for a given platform, enable this driver, and
- *  then see if your application runs faster without video overhead.
- *
- * Initial work by Ryan C. Gordon (icculus@linuxgames.com). A good portion
- *  of this was cut-and-pasted from Stephane Peter's work in the AAlib
- *  SDL video driver.  Renamed to "DUMMY" by Sam Lantinga.
+/* SEGA Saturn SDL video driver implementation; ...
  */
 
 #include <stdio.h>
@@ -52,47 +40,47 @@ static char rcsid =
 #include "SDL_pixels_c.h"
 #include "SDL_events_c.h"
 
-#include "SDL_nullvideo.h"
-#include "SDL_nullevents_c.h"
-#include "SDL_nullmouse_c.h"
+#include "SDL_satvideo.h"
+#include "SDL_satevents_c.h"
+#include "SDL_satmouse_c.h"
 
-#define DUMMYVID_DRIVER_NAME "dummy"
+#define SATURNVID_DRIVER_NAME "saturn"
 
 /* Initialization/Query functions */
-static int DUMMY_VideoInit(_THIS, SDL_PixelFormat *vformat);
-static SDL_Rect **DUMMY_ListModes(_THIS, SDL_PixelFormat *format, Uint32 flags);
-static SDL_Surface *DUMMY_SetVideoMode(_THIS, SDL_Surface *current, int width, int height, int bpp, Uint32 flags);
-static int DUMMY_SetColors(_THIS, int firstcolor, int ncolors, SDL_Color *colors);
-static void DUMMY_VideoQuit(_THIS);
+static int SAT_VideoInit(_THIS, SDL_PixelFormat *vformat);
+static SDL_Rect **SAT_ListModes(_THIS, SDL_PixelFormat *format, Uint32 flags);
+static SDL_Surface *SAT_SetVideoMode(_THIS, SDL_Surface *current, int width, int height, int bpp, Uint32 flags);
+static int SAT_SetColors(_THIS, int firstcolor, int ncolors, SDL_Color *colors);
+static void SAT_VideoQuit(_THIS);
 
 /* Hardware surface functions */
-static int DUMMY_AllocHWSurface(_THIS, SDL_Surface *surface);
-static int DUMMY_LockHWSurface(_THIS, SDL_Surface *surface);
-static void DUMMY_UnlockHWSurface(_THIS, SDL_Surface *surface);
-static void DUMMY_FreeHWSurface(_THIS, SDL_Surface *surface);
+static int SAT_AllocHWSurface(_THIS, SDL_Surface *surface);
+static int SAT_LockHWSurface(_THIS, SDL_Surface *surface);
+static void SAT_UnlockHWSurface(_THIS, SDL_Surface *surface);
+static void SAT_FreeHWSurface(_THIS, SDL_Surface *surface);
 
 /* etc. */
-static void DUMMY_UpdateRects(_THIS, int numrects, SDL_Rect *rects);
+static void SAT_UpdateRects(_THIS, int numrects, SDL_Rect *rects);
 
 /* DUMMY driver bootstrap functions */
 
-static int DUMMY_Available(void)
+static int SAT_Available(void)
 {
 	const char *envr = getenv("SDL_VIDEODRIVER");
-	if ((envr) && (strcmp(envr, DUMMYVID_DRIVER_NAME) == 0)) {
+	if ((envr) && (strcmp(envr, SATURNVID_DRIVER_NAME) == 0)) {
 		return(1);
 	}
 
 	return(0);
 }
 
-static void DUMMY_DeleteDevice(SDL_VideoDevice *device)
+static void SAT_DeleteDevice(SDL_VideoDevice *device)
 {
 	free(device->hidden);
 	free(device);
 }
 
-static SDL_VideoDevice *DUMMY_CreateDevice(int devindex)
+static SDL_VideoDevice *SAT_CreateDevice(int devindex)
 {
 	SDL_VideoDevice *device;
 
@@ -113,44 +101,44 @@ static SDL_VideoDevice *DUMMY_CreateDevice(int devindex)
 	memset(device->hidden, 0, (sizeof *device->hidden));
 
 	/* Set the function pointers */
-	device->VideoInit = DUMMY_VideoInit;
-	device->ListModes = DUMMY_ListModes;
-	device->SetVideoMode = DUMMY_SetVideoMode;
+	device->VideoInit = SAT_VideoInit;
+	device->ListModes = SAT_ListModes;
+	device->SetVideoMode = SAT_SetVideoMode;
 	device->CreateYUVOverlay = NULL;
-	device->SetColors = DUMMY_SetColors;
-	device->UpdateRects = DUMMY_UpdateRects;
-	device->VideoQuit = DUMMY_VideoQuit;
-	device->AllocHWSurface = DUMMY_AllocHWSurface;
+	device->SetColors = SAT_SetColors;
+	device->UpdateRects = SAT_UpdateRects;
+	device->VideoQuit = SAT_VideoQuit;
+	device->AllocHWSurface = SAT_AllocHWSurface;
 	device->CheckHWBlit = NULL;
 	device->FillHWRect = NULL;
 	device->SetHWColorKey = NULL;
 	device->SetHWAlpha = NULL;
-	device->LockHWSurface = DUMMY_LockHWSurface;
-	device->UnlockHWSurface = DUMMY_UnlockHWSurface;
+	device->LockHWSurface = SAT_LockHWSurface;
+	device->UnlockHWSurface = SAT_UnlockHWSurface;
 	device->FlipHWSurface = NULL;
-	device->FreeHWSurface = DUMMY_FreeHWSurface;
+	device->FreeHWSurface = SAT_FreeHWSurface;
 	device->SetCaption = NULL;
 	device->SetIcon = NULL;
 	device->IconifyWindow = NULL;
 	device->GrabInput = NULL;
 	device->GetWMInfo = NULL;
-	device->InitOSKeymap = DUMMY_InitOSKeymap;
-	device->PumpEvents = DUMMY_PumpEvents;
+	device->InitOSKeymap = SAT_InitOSKeymap;
+	device->PumpEvents = SAT_PumpEvents;
 
-	device->free = DUMMY_DeleteDevice;
+	device->free = SAT_DeleteDevice;
 
 	return device;
 }
 
-VideoBootStrap DUMMY_bootstrap = {
-	DUMMYVID_DRIVER_NAME, "SDL dummy video driver",
-	DUMMY_Available, DUMMY_CreateDevice
+VideoBootStrap SAT_bootstrap = {
+	SATURNVID_DRIVER_NAME, "SDL saturn video driver",
+	SAT_Available, SAT_CreateDevice
 };
 
 
-int DUMMY_VideoInit(_THIS, SDL_PixelFormat *vformat)
+int SAT_VideoInit(_THIS, SDL_PixelFormat *vformat)
 {
-	fprintf(stderr, "WARNING: You are using the SDL dummy video driver!\n");
+	fprintf(stderr, "WARNING: You are using the SDL saturn video driver!\n");
 
 	/* Determine the screen depth (use default 8-bit depth) */
 	/* we change this during the SDL_SetVideoMode implementation... */
@@ -161,12 +149,12 @@ int DUMMY_VideoInit(_THIS, SDL_PixelFormat *vformat)
 	return(0);
 }
 
-SDL_Rect **DUMMY_ListModes(_THIS, SDL_PixelFormat *format, Uint32 flags)
+SDL_Rect **SAT_ListModes(_THIS, SDL_PixelFormat *format, Uint32 flags)
 {
    	 return (SDL_Rect **) -1;
 }
 
-SDL_Surface *DUMMY_SetVideoMode(_THIS, SDL_Surface *current,
+SDL_Surface *SAT_SetVideoMode(_THIS, SDL_Surface *current,
 				int width, int height, int bpp, Uint32 flags)
 {
 	if ( this->hidden->buffer ) {
@@ -203,32 +191,32 @@ SDL_Surface *DUMMY_SetVideoMode(_THIS, SDL_Surface *current,
 }
 
 /* We don't actually allow hardware surfaces other than the main one */
-static int DUMMY_AllocHWSurface(_THIS, SDL_Surface *surface)
+static int SAT_AllocHWSurface(_THIS, SDL_Surface *surface)
 {
 	return(-1);
 }
-static void DUMMY_FreeHWSurface(_THIS, SDL_Surface *surface)
+static void SAT_FreeHWSurface(_THIS, SDL_Surface *surface)
 {
 	return;
 }
 
 /* We need to wait for vertical retrace on page flipped displays */
-static int DUMMY_LockHWSurface(_THIS, SDL_Surface *surface)
+static int SAT_LockHWSurface(_THIS, SDL_Surface *surface)
 {
 	return(0);
 }
 
-static void DUMMY_UnlockHWSurface(_THIS, SDL_Surface *surface)
+static void SAT_UnlockHWSurface(_THIS, SDL_Surface *surface)
 {
 	return;
 }
 
-static void DUMMY_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
+static void SAT_UpdateRects(_THIS, int numrects, SDL_Rect *rects)
 {
 	/* do nothing. */
 }
 
-int DUMMY_SetColors(_THIS, int firstcolor, int ncolors, SDL_Color *colors)
+int SAT_SetColors(_THIS, int firstcolor, int ncolors, SDL_Color *colors)
 {
 	/* do nothing of note. */
 	return(1);
@@ -237,7 +225,7 @@ int DUMMY_SetColors(_THIS, int firstcolor, int ncolors, SDL_Color *colors)
 /* Note:  If we are terminated, this could be called in the middle of
    another SDL video routine -- notably UpdateRects.
 */
-void DUMMY_VideoQuit(_THIS)
+void SAT_VideoQuit(_THIS)
 {
 	if (this->screen->pixels != NULL)
 	{

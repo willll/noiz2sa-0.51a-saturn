@@ -54,6 +54,9 @@ set(SOURCES
   src/video/SDL_blit_N.c
   src/video/SDL_blit_A.c
   src/video/SDL_bmp.c
+  src/video/saturn/SDL_satevents.c
+  src/video/saturn/SDL_satmouse.c
+  src/video/saturn/SDL_satvideo.c
   src/video/dummy/SDL_nullevents.c
   src/video/dummy/SDL_nullmouse.c
   src/video/dummy/SDL_nullvideo.c
@@ -84,8 +87,8 @@ set(SOURCES
 add_compile_definitions(MODEL_S
                         _SH
                         DISABLE_AUDIO
-  #                      DISABLE_VIDEO
                         ENABLE_DUMMYVIDEO
+                        ENABLE_SATURN
                         DISABLE_JOYSTICK
                         DISABLE_CDROM
                         DISABLE_TIMERS

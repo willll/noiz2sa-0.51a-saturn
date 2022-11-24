@@ -25,6 +25,22 @@ static char rcsid =
  "@(#) $Id$";
 #endif
 
-#include "SDL_nullvideo.h"
+#ifndef _SDL_satvideo_h
+#define _SDL_satvideo_h
 
-/* Functions to be exported */
+#include "SDL_mouse.h"
+#include "SDL_sysvideo.h"
+#include "SDL_mutex.h"
+
+/* Hidden "this" pointer for the video functions */
+#define _THIS	SDL_VideoDevice *this
+
+
+/* Private display data */
+
+struct SDL_PrivateVideoData {
+    int w, h;
+    void *buffer;
+};
+
+#endif /* _SDL_satvideo_h */

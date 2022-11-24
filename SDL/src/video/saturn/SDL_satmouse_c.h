@@ -25,16 +25,6 @@ static char rcsid =
  "@(#) $Id$";
 #endif
 
-#include <stdio.h>
+#include "SDL_satvideo.h"
 
-#include "SDL_error.h"
-#include "SDL_mouse.h"
-#include "SDL_events_c.h"
-
-#include "SDL_nullmouse_c.h"
-
-
-/* The implementation dependent data for the window manager cursor */
-struct WMcursor {
-	int unused;
-};
+/* Functions to be exported */

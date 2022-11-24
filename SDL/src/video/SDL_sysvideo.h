@@ -70,7 +70,7 @@ struct SDL_VideoDevice {
 	/* * * */
 	/* Initialization/Query functions */
 
-	/* Initialize the native video subsystem, filling 'vformat' with the 
+	/* Initialize the native video subsystem, filling 'vformat' with the
 	   "best" display pixel format, returning 0 or -1 if there's an error.
 	 */
 	int (*VideoInit)(_THIS, SDL_PixelFormat *vformat);
@@ -209,7 +209,7 @@ struct SDL_VideoDevice {
 	GLuint texture;
 #endif
 	int is_32bit;
- 
+
 	/* * * */
 	/* Window manager functions */
 
@@ -408,6 +408,9 @@ extern VideoBootStrap PG_bootstrap;
 #endif
 #ifdef ENABLE_DC
 extern VideoBootStrap DC_bootstrap;
+#endif
+#ifdef ENABLE_SATURN
+extern VideoBootStrap SAT_bootstrap;
 #endif
 /* This is the current video device */
 extern SDL_VideoDevice *current_video;
