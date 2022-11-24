@@ -104,55 +104,7 @@ typedef struct AudioBootStrap {
 	SDL_AudioDevice *(*create)(int devindex);
 } AudioBootStrap;
 
-#ifdef OPENBSD_AUDIO_SUPPORT
-extern AudioBootStrap OPENBSD_AUDIO_bootstrap;
-#endif
-#ifdef OSS_SUPPORT
-extern AudioBootStrap DSP_bootstrap;
-extern AudioBootStrap DMA_bootstrap;
-#endif
-#ifdef ALSA_SUPPORT
-extern AudioBootStrap ALSA_bootstrap;
-#endif
-#ifdef SUNAUDIO_SUPPORT
-extern AudioBootStrap SUNAUDIO_bootstrap;
-#endif
-#ifdef DMEDIA_SUPPORT
-extern AudioBootStrap DMEDIA_bootstrap;
-#endif
-#ifdef ARTSC_SUPPORT
-extern AudioBootStrap ARTSC_bootstrap;
-#endif
-#ifdef ESD_SUPPORT
-extern AudioBootStrap ESD_bootstrap;
-#endif
-#ifdef NAS_SUPPORT
-extern AudioBootStrap NAS_bootstrap;
-#endif
-#ifdef ENABLE_DIRECTX
-extern AudioBootStrap DSOUND_bootstrap;
-#endif
-#ifdef ENABLE_WINDIB
-extern AudioBootStrap WAVEOUT_bootstrap;
-#endif
-#ifdef _AIX
-extern AudioBootStrap Paud_bootstrap;
-#endif
-#ifdef __BEOS__
-extern AudioBootStrap BAUDIO_bootstrap;
-#endif
-#if defined(macintosh) || TARGET_API_MAC_CARBON
-extern AudioBootStrap SNDMGR_bootstrap;
-#endif
-#ifdef ENABLE_AHI
-extern AudioBootStrap AHI_bootstrap;
-#endif
-#ifdef MINTAUDIO_SUPPORT
-extern AudioBootStrap MINTAUDIO_bootstrap;
-#endif
-#ifdef DISKAUD_SUPPORT
-extern AudioBootStrap DISKAUD_bootstrap;
-#endif
+
 #ifdef ENABLE_DC
 extern AudioBootStrap DCAUD_bootstrap;
 #endif
