@@ -45,77 +45,8 @@ static char rcsid =
 
 /* Available video drivers */
 static VideoBootStrap *bootstrap[] = {
-#ifdef ENABLE_X11
-	&X11_bootstrap,
-#endif
-#ifdef ENABLE_DGA
-	&DGA_bootstrap,
-#endif
-#ifdef ENABLE_NANOX
-	&NX_bootstrap,
-#endif
-#ifdef ENABLE_FBCON
-	&FBCON_bootstrap,
-#endif
-#ifdef ENABLE_DIRECTFB
-	&DirectFB_bootstrap,
-#endif
-#ifdef ENABLE_PS2GS
-	&PS2GS_bootstrap,
-#endif
-#ifdef ENABLE_GGI
-	&GGI_bootstrap,
-#endif
-#ifdef ENABLE_VGL
-	&VGL_bootstrap,
-#endif
-#ifdef ENABLE_SVGALIB
-	&SVGALIB_bootstrap,
-#endif
-#ifdef ENABLE_AALIB
-    &AALIB_bootstrap,
-#endif
-#ifdef ENABLE_DIRECTX
-	&DIRECTX_bootstrap,
-#endif
-#ifdef ENABLE_WINDIB
-	&WINDIB_bootstrap,
-#endif
-#ifdef ENABLE_BWINDOW
-	&BWINDOW_bootstrap,
-#endif
-#ifdef ENABLE_TOOLBOX
-	&TOOLBOX_bootstrap,
-#endif
-#ifdef ENABLE_DRAWSPROCKET
-	&DSp_bootstrap,
-#endif
-#ifdef ENABLE_QUARTZ
-	&QZ_bootstrap,
-#endif
-#ifdef ENABLE_CYBERGRAPHICS
-	&CGX_bootstrap,
-#endif
-#ifdef ENABLE_PHOTON
-	&ph_bootstrap,
-#endif
-#ifdef ENABLE_EPOC
-	&EPOC_bootstrap,
-#endif
 #ifdef ENABLE_DUMMYVIDEO
 	&DUMMY_bootstrap,
-#endif
-#ifdef ENABLE_XBIOS
-	&XBIOS_bootstrap,
-#endif
-#ifdef ENABLE_GEM
-	&GEM_bootstrap,
-#endif
-#ifdef ENABLE_QTOPIA
-	&Qtopia_bootstrap,
-#endif
-#ifdef ENABLE_PICOGUI
-	&PG_bootstrap,
 #endif
 #ifdef ENABLE_DC
 	&DC_bootstrap,

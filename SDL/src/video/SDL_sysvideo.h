@@ -327,45 +327,6 @@ typedef struct VideoBootStrap {
 	SDL_VideoDevice *(*create)(int devindex);
 } VideoBootStrap;
 
-#ifdef ENABLE_X11
-extern VideoBootStrap X11_bootstrap;
-#endif
-#ifdef ENABLE_DGA
-extern VideoBootStrap DGA_bootstrap;
-#endif
-#ifdef ENABLE_NANOX
-extern VideoBootStrap NX_bootstrap;
-#endif
-#ifdef ENABLE_FBCON
-extern VideoBootStrap FBCON_bootstrap;
-#endif
-#ifdef ENABLE_DIRECTFB
-extern VideoBootStrap DirectFB_bootstrap;
-#endif
-#ifdef ENABLE_PS2GS
-extern VideoBootStrap PS2GS_bootstrap;
-#endif
-#ifdef ENABLE_GGI
-extern VideoBootStrap GGI_bootstrap;
-#endif
-#ifdef ENABLE_VGL
-extern VideoBootStrap VGL_bootstrap;
-#endif
-#ifdef ENABLE_SVGALIB
-extern VideoBootStrap SVGALIB_bootstrap;
-#endif
-#ifdef ENABLE_AALIB
-extern VideoBootStrap AALIB_bootstrap;
-#endif
-#ifdef ENABLE_WINDIB
-extern VideoBootStrap WINDIB_bootstrap;
-#endif
-#ifdef ENABLE_DIRECTX
-extern VideoBootStrap DIRECTX_bootstrap;
-#endif
-#ifdef ENABLE_BWINDOW
-extern VideoBootStrap BWINDOW_bootstrap;
-#endif
 /* MacOS X gets the proper defines from configure */
 #if defined(macintosh) && !defined(MACOSX)
 #define ENABLE_TOOLBOX
@@ -373,38 +334,8 @@ extern VideoBootStrap BWINDOW_bootstrap;
 #define ENABLE_DRAWSPROCKET
 #endif
 #endif
-#ifdef ENABLE_TOOLBOX
-extern VideoBootStrap TOOLBOX_bootstrap;
-#endif
-#ifdef ENABLE_DRAWSPROCKET
-extern VideoBootStrap DSp_bootstrap;
-#endif
-#ifdef ENABLE_QUARTZ
-extern VideoBootStrap QZ_bootstrap;
-#endif
-#ifdef ENABLE_CYBERGRAPHICS
-extern VideoBootStrap CGX_bootstrap;
-#endif
-#ifdef ENABLE_PHOTON
-extern VideoBootStrap ph_bootstrap;
-#endif
-#ifdef ENABLE_EPOC
-extern VideoBootStrap EPOC_bootstrap;
-#endif
 #ifdef ENABLE_DUMMYVIDEO
 extern VideoBootStrap DUMMY_bootstrap;
-#endif
-#ifdef ENABLE_XBIOS
-extern VideoBootStrap XBIOS_bootstrap;
-#endif
-#ifdef ENABLE_GEM
-extern VideoBootStrap GEM_bootstrap;
-#endif
-#ifdef ENABLE_QTOPIA
-extern VideoBootStrap Qtopia_bootstrap;
-#endif
-#ifdef ENABLE_PICOGUI
-extern VideoBootStrap PG_bootstrap;
 #endif
 #ifdef ENABLE_DC
 extern VideoBootStrap DC_bootstrap;
