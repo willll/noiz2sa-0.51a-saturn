@@ -111,7 +111,7 @@ SDL_Surface * SDL_CreateRGBSurface (Uint32 flags,
 	SDL_SetClipRect(surface, NULL);
 
 	/* Get the pixels */
-	if ( ((flags&SDL_HWSURFACE) == SDL_SWSURFACE) || 
+	if ( ((flags&SDL_HWSURFACE) == SDL_SWSURFACE) ||
 				(video->AllocHWSurface(this, surface) < 0) ) {
 		if ( surface->w && surface->h ) {
 			surface->pixels = malloc(surface->h*surface->pitch);
@@ -384,13 +384,13 @@ void SDL_GetClipRect(SDL_Surface *surface, SDL_Rect *rect)
 		*rect = surface->clip_rect;
 	}
 }
-/* 
+/*
  * Set up a blit between two surfaces -- split into three parts:
- * The upper part, SDL_UpperBlit(), performs clipping and rectangle 
+ * The upper part, SDL_UpperBlit(), performs clipping and rectangle
  * verification.  The lower part is a pointer to a low level
  * accelerated blitting function.
  *
- * These parts are separated out and each used internally by this 
+ * These parts are separated out and each used internally by this
  * library in the optimimum places.  They are exported so that if
  * you know exactly what you are doing, you can optimize your code
  * by calling the one(s) you need.
@@ -457,7 +457,7 @@ int SDL_UpperBlit (SDL_Surface *src, SDL_Rect *srcrect,
 	/* clip the source rectangle to the source surface */
 	if(srcrect) {
 	        int maxw, maxh;
-	
+
 		srcx = srcrect->x;
 		w = srcrect->w;
 		if(srcx < 0) {
@@ -479,7 +479,7 @@ int SDL_UpperBlit (SDL_Surface *src, SDL_Rect *srcrect,
 		maxh = src->h - srcy;
 		if(maxh < h)
 			h = maxh;
-	    
+
 	} else {
 	        srcx = srcy = 0;
 		w = src->w;
@@ -524,7 +524,7 @@ int SDL_UpperBlit (SDL_Surface *src, SDL_Rect *srcrect,
 	return 0;
 }
 
-/* 
+/*
  * This function performs a fast fill of the given rectangle with 'color'
  */
 int SDL_FillRect(SDL_Surface *dst, SDL_Rect *dstrect, Uint32 color)
@@ -753,7 +753,7 @@ void SDL_UnlockSurface (SDL_Surface *surface)
 	}
 }
 
-/* 
+/*
  * Convert a surface into the specified pixel format.
  */
 SDL_Surface * SDL_ConvertSurface (SDL_Surface *surface,

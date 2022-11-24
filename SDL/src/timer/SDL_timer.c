@@ -30,6 +30,7 @@ static char rcsid =
 #include <stdlib.h>
 #include <stdio.h>			/* For the definition of NULL */
 
+#include "SDL_saturn.h"
 #include "SDL_error.h"
 #include "SDL_timer.h"
 #include "SDL_timer_c.h"
@@ -235,7 +236,7 @@ static void SDL_RemoveAllTimers(SDL_TimerID t)
 	SDL_TimerID freeme;
 
 	/* Changed to non-recursive implementation.
-	   The recursive implementation is elegant, but subject to 
+	   The recursive implementation is elegant, but subject to
 	   stack overflow if there are lots and lots of timers.
 	 */
 	while ( t ) {

@@ -211,7 +211,7 @@ SDL_PixelFormat *SDL_AllocFormat(int bpp,
 			format->Amask = Amask;
 			break;
 	}
-	/* Calculate some standard bitmasks, if necessary 
+	/* Calculate some standard bitmasks, if necessary
 	 * Note:  This could conflict with an alpha mask, if given.
 	 */
 	if ( (bpp > 8) && !format->Rmask && !format->Gmask && !format->Bmask ) {
@@ -289,7 +289,7 @@ void SDL_DitherColors(SDL_Color *colors, int bpp)
 		colors[i].b = b;
 	}
 }
-/* 
+/*
  * Calculate the pad-aligned scanline width of a surface
  */
 Uint16 SDL_CalculatePitch(SDL_Surface *surface)
@@ -322,7 +322,7 @@ Uint8 SDL_FindColor(SDL_Palette *pal, Uint8 r, Uint8 g, Uint8 b)
 	int rd, gd, bd;
 	int i;
 	Uint8 pixel=0;
-		
+
 	smallest = ~0;
 	for ( i=0; i<pal->ncolors; ++i ) {
 		rd = pal->colors[i].r - r;

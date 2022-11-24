@@ -31,6 +31,7 @@ static char rcsid =
 #include <stdlib.h>
 #include <string.h>
 
+#include "SDL_saturn.h"
 #include "SDL_error.h"
 #include "SDL_events.h"
 #ifndef DISABLE_EVENTS

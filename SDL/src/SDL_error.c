@@ -32,6 +32,8 @@ static char rcsid =
 #include <stdarg.h>
 #include <string.h>
 
+#include "SDL_saturn.h"
+
 #include "SDL_types.h"
 #include "SDL_getenv.h"
 #include "SDL_error.h"
@@ -47,9 +49,6 @@ static SDL_error SDL_global_error;
 #define SDL_GetErrBuf()	(&SDL_global_error)
 #endif /* DISABLE_THREADS */
 
-#ifdef __CYGWIN__
-#define DISABLE_STDIO
-#endif
 
 #define SDL_ERRBUFIZE	1024
 

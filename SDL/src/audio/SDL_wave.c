@@ -32,6 +32,7 @@ static char rcsid =
 #include <stdlib.h>
 #include <string.h>
 
+#include "SDL_saturn.h"
 #include "SDL_error.h"
 #include "SDL_audio.h"
 #include "SDL_wave.h"
@@ -141,7 +142,7 @@ static int MS_ADPCM_decode(Uint8 **audio_buf, Uint32 *audio_len)
 	encoded_len = *audio_len;
 	encoded = *audio_buf;
 	freeable = *audio_buf;
-	*audio_len = (encoded_len/MS_ADPCM_state.wavefmt.blockalign) * 
+	*audio_len = (encoded_len/MS_ADPCM_state.wavefmt.blockalign) *
 				MS_ADPCM_state.wSamplesPerBlock*
 				MS_ADPCM_state.wavefmt.channels*sizeof(Sint16);
 	*audio_buf = (Uint8 *)malloc(*audio_len);
@@ -358,7 +359,7 @@ static int IMA_ADPCM_decode(Uint8 **audio_buf, Uint32 *audio_len)
 	encoded_len = *audio_len;
 	encoded = *audio_buf;
 	freeable = *audio_buf;
-	*audio_len = (encoded_len/IMA_ADPCM_state.wavefmt.blockalign) * 
+	*audio_len = (encoded_len/IMA_ADPCM_state.wavefmt.blockalign) *
 				IMA_ADPCM_state.wSamplesPerBlock*
 				IMA_ADPCM_state.wavefmt.channels*sizeof(Sint16);
 	*audio_buf = (Uint8 *)malloc(*audio_len);
@@ -430,7 +431,7 @@ SDL_AudioSpec * SDL_LoadWAV_RW (SDL_RWops *src, int freesrc,
 		was_error = 1;
 		goto done;
 	}
-		
+
 	/* Check the magic header */
 	RIFFchunk	= SDL_ReadLE32(src);
 	wavelen		= SDL_ReadLE32(src);

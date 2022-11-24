@@ -30,7 +30,7 @@ static char rcsid =
  *
  * Original version by Sam Lantinga
  *
- * Mattias Engdegård (Yorick): Rewrite. New encoding format, encoder and
+ * Mattias Engdegï¿½rd (Yorick): Rewrite. New encoding format, encoder and
  * decoder. Added per-surface alpha blitter. Added per-pixel alpha
  * format, encoder and blitter.
  *
@@ -76,7 +76,7 @@ static char rcsid =
  *   For 32-bit targets, each pixel has the target RGB format but with
  *   the alpha value occupying the highest 8 bits. The <skip> and <run>
  *   counts are 16 bit.
- * 
+ *
  *   For 16-bit targets, each pixel has the target RGB format, but with
  *   the middle component (usually green) shifted 16 steps to the left,
  *   and the hole filled with the 5 most significant bits of the alpha value.
@@ -94,6 +94,7 @@ static char rcsid =
 #include <stdlib.h>
 #include <string.h>
 
+#include "SDL_saturn.h"
 #include "SDL_types.h"
 #include "SDL_video.h"
 #include "SDL_error.h"
@@ -1500,7 +1501,7 @@ static void UnRLEAlpha(SDL_Surface *surface)
 	/* skip padding if needed */
 	if(bpp == 2)
 	    srcbuf += (unsigned long)srcbuf & 2;
-	
+
 	/* copy translucent pixels */
 	ofs = 0;
 	do {
@@ -1552,5 +1553,3 @@ void SDL_UnRLESurface(SDL_Surface *surface, int recode)
 	}
     }
 }
-
-

@@ -37,6 +37,7 @@ static char rcsid =
 #include <stddef.h>
 #endif
 
+#include "SDL_saturn.h"
 #include "SDL_audiomem.h"
 
 /* Allocate memory that will be shared between threads (freed on exit) */
@@ -46,14 +47,14 @@ void *SDL_AllocAudioMem(int size)
 
 #ifdef FORK_HACK
 	int   semid;
-	
+
 	/* Create and get the address of a shared memory segment */
 	semid = shmget(IPC_PRIVATE, size, (IPC_CREAT|0600));
 	if ( semid < 0 ) {
 		return(NULL);
 	}
 	chunk = shmat(semid, NULL, 0);
-	
+
 	/* Set the segment for deletion when it is detatched */
 	shmctl(semid, IPC_RMID, NULL);	/* Delets semid if shmat() fails */
 #else

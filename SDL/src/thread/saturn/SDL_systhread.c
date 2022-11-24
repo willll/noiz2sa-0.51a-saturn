@@ -32,6 +32,7 @@ static char rcsid =
 
 /* Thread management routines for SDL */
 
+#include "SDL_saturn.h"
 #include "SDL_error.h"
 #include "SDL_thread.h"
 #include "../SDL_systhread.h"

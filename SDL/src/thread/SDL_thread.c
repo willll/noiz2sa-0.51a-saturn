@@ -31,6 +31,7 @@ static char rcsid =
 #include <stdlib.h>
 #include <string.h>
 
+#include "SDL_saturn.h"
 #include "SDL_error.h"
 #include "SDL_mutex.h"
 #include "SDL_thread.h"
@@ -302,4 +303,3 @@ void SDL_KillThread(SDL_Thread *thread)
 		SDL_WaitThread(thread, NULL);
 	}
 }
-

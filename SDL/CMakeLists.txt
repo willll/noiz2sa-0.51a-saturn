@@ -94,6 +94,7 @@ add_compile_definitions(MODEL_S
                         DISABLE_ENDIAN
   #                      DISABLE_FILE
                         NO_SIGNAL_H
+                        DISABLE_STDIO
                         )
 
 add_library( sdl STATIC
