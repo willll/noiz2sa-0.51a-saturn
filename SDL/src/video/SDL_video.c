@@ -32,6 +32,7 @@ static char rcsid =
 #include <string.h>
 
 #include "SDL.h"
+
 #include "SDL_error.h"
 #include "SDL_video.h"
 #include "SDL_events.h"

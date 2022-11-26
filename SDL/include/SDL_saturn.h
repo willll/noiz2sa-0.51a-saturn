@@ -22,11 +22,15 @@ extern "C" {
 
 #include "sgl.h"
 
+#undef pal
+
 #include "sega_def.h"
 #include "sega_sys.h"
 #include "sega_gfs.h"
 #include "sega_tim.h"
 #include "sega_mem.h"
+
+
 
 #ifndef ACTION_REPLAY
 GfsDirName dir_name[MAX_DIR];
