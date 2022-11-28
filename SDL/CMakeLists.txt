@@ -20,16 +20,22 @@ project( SDL VERSION 1.0
                   LANGUAGES C)
 
 set(as_flags )
-set(cxx_flags
-        -O2 -g3 -m2
-        -fpermissive
-        -Wno-conversion-null
+
+set(c_flags
+        -Os -m2
+        -save-temps
         -fno-lto -Wshadow -Wall -Wswitch -Wpadded
         -fno-common -Wextra -Wno-narrowing -fno-web
         -fno-builtin -funit-at-a-time -Wwrite-strings
         -Wl,--strip-all -Wl,--verbose -mno-fsrra
         -Wno-padded
         -maccumulate-outgoing-args -fomit-frame-pointer
+         )
+
+set(cxx_flags
+        ${c_flags}
+        -fpermissive
+        -Wno-conversion-null
         -fno-rtti
         -fno-exceptions
          )
@@ -73,11 +79,11 @@ set(SOURCES
   src/thread/saturn/SDL_sysmutex.c
   src/thread/saturn/SDL_syssem.c
   src/events/SDL_events.c
-  src/events/SDL_keyboard.c
-  src/events/SDL_mouse.c
+  #src/events/SDL_keyboard.c
+  #src/events/SDL_mouse.c
   src/events/SDL_active.c
   src/events/SDL_quit.c
-  src/events/SDL_resize.c
+  #src/events/SDL_resize.c
   src/endian/SDL_endian.c
   src/joystick/SDL_joystick.c
   src/joystick/saturn/SDL_sysjoystick.c

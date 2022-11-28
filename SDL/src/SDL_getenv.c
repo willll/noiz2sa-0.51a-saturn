@@ -25,83 +25,22 @@ static char rcsid =
  "@(#) $Id$";
 #endif
 
-/* Not all environments have a working getenv()/putenv() */
-
-#ifdef TEST_MAIN
-#define NEED_SDL_GETENV
-#endif
 
 #include "SDL_getenv.h"
-
-#ifdef NEED_SDL_GETENV
 
 #include <stdlib.h>
 #include <string.h>
 
-static char **SDL_env = (char **)0;
+static char **SDL_env = { "SDL_VIDEODRIVER=saturn",
+                          "SDL_AUDIODRIVER=saturn",
+                          "SDL_JOYSTICK_DEVICE=saturn",
+                          "SDL_NOMOUSE=1"};
 
 /* Put a variable of the form "name=value" into the environment */
 int SDL_putenv(const char *variable)
 {
-	const char *name, *value;
-	int added;
-	int len, i;
-	char **new_env;
-	char *new_variable;
-
-	/* A little error checking */
-	if ( ! variable ) {
-		return(-1);
-	}
-	name = variable;
-	for ( value=variable; *value && (*value != '='); ++value ) {
-		/* Keep looking for '=' */ ;
-	}
-	if ( *value ) {
-		++value;
-	} else {
-		return(-1);
-	}
-
-	/* Allocate memory for the variable */
-	new_variable = (char *)malloc(strlen(variable)+1);
-	if ( ! new_variable ) {
-		return(-1);
-	}
-	strcpy(new_variable, variable);
-
-	/* Actually put it into the environment */
-	added = 0;
-	i = 0;
-	if ( SDL_env ) {
-		/* Check to see if it's already there... */
-		len = (value - name);
-		for ( ; SDL_env[i]; ++i ) {
-			if ( strncmp(SDL_env[i], name, len) == 0 ) {
-				break;
-			}
-		}
-		/* If we found it, just replace the entry */
-		if ( SDL_env[i] ) {
-			free(SDL_env[i]);
-			SDL_env[i] = new_variable;
-			added = 1;
-		}
-	}
-
-	/* Didn't find it in the environment, expand and add */
-	if ( ! added ) {
-		new_env = realloc(SDL_env, (i+2)*sizeof(char *));
-		if ( new_env ) {
-			SDL_env = new_env;
-			SDL_env[i++] = new_variable;
-			SDL_env[i++] = (char *)0;
-			added = 1;
-		} else {
-			free(new_variable);
-		}
-	}
-	return (added ? 0 : -1);
+	variable;
+	return -1;
 }
 
 /* Retrieve a variable named "name" from the environment */
@@ -194,4 +133,3 @@ int main(int argc, char *argv[])
 	return(0);
 }
 #endif /* TEST_MAIN */
-

@@ -67,26 +67,15 @@ static uint8_t	SYS_Joystick_addr[MAX_JOYSTICKS];
  */
 int SDL_SYS_JoystickInit(void)
 {
-	int numdevs;
 
-	int p,u;
 
-	// numdevs = 0;
-	// for(p=0;p<MAPLE_PORT_COUNT;p++) {
-	// 	for(u=0;u<MAPLE_UNIT_COUNT;u++) {
-	// 		if (maple_device_func(p,u)&MAPLE_FUNC_CONTROLLER) {
-	// 			SYS_Joystick_addr[numdevs] = maple_addr(p,u);
-	// 			numdevs++;
-	// 		}
-	// 	}
-	// }
-
-	return(numdevs);
+	return(0);
 }
 
 /* Function to get the device-dependent name of a joystick */
 const char *SDL_SYS_JoystickName(int index)
 {
+  index;
 	//maple_device_t *dev;
 	// if (maple_compat_resolve(SYS_Joystick_addr[index],&dev,MAPLE_FUNC_CONTROLLER)!=0) return NULL;
 	// return dev->info.product_name;
@@ -100,6 +89,7 @@ const char *SDL_SYS_JoystickName(int index)
  */
 int SDL_SYS_JoystickOpen(SDL_Joystick *joystick)
 {
+  joystick;
 	/* allocate memory for system specific hardware data */
 	// joystick->hwdata = (struct joystick_hwdata *) malloc(sizeof(*joystick->hwdata));
 	// if (joystick->hwdata == NULL)
@@ -125,6 +115,7 @@ int SDL_SYS_JoystickOpen(SDL_Joystick *joystick)
 
 void SDL_SYS_JoystickUpdate(SDL_Joystick *joystick)
 {
+  joystick;
 // const	int sdl_buttons[] = {
 // 	CONT_C,
 // 	CONT_B,
@@ -191,6 +182,7 @@ void SDL_SYS_JoystickUpdate(SDL_Joystick *joystick)
 /* Function to close a joystick after use */
 void SDL_SYS_JoystickClose(SDL_Joystick *joystick)
 {
+  joystick;
 	// if (joystick->hwdata != NULL) {
 	// 	/* free system specific hardware data */
 	// 	free(joystick->hwdata);
