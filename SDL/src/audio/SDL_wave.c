@@ -348,7 +348,7 @@ static int IMA_ADPCM_decode(Uint8 **audio_buf, Uint32 *audio_len)
 
 	/* Check to make sure we have enough variables in the state array */
 	channels = IMA_ADPCM_state.wavefmt.channels;
-	if ( channels > NELEMS(IMA_ADPCM_state.state) ) {
+	if ( channels > (int)NELEMS(IMA_ADPCM_state.state) ) {
 		SDL_SetError("IMA ADPCM decoder can only handle %d channels",
 						NELEMS(IMA_ADPCM_state.state));
 		return(-1);
