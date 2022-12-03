@@ -24,11 +24,17 @@ set(as_flags )
 set(c_flags
         -Os -m2
         -save-temps
-        -fno-lto -Wshadow -Wall -Wswitch -Wpadded
+        -fno-lto
+        -Wshadow
+        -Wall
+        -Wswitch
+        #-Wpadded
         -fno-common -Wextra -Wno-narrowing -fno-web
         -fno-builtin -funit-at-a-time -Wwrite-strings
         -Wl,--strip-all -Wl,--verbose -mno-fsrra
         -Wno-padded
+        -Wno-unused
+        -Wno-implicit-fallthrough
         -maccumulate-outgoing-args -fomit-frame-pointer
          )
 
@@ -52,13 +58,13 @@ set(SOURCES
   src/video/SDL_video.c
   src/video/SDL_pixels.c
   src/video/SDL_bmp.c
-  src/video/SDL_cursor.c
-  src/video/SDL_RLEaccel.c
-  src/video/SDL_blit.c
-  src/video/SDL_blit_0.c
-  src/video/SDL_blit_1.c
-  src/video/SDL_blit_N.c
-  src/video/SDL_blit_A.c
+  #src/video/SDL_cursor.c
+  #src/video/SDL_RLEaccel.c
+  #src/video/SDL_blit.c
+  #src/video/SDL_blit_0.c
+  #src/video/SDL_blit_1.c
+  #src/video/SDL_blit_N.c
+  #src/video/SDL_blit_A.c
   src/video/SDL_bmp.c
   src/video/saturn/SDL_satevents.c
   src/video/saturn/SDL_satmouse.c
