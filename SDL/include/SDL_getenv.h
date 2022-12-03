@@ -1,12 +1,6 @@
 
 /* Not all environments have a working getenv()/putenv() */
 
-#if defined(macintosh) || defined(_WIN32_WCE)
-#define NEED_SDL_GETENV
-#endif
-
-#ifdef NEED_SDL_GETENV
-
 #include "begin_code.h"
 /* Set up for C function definitions, even when using C++ */
 #ifdef __cplusplus
@@ -26,5 +20,3 @@ extern DECLSPEC char * SDLCALL SDL_getenv(const char *name);
 }
 #endif
 #include "close_code.h"
-
-#endif /* NEED_GETENV */
