@@ -34,7 +34,7 @@ static char rcsid =
 static char **SDL_env = { "SDL_VIDEODRIVER=saturn",
                           "SDL_AUDIODRIVER=saturn",
                           "SDL_JOYSTICK_DEVICE=saturn",
-                          "SDL_NOMOUSE=1"};
+                          "SDL_NOMOUSE=1" };
 
 /* Put a variable of the form "name=value" into the environment */
 int SDL_putenv(const char *variable)
