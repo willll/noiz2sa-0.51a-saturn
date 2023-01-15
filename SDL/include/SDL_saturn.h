@@ -30,10 +30,6 @@ extern "C" {
 #include "sega_tim.h"
 #include "sega_mem.h"
 
-#ifndef ACTION_REPLAY
-GfsDirName dir_name[MAX_DIR];
-#endif
-
 #define malloc(X) MEM_Malloc(X)
 #define free(X) MEM_Free(X)
 

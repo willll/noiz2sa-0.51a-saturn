@@ -44,7 +44,7 @@ static Uint8  SDL_KeyState[SDLK_LAST];
 static SDLMod SDL_ModState;
 int SDL_TranslateUNICODE = 0;
 
-static char *keynames[SDLK_LAST];	/* Array of keycode names */
+static const char *keynames[SDLK_LAST];	/* Array of keycode names */
 
 /*
  * jk 991215 - added
@@ -305,7 +305,7 @@ int SDL_KeyboardInit(void)
 	keynames[SDLK_RMETA] = "right meta";
 	keynames[SDLK_LMETA] = "left meta";
 	keynames[SDLK_LSUPER] = "left super";	/* "Windows" keys */
-	keynames[SDLK_RSUPER] = "right super";	
+	keynames[SDLK_RSUPER] = "right super";
 	keynames[SDLK_MODE] = "alt gr";
 	keynames[SDLK_COMPOSE] = "compose";
 
@@ -366,16 +366,14 @@ void SDL_SetModState (SDLMod modstate)
 
 char *SDL_GetKeyName(SDLKey key)
 {
-	char *keyname;
-
-	keyname = NULL;
+	const char *keyname = NULL;
 	if ( key < SDLK_LAST ) {
 		keyname = keynames[key];
 	}
 	if ( keyname == NULL ) {
 		keyname = "unknown key";
 	}
-	return(keyname);
+	return (char *)keyname;
 }
 
 /* These are global for SDL_eventloop.c */
@@ -388,7 +386,7 @@ int SDL_PrivateKeyboard(Uint8 state, SDL_keysym *keysym)
 	memset(&event, 0, sizeof(event));
 
 #if 0
-printf("The '%s' key has been %s\n", SDL_GetKeyName(keysym->sym), 
+printf("The '%s' key has been %s\n", SDL_GetKeyName(keysym->sym),
 				state == SDL_PRESSED ? "pressed" : "released");
 #endif
 	/* Set up the keysym */
@@ -568,4 +566,3 @@ int SDL_EnableKeyRepeat(int delay, int interval)
 	SDL_KeyRepeat.timestamp = 0;
 	return(0);
 }
-

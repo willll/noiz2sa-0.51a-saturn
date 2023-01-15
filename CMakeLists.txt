@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 
-SET(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 set(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
@@ -66,16 +66,14 @@ set(SOURCES_NOIZ2SA
   src/foe.cc
   src/foecommand.cc
   src/barragemanager.cc
-
   )
 
 set(CD_FILES
       0.bin
     )
 
-add_compile_definitions(MODEL_S
-                        _SH
-                        )
+add_compile_definitions( MODEL_S
+                         _SH )
 
 add_executable( noiz2sa.elf ${SOURCES_NOIZ2SA} )
 

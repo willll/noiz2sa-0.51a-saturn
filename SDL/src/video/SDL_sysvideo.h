@@ -37,23 +37,6 @@ static char rcsid =
    This is designed to be easily converted to C++ in the future.
  */
 
-/* OpenGL is pretty much available on all Windows systems */
-#ifdef WIN32
-#ifndef _WIN32_WCE
-#define HAVE_OPENGL
-#endif
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-
-#ifdef HAVE_OPENGL
-#ifdef MACOSX
-#include <OpenGL/gl.h>  /* OpenGL.framework */
-#else
-#include <GL/gl.h>
-#endif /* MACOSX */
-#endif /* HAVE_OPENGL */
-
 /* The SDL video driver */
 typedef struct SDL_VideoDevice SDL_VideoDevice;
 
@@ -196,18 +179,6 @@ struct SDL_VideoDevice {
 	/* Swap the current buffers in double buffer mode. */
 	void (*GL_SwapBuffers)(_THIS);
 
-  	/* OpenGL functions for SDL_OPENGLBLIT */
-#ifdef HAVE_OPENGL
-#ifndef WIN32
-#define WINAPI
-#endif
-#define SDL_PROC(ret,func,params) ret (WINAPI *func) params;
-#include "SDL_glfuncs.h"
-#undef SDL_PROC
-
-	/* Texture id */
-	GLuint texture;
-#endif
 	int is_32bit;
 
 	/* * * */

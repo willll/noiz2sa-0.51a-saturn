@@ -40,6 +40,7 @@ static char rcsid =
 
 struct SDL_PrivateVideoData {
     int w, h;
+    unsigned char hz;
     void *buffer;
 };
 

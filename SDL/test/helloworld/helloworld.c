@@ -2,7 +2,7 @@
 * https://www.badprog.com/c-sdl-simple-directmedia-layer-hello-world
 */
 
-#include <SDL/SDL.h>
+#include <SDL.h>
 
 int main(int argc, char *argv[]) {
     int gogogo = 1;
@@ -10,7 +10,8 @@ int main(int argc, char *argv[]) {
 
     SDL_Init(SDL_INIT_EVERYTHING);
     SDL_WM_SetCaption("Hello World! :D", NULL);
-    SDL_SetVideoMode(800, 600, 32, SDL_HWSURFACE);
+    SDL_SetVideoMode(320, 240, 32, SDL_HWSURFACE);
+    //SDL_SetVideoMode(800, 600, 32, SDL_HWSURFACE);
     while (gogogo) {
         SDL_WaitEvent(&event);
         if (event.type == SDL_QUIT)
@@ -19,4 +20,3 @@ int main(int argc, char *argv[]) {
     SDL_Quit();
     return 0;
 }
-

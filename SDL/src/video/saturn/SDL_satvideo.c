@@ -45,7 +45,11 @@ static char rcsid =
 #include "SDL_satevents_c.h"
 #include "SDL_satmouse_c.h"
 
+#include <sgl.h>
+
 #define SATURNVID_DRIVER_NAME "saturn"
+
+#define TVSTAT      (*(volatile Uint16 *)0x25F80004)
 
 /* Initialization/Query functions */
 static int SAT_VideoInit(_THIS, SDL_PixelFormat *vformat);
@@ -63,7 +67,7 @@ static void SAT_FreeHWSurface(_THIS, SDL_Surface *surface);
 /* etc. */
 static void SAT_UpdateRects(_THIS, int numrects, SDL_Rect *rects);
 
-/* DUMMY driver bootstrap functions */
+/* SEGA Saturn driver bootstrap functions */
 
 static int SAT_Available(void)
 {
@@ -79,6 +83,14 @@ static void SAT_DeleteDevice(SDL_VideoDevice *device)
 {
 	free(device->hidden);
 	free(device);
+}
+
+static unsigned int get_hz()
+{
+	if((TVSTAT & 1) == 0)
+		return 60;
+	else
+		return 50;
 }
 
 static SDL_VideoDevice *SAT_CreateDevice(int devindex)
@@ -158,17 +170,155 @@ SDL_Rect **SAT_ListModes(_THIS, SDL_PixelFormat *format, Uint32 flags)
 SDL_Surface *SAT_SetVideoMode(_THIS, SDL_Surface *current,
 				int width, int height, int bpp, Uint32 flags)
 {
-	if ( this->hidden->buffer ) {
-		free( this->hidden->buffer );
-	}
+	unsigned char tv_mode=TV_320x224;
 
-	this->hidden->buffer = malloc(width * height * (bpp / 8));
-	if ( ! this->hidden->buffer ) {
-		SDL_SetError("Couldn't allocate buffer for requested mode");
-		return(NULL);
-	}
+  switch(width) {
+    case 320:
+      switch(height) {
+        case 224:
+          tv_mode = TV_320x224;
+          break;
+        case 240:
+          tv_mode = TV_320x240;
+          break;
+        case 256:
+          tv_mode = TV_320x256;
+          break;
+        case 448:
+          tv_mode = TV_320x448;
+          break;
+        case 480:
+          tv_mode = TV_320x480;
+          break;
+        case 512 :
+          tv_mode = TV_320x512;
+          break;
+        default:
+          SDL_SetError("TODO !");
+      }
+      break;
+    case 352:
+      switch(height) {
+        case 224:
+          tv_mode = TV_352x224;
+          break;
+        case 240:
+          tv_mode = TV_352x240;
+          break;
+        case 256:
+          tv_mode = TV_352x256;
+          break;
+        case 448:
+          tv_mode = TV_352x448;
+          break;
+        case 480:
+          tv_mode = TV_352x480;
+          break;
+        case 512 :
+          tv_mode = TV_352x512;
+          break;
+        default:
+          SDL_SetError("TODO !");
+      }
+      break;
+    case 640:
+      switch(height) {
+        case 224:
+          tv_mode = TV_640x224;
+          break;
+        case 240:
+          tv_mode = TV_640x240;
+          break;
+        case 256:
+          tv_mode = TV_640x256;
+          break;
+        case 448:
+          tv_mode = TV_640x448;
+          break;
+        case 480:
+          tv_mode = TV_640x480;
+          break;
+        case 512 :
+          tv_mode = TV_640x512;
+          break;
+        default:
+          SDL_SetError("TODO !");
+      }
+      break;
+    case 704:
+      switch(height) {
+        case 224:
+          tv_mode = TV_704x224;
+          break;
+        case 240:
+          tv_mode = TV_704x240;
+          break;
+        case 256:
+          tv_mode = TV_704x256;
+          break;
+        case 448:
+          tv_mode = TV_704x448;
+          break;
+        case 480:
+          tv_mode = TV_704x480;
+          break;
+        case 512 :
+          tv_mode = TV_704x512;
+          break;
+        default:
+          SDL_SetError("TODO !");
+      }
+      break;
+    default:
+      SDL_SetError("TODO !");
+  }
 
+  switch(bpp) {
+    case 16:
+      slColRAMMode(CRM16_2048);
+      slCharNbg1(COL_TYPE_16 , CHAR_SIZE_1x1);
+      break;
+    case 256:
+      slColRAMMode(CRM16_2048);
+      slCharNbg1(COL_TYPE_256 , CHAR_SIZE_1x1);
+      break;
+    case 2048:
+      slColRAMMode(CRM16_2048);
+      slCharNbg1(COL_TYPE_2048 , CHAR_SIZE_1x1);
+      break;
+    case 32768:
+      slColRAMMode(CRM16_2048);
+      slCharNbg1(COL_TYPE_32768 , CHAR_SIZE_1x1);
+      break;
+    case 16777216:
+      slColRAMMode(CRM16_2048);
+      slCharNbg1(COL_TYPE_1M , CHAR_SIZE_1x1);
+      break;
+    default:
+      SDL_SetError("TODO !");
+}
 /* 	printf("Setting mode %dx%d\n", width, height); */
+
+  slInitSystem(tv_mode, NULL, 1);
+
+  if ( this->hidden->buffer ) {
+    free( this->hidden->buffer );
+  }
+
+  if ( current ) {
+    free( current );
+  }
+
+  this->hidden->hz = get_hz();
+
+  current = (SDL_Surface*)malloc(sizeof(SDL_Surface));
+
+  //this->hidden->buffer = malloc(width * height * (bpp / 8));
+  this->hidden->buffer = malloc(width * height ));
+  if ( ! this->hidden->buffer ) {
+    SDL_SetError("Couldn't allocate buffer for requested mode");
+    return(NULL);
+  }
 
 	memset(this->hidden->buffer, 0, width * height * (bpp / 8));
 
@@ -188,7 +338,7 @@ SDL_Surface *SAT_SetVideoMode(_THIS, SDL_Surface *current,
 	current->pixels = this->hidden->buffer;
 
 	/* We're done */
-	return(current);
+	return current;
 }
 
 /* We don't actually allow hardware surfaces other than the main one */

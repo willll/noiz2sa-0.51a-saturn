@@ -626,26 +626,26 @@ static void BlitNtoNSurfaceAlphaKey(SDL_BlitInfo *info)
 	while ( height-- ) {
 	    DUFFS_LOOP4(
 	    {
-		Uint32 pixel;
-		unsigned sR;
-		unsigned sG;
-		unsigned sB;
-		unsigned dR;
-		unsigned dG;
-		unsigned dB;
-		RETRIEVE_RGB_PIXEL(src, srcbpp, pixel);
-		if(pixel != ckey) {
-		    RGB_FROM_PIXEL(pixel, srcfmt, sR, sG, sB);
-		    DISEMBLE_RGB(dst, dstbpp, dstfmt, pixel, dR, dG, dB);
-		    ALPHA_BLEND(sR, sG, sB, sA, dR, dG, dB);
-		    ASSEMBLE_RGBA(dst, dstbpp, dstfmt, dR, dG, dB, dA);
-		}
-		src += srcbpp;
-		dst += dstbpp;
-	    },
-	    width);
-	    src += srcskip;
-	    dst += dstskip;
+    		Uint32 pixel;
+    		unsigned sR;
+    		unsigned sG;
+    		unsigned sB;
+    		unsigned dR;
+    		unsigned dG;
+    		unsigned dB;
+    		RETRIEVE_RGB_PIXEL(src, srcbpp, pixel);
+    		if(pixel != ckey) {
+    		    RGB_FROM_PIXEL(pixel, srcfmt, sR, sG, sB);
+    		    DISEMBLE_RGB(dst, dstbpp, dstfmt, pixel, dR, dG, dB);
+    		    ALPHA_BLEND(sR, sG, sB, sA, dR, dG, dB);
+    		    ASSEMBLE_RGBA(dst, dstbpp, dstfmt, dR, dG, dB, dA);
+    		}
+    		src += srcbpp;
+    		dst += dstbpp;
+    	    },
+    	    width);
+    	    src += srcskip;
+    	    dst += dstskip;
 	}
 }
 
@@ -773,4 +773,3 @@ SDL_loblit SDL_CalculateAlphaBlit(SDL_Surface *surface, int blit_index)
 	}
     }
 }
-
