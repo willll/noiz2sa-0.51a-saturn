@@ -34,13 +34,13 @@ static char rcsid =
 
 
 /* Initialize the system dependent timer subsystem */
-extern int SDL_SYS_TimerInit(void);
+extern int SDL_SYS_TimerInit();
 
 /* Quit the system dependent timer subsystem */
-extern void SDL_SYS_TimerQuit(void);
+extern void SDL_SYS_TimerQuit();
 
 /* Start a timer set up by SDL_SetTimer() */
-extern int SDL_SYS_StartTimer(void);
+extern int SDL_SYS_StartTimer();
 
 /* Stop a previously started timer */
-extern void SDL_SYS_StopTimer(void);
+extern void SDL_SYS_StopTimer();

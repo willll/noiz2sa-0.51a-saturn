@@ -105,7 +105,6 @@ set( SOURCES
 add_compile_definitions( MODEL_S
                         _SH
                         DISABLE_AUDIO
-                        ENABLE_DUMMYVIDEO
                         ENABLE_SATURN
                         DISABLE_JOYSTICK
                         DISABLE_CDROM

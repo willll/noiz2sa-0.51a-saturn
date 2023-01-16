@@ -54,21 +54,18 @@ static int SDL_SYS_CDStop(SDL_CD *cdrom);
 static int SDL_SYS_CDEject(SDL_CD *cdrom);
 static void SDL_SYS_CDClose(SDL_CD *cdrom);
 
+static void InitCD();
+static void	InitCDBlock();
+
 extern GfsDirName dir_name[MAX_DIR];
 
-int  SDL_SYS_CDInit(void)
+static	CdcPly	playdata;
+static	CdcPos	posdata;
+
+int  SDL_SYS_CDInit()
 {
-
-  Uint32 lib_work[GFS_WORK_SIZE(MAX_OPEN) / sizeof(Uint32)];
-	GfsDirTbl dirtbl;
-
-  CdUnlock();
-
-	CDC_CdInit(0x00,0x00,0x05,0x0f);
-  GFS_DIRTBL_TYPE(&dirtbl) = GFS_DIR_NAME;
-  GFS_DIRTBL_DIRNAME(&dirtbl) = dir_name;
-  GFS_DIRTBL_NDIR(&dirtbl) = MAX_DIR;
-  GFS_Init(MAX_OPEN, lib_work, &dirtbl);
+  InitCD();
+  InitCDBlock();
 
 	/* Fill in our driver capabilities */
 	SDL_CDcaps.Name = SDL_SYS_CDName;
@@ -158,4 +155,34 @@ static void SDL_SYS_CDClose(SDL_CD *cdrom)
 void SDL_SYS_CDQuit(void)
 {
 
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------------
+static void InitCD()
+{
+  Uint32 lib_work[GFS_WORK_SIZE(MAX_OPEN) / sizeof(Uint32)];
+  GfsDirTbl dirtbl;
+
+  //CdUnlock();
+
+  CDC_CdInit(0x00,0x00,0x05,0x0f);
+  GFS_DIRTBL_TYPE(&dirtbl) = GFS_DIR_NAME;
+  GFS_DIRTBL_DIRNAME(&dirtbl) = dir_name;
+  GFS_DIRTBL_NDIR(&dirtbl) = MAX_DIR;
+  GFS_Init(MAX_OPEN, lib_work, &dirtbl);
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------------
+static void	InitCDBlock()
+{
+//    InitSoundDriver();
+
+    CDC_PLY_STYPE(&playdata) = CDC_PTYPE_TNO;	/* set by track number.*/
+    CDC_PLY_STNO( &playdata) = 2;		/* start track number. */
+    CDC_PLY_SIDX( &playdata) = 1;		/* start index number. */
+    CDC_PLY_ETYPE(&playdata) = CDC_PTYPE_TNO;	/* set by track number.*/
+    CDC_PLY_ETNO( &playdata) = 10;		/* start track number. */
+    CDC_PLY_EIDX( &playdata) = 99;		/* start index number. */
+    CDC_PLY_PMODE(&playdata) = CDC_PTYPE_NOCHG;//CDC_PM_DFL + 30;	/* Play Mode. */ // lecture en boucle
+//    CDC_PLY_PMODE(&playdata) = CDC_PTYPE_NOCHG;//CDC_PM_DFL+30;//CDC_PM_DFL ;	/* Play Mode. */ // lecture unique
 }

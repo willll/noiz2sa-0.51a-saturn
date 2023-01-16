@@ -30,6 +30,14 @@ extern "C" {
 #include "sega_tim.h"
 #include "sega_mem.h"
 
+#define		NBG1_MAP_ADR		(VDP2_VRAM_B1 + 0x18000 )
+#define   BACK_COL_ADR    (VDP2_VRAM_A1 + 0x1fffe)
+#define   NBG1_CEL_ADR    (VDP2_VRAM_B0 + 0x00000)
+#define   NBG1_COL_ADR    (VDP2_COLRAM  + 0x00200)
+#define		TEX_COL_ADR		  (VDP2_COLRAM  + 0x00200)
+#define		NBG0_COL_ADR    (VDP2_COLRAM  + 0x00000)
+#define   NBG0_CEL_ADR    (VDP2_VRAM_A0 + 0x00000)
+
 #define malloc(X) MEM_Malloc(X)
 #define free(X) MEM_Free(X)
 

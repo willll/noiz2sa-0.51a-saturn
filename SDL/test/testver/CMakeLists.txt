@@ -3,13 +3,13 @@ cmake_minimum_required(VERSION 3.0)
 SET(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set( TARGET_NAME helloworld )
-set( TARGET_PATH helloworld )
+set( TARGET_NAME testver )
+set( TARGET_PATH testver )
 
 set(INSTALL_DESTINATION exe)
 
 project( ${TARGET_NAME} VERSION 1.0
-                  DESCRIPTION "SDL Hello World"
+                  DESCRIPTION "SDL Testver"
                   LANGUAGES C CXX ASM)
 
 set(as_flags )
@@ -31,7 +31,7 @@ set(cxx_flags
 
 set(SOURCES
   ${SATURN_COMMON}/crt0.s
-  helloworld.c
+  testver.c
   )
 
 set(CD_FILES
@@ -85,7 +85,9 @@ add_custom_command(OUTPUT IP.BIN
 
 target_link_libraries( ${TARGET_NAME}.elf PUBLIC ${SEGASGL}/lib/sglarea.o )
 target_link_libraries( ${TARGET_NAME}.elf PUBLIC ${SEGASGL}/lib/libsgl.a )
-target_link_libraries( ${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_mem.a )
+target_link_libraries( ${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_sat.a )
+target_link_libraries( ${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_sys.a )
+target_link_libraries( ${TARGET_NAME}.elf PUBLIC ${SEGALIB}/lib/sega_cdc.a )
 
 include(${SATURN_CMAKE}/install.cmake)
 include(${SATURN_CMAKE}/create_cd.cmake)

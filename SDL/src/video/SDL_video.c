@@ -1561,6 +1561,7 @@ void SDL_WM_SetCaption (const char *title, const char *icon)
 		}
 	}
 }
+
 void SDL_WM_GetCaption (char **title, char **icon)
 {
 	SDL_VideoDevice *video = current_video;
