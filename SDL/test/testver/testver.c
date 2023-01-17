@@ -15,6 +15,7 @@
 #include <sgl.h>
 
 #include <string.h>
+#include <stdlib.h>
 
 
 static	volatile Uint16	PadData1  = 0x0000;
@@ -28,6 +29,8 @@ int main(int argc, char *argv[])
 
 	char text_buffer[buffer_size];
 	memset(text_buffer, 0, buffer_size);
+
+//	*((char*)-1) = 'x'; // crash !
 
 	/* Initialize SDL */
 	if ( SDL_Init(SDL_INIT_EVERYTHING) < 0 ) {
@@ -61,6 +64,8 @@ int main(int argc, char *argv[])
 	sprintf(text_buffer, "This is a %s endian machine.\n",
 		(SDL_BYTEORDER == SDL_LIL_ENDIAN) ? "little" : "big");
 	slPrint(text_buffer, slLocate (1,line++));
+
+	slSynch();
 
 	for(;;);
 

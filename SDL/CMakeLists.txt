@@ -25,27 +25,13 @@ set( as_flags )
 
 set( c_flags
         -Os -m2
-        -save-temps
         -fno-lto
         -Wshadow
         -Wall
         -Wswitch
-        #-Wpadded
-        -fno-common -Wextra -Wno-narrowing -fno-web
-        -fno-builtin -funit-at-a-time -Wwrite-strings
+        -fomit-frame-pointer
         -Wl,--strip-all -Wl,--verbose -mno-fsrra
-        -Wno-padded
-        -Wno-unused
-        -Wno-implicit-fallthrough
-        -maccumulate-outgoing-args -fomit-frame-pointer
-         )
-
-set( cxx_flags
-        ${c_flags}
-        -fpermissive
-        -Wno-conversion-null
-        -fno-rtti
-        -fno-exceptions
+        -Wpointer-sign
          )
 
 set( SOURCES
@@ -110,7 +96,6 @@ add_compile_definitions( MODEL_S
                         DISABLE_CDROM
                         DISABLE_TIMERS
                         DISABLE_THREADS
-                        DISABLE_EVENTS
                         DISABLE_ENDIAN
   #                      DISABLE_FILE
                         NO_SIGNAL_H
@@ -133,8 +118,7 @@ target_include_directories(
     ${SEGASGL}/include
     )
 
-target_compile_options(sdl PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
-                                  $<$<COMPILE_LANGUAGE:C>:${c_flags}> )
+target_compile_options(sdl PUBLIC $<$<COMPILE_LANGUAGE:C>:${c_flags}> )
 
 target_link_options(
     sdl PUBLIC
@@ -146,15 +130,11 @@ target_link_options(
     "SHELL:-lc -lgcc -lm"
 )
 
+target_link_libraries( sdl PUBLIC ${SEGASGL}/lib/sglarea.o )
 target_link_libraries( sdl PUBLIC ${SEGASGL}/lib/libsgl.a )
-target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_mth.a )
-target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_gfs.a )
-target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_csh.a )
-target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_cdc.a )
-target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_dma.a )
-target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_int.a )
+target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_sat.a )
 target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_sys.a )
-target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_mem.a )
+target_link_libraries( sdl PUBLIC ${SEGALIB}/lib/sega_cdc.a )
 
 set_target_properties( sdl PROPERTIES PREFIX "" )
 

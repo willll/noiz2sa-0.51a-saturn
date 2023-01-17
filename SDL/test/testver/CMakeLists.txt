@@ -13,21 +13,6 @@ project( ${TARGET_NAME} VERSION 1.0
                   LANGUAGES C CXX ASM)
 
 set(as_flags )
-set(cxx_flags
-        -O2 -g3 -m2
-        -fpermissive
-        -Wno-conversion-null
-        -fno-lto -Wshadow -Wall -Wswitch -Wpadded
-        -fno-common -Wextra -Wno-narrowing -fno-web
-        -fno-builtin -funit-at-a-time -Wwrite-strings
-        -Wl,--strip-all -Wl,--verbose -mno-fsrra
-        -Wno-padded
-        -maccumulate-outgoing-args
-        -fomit-frame-pointer
-        -fno-rtti
-        -fno-exceptions
-        -Wdeprecated-declarations   # FIXME!
-         )
 
 set(SOURCES
   ${SATURN_COMMON}/crt0.s
@@ -55,8 +40,7 @@ target_include_directories(
     ${SEGASGL}/include
     )
 
-target_compile_options(${TARGET_NAME}.elf PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
-                                                 $<$<COMPILE_LANGUAGE:C>:${c_flags}> )
+target_compile_options(${TARGET_NAME}.elf PUBLIC $<$<COMPILE_LANGUAGE:C>:${c_flags}> )
 
 target_link_options(
     ${TARGET_NAME}.elf PUBLIC
@@ -65,7 +49,6 @@ target_link_options(
     "SHELL:-Xlinker -fno-lto"
     "SHELL:-m2 -nostartfiles"
     "SHELL:-T${SATURN_COMMON}/Saturn.lnk"
-    "SHELL:-lc -lgcc -lm"
 )
 
 target_link_libraries( ${TARGET_NAME}.elf PUBLIC /saturn/SDL/lib//sdl.a )
