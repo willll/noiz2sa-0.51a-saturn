@@ -317,11 +317,8 @@ int SDL_VideoModeOK (int width, int height, int bpp, Uint32 flags)
 			/* No sizes supported at this bit-depth */
 			continue;
 		} else
-#ifdef macintosh /* MPW optimization bug? */
-		if ( (sizes == (SDL_Rect **)0xFFFFFFFF) ||
-#else
+
 		if ( (sizes == (SDL_Rect **)-1) ||
-#endif
 		     current_video->handles_any_size ) {
 			/* Any size supported at this bit-depth */
 			supported = 1;
@@ -362,6 +359,8 @@ static int SDL_GetVideoMode (int *w, int *h, int *BitsPerPixel, Uint32 flags)
 		SDL_SetError("Invalid width or height");
 		return(0);
 	}
+
+		return(1);
 
 	/* Try the original video mode, get the closest depth */
 	native_bpp = SDL_VideoModeOK(*w, *h, *BitsPerPixel, flags);
@@ -526,12 +525,7 @@ SDL_Surface * SDL_SetVideoMode (int width, int height, int bpp, Uint32 flags)
 	if ( video_bpp > 8 ) {
 		flags &= ~SDL_HWPALETTE;
 	}
-#if 0
-	if ( (flags&SDL_FULLSCREEN) != SDL_FULLSCREEN ) {
-		/* There's no windowed double-buffering */
-		flags &= ~SDL_DOUBLEBUF;
-	}
-#endif
+
 	if ( (flags&SDL_DOUBLEBUF) == SDL_DOUBLEBUF ) {
 		/* Use hardware surfaces when double-buffering */
 		flags |= SDL_HWSURFACE;

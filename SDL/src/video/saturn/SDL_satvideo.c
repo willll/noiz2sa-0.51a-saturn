@@ -178,126 +178,126 @@ SDL_Surface *SAT_SetVideoMode(_THIS, SDL_Surface *current,
 
     switch(width) {
       case 320:
-      switch(height) {
-        case 224:
-        tv_mode = TV_320x224;
-        break;
-        case 240:
-        tv_mode = TV_320x240;
-        break;
-        case 256:
-        tv_mode = TV_320x256;
-        break;
-        case 448:
-        tv_mode = TV_320x448;
-        break;
-        case 480:
-        tv_mode = TV_320x480;
-        break;
-        case 512 :
-        tv_mode = TV_320x512;
-        break;
-        default:
-        SDL_SetError("TODO !");
-      }
+        switch(height) {
+          case 224:
+          tv_mode = TV_320x224;
+          break;
+          case 240:
+          tv_mode = TV_320x240;
+          break;
+          case 256:
+          tv_mode = TV_320x256;
+          break;
+          case 448:
+          tv_mode = TV_320x448;
+          break;
+          case 480:
+          tv_mode = TV_320x480;
+          break;
+          case 512 :
+          tv_mode = TV_320x512;
+          break;
+          default:
+          SDL_SetError("TODO !");
+        }
       break;
       case 352:
-      switch(height) {
-        case 224:
-        tv_mode = TV_352x224;
-        break;
-        case 240:
-        tv_mode = TV_352x240;
-        break;
-        case 256:
-        tv_mode = TV_352x256;
-        break;
-        case 448:
-        tv_mode = TV_352x448;
-        break;
-        case 480:
-        tv_mode = TV_352x480;
-        break;
-        case 512 :
-        tv_mode = TV_352x512;
-        break;
-        default:
-        SDL_SetError("TODO !");
-      }
+        switch(height) {
+          case 224:
+          tv_mode = TV_352x224;
+          break;
+          case 240:
+          tv_mode = TV_352x240;
+          break;
+          case 256:
+          tv_mode = TV_352x256;
+          break;
+          case 448:
+          tv_mode = TV_352x448;
+          break;
+          case 480:
+          tv_mode = TV_352x480;
+          break;
+          case 512 :
+          tv_mode = TV_352x512;
+          break;
+          default:
+          SDL_SetError("TODO !");
+        }
       break;
       case 640:
-      switch(height) {
-        case 224:
-        tv_mode = TV_640x224;
-        break;
-        case 240:
-        tv_mode = TV_640x240;
-        break;
-        case 256:
-        tv_mode = TV_640x256;
-        break;
-        case 448:
-        tv_mode = TV_640x448;
-        break;
-        case 480:
-        tv_mode = TV_640x480;
-        break;
-        case 512 :
-        tv_mode = TV_640x512;
-        break;
-        default:
-        SDL_SetError("TODO !");
-      }
+        switch(height) {
+          case 224:
+          tv_mode = TV_640x224;
+          break;
+          case 240:
+          tv_mode = TV_640x240;
+          break;
+          case 256:
+          tv_mode = TV_640x256;
+          break;
+          case 448:
+          tv_mode = TV_640x448;
+          break;
+          case 480:
+          tv_mode = TV_640x480;
+          break;
+          case 512 :
+          tv_mode = TV_640x512;
+          break;
+          default:
+          SDL_SetError("TODO !");
+        }
       break;
       case 704:
-      switch(height) {
-        case 224:
-        tv_mode = TV_704x224;
-        break;
-        case 240:
-        tv_mode = TV_704x240;
-        break;
-        case 256:
-        tv_mode = TV_704x256;
-        break;
-        case 448:
-        tv_mode = TV_704x448;
-        break;
-        case 480:
-        tv_mode = TV_704x480;
-        break;
-        case 512 :
-        tv_mode = TV_704x512;
-        break;
-        default:
-        SDL_SetError("TODO !");
-      }
+        switch(height) {
+          case 224:
+          tv_mode = TV_704x224;
+          break;
+          case 240:
+          tv_mode = TV_704x240;
+          break;
+          case 256:
+          tv_mode = TV_704x256;
+          break;
+          case 448:
+          tv_mode = TV_704x448;
+          break;
+          case 480:
+          tv_mode = TV_704x480;
+          break;
+          case 512 :
+          tv_mode = TV_704x512;
+          break;
+          default:
+          SDL_SetError("TODO !");
+        }
       break;
       default:
-      SDL_SetError("TODO !");
+        SDL_SetError("TODO !");
     }
 
     switch(bpp) {
-      case 16:
-      slColRAMMode(CRM16_2048);
-      slCharNbg1(COL_TYPE_16 , CHAR_SIZE_1x1);
-      break;
-      case 256:
-      slColRAMMode(CRM16_2048);
-      slCharNbg1(COL_TYPE_256 , CHAR_SIZE_1x1);
-      break;
-      case 2048:
-      slColRAMMode(CRM16_2048);
-      slCharNbg1(COL_TYPE_2048 , CHAR_SIZE_1x1);
-      break;
-      case 32768:
-      slColRAMMode(CRM16_2048);
-      slCharNbg1(COL_TYPE_32768 , CHAR_SIZE_1x1);
-      break;
-      case 16777216:
-      slColRAMMode(CRM16_2048);
-      slCharNbg1(COL_TYPE_1M , CHAR_SIZE_1x1);
-      break;
+      case 4:
+        slColRAMMode(CRM16_1024);
+        slCharNbg1(COL_TYPE_16 , CHAR_SIZE_1x1);
+        break;
+      case 8:
+        slColRAMMode(CRM16_1024);
+        slCharNbg1(COL_TYPE_256 , CHAR_SIZE_1x1);
+        break;
+      case 11:
+        slColRAMMode(CRM16_2048);
+        slCharNbg1(COL_TYPE_2048 , CHAR_SIZE_1x1);
+        break;
+      case 15:
+        slColRAMMode(CRM32_1024);
+        slCharNbg1(COL_TYPE_32768 , CHAR_SIZE_1x1);
+        break;
+      case 24:
+        slColRAMMode(CRM32_1024);
+        slCharNbg1(COL_TYPE_1M , CHAR_SIZE_1x1);
+        break;
       default:
       SDL_SetError("TODO !");
     }
