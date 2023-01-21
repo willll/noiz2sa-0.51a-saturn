@@ -34,13 +34,13 @@ int main(int argc, char *argv[])
 
 	/* Initialize SDL */
 	if ( SDL_Init(SDL_INIT_EVERYTHING) < 0 ) {
-		sprintf(text_buffer, "Couldn't initialize SDL: %s\n",SDL_GetError());
+		sprintf(text_buffer, "Couldn't initialize SDL: %s",SDL_GetError());
 		slPrint(text_buffer, slLocate (1,line++));
-		SYS_Exit(1);
+	//	SYS_Exit(1);
 	}
 	SDL_SetVideoMode(320, 240, 8, SDL_HWSURFACE);
-	slPrint("SDL initialized\n", slLocate (1,line++));
-
+	slPrint("SDL initialized", slLocate (1,line++));
+/*
 #if SDL_VERSION_ATLEAST(1, 2, 0)
 	slPrint("Compiled with SDL 1.2 or newer\n", slLocate (1,line++));
 #else
@@ -49,25 +49,26 @@ int main(int argc, char *argv[])
 	SDL_VERSION(&compiled);
 
 	memset(text_buffer, 0, buffer_size);
-	sprintf(text_buffer, "Compiled version: %d.%d.%d\n",
+	sprintf(text_buffer, "Compiled version: %d.%d.%d",
 			compiled.major, compiled.minor, compiled.patch);
 	slPrint(text_buffer, slLocate (1,line++));
 
 	memset(text_buffer, 0, buffer_size);
-	sprintf(text_buffer, "Linked version: %d.%d.%d\n",
+	sprintf(text_buffer, "Linked version: %d.%d.%d",
 			SDL_Linked_Version()->major,
 			SDL_Linked_Version()->minor,
 			SDL_Linked_Version()->patch);
 	slPrint(text_buffer, slLocate (1,line++));
 
 	memset(text_buffer, 0, buffer_size);
-	sprintf(text_buffer, "This is a %s endian machine.\n",
+	sprintf(text_buffer, "This is a %s endian machine.",
 		(SDL_BYTEORDER == SDL_LIL_ENDIAN) ? "little" : "big");
 	slPrint(text_buffer, slLocate (1,line++));
 
-	slSynch();
-
-	for(;;);
+*/
+	for(;;) {
+				slSynch();
+	}
 
 	SDL_Quit();
 
