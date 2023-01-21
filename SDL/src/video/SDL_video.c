@@ -568,15 +568,15 @@ SDL_Surface * SDL_SetVideoMode (int width, int height, int bpp, Uint32 flags)
 	prev_mode = SDL_VideoSurface;
 	SDL_LockCursor();
 	SDL_VideoSurface = NULL;	/* In case it's freed by driver */
-	mode = video->SetVideoMode(this, prev_mode,video_w,video_h,video_bpp,flags);
+	mode = video->SetVideoMode(this, prev_mode, video_w, video_h, video_bpp, flags);
 	if ( mode ) { /* Prevent resize events from mode change */
 	    SDL_PrivateResize(mode->w, mode->h);
 
 	    /* Sam - If we asked for OpenGL mode, and didn't get it, fail */
 	    if ( is_opengl && !(mode->flags & SDL_OPENGL) ) {
-		mode = NULL;
+		      mode = NULL;
 	    }
-        }
+  }
 	/*
 	 * rcg11292000
 	 * If you try to set an SDL_OPENGL surface, and fail to find a
@@ -599,10 +599,10 @@ SDL_Surface * SDL_SetVideoMode (int width, int height, int bpp, Uint32 flags)
 
 		/* If we have a palettized surface, create a default palette */
 		if ( mode->format->palette ) {
-	        	SDL_PixelFormat *vf = mode->format;
-			SDL_DitherColors(vf->palette->colors, vf->BitsPerPixel);
-			video->SetColors(this, 0, vf->palette->ncolors,
-			                           vf->palette->colors);
+      	SDL_PixelFormat *vf = mode->format;
+  			SDL_DitherColors(vf->palette->colors, vf->BitsPerPixel);
+  			video->SetColors(this, 0, vf->palette->ncolors,
+  			                           vf->palette->colors);
 		}
 
 		/* Clear the surface to black */
