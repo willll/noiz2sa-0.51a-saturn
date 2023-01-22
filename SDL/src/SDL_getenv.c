@@ -25,16 +25,15 @@ static char rcsid =
  "@(#) $Id$";
 #endif
 
-
 #include "SDL_getenv.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-static char **SDL_env = { "SDL_VIDEODRIVER=saturn",
-                          "SDL_AUDIODRIVER=saturn",
-                          "SDL_JOYSTICK_DEVICE=saturn",
-                          "SDL_NOMOUSE=1" };
+static const char *SDL_env[] = { "SDL_VIDEODRIVER=saturn",
+                                 "SDL_AUDIODRIVER=saturn",
+                                 "SDL_JOYSTICK_DEVICE=saturn",
+                                 "SDL_NOMOUSE=1" };
 
 /* Put a variable of the form "name=value" into the environment */
 int SDL_putenv(const char *variable)
@@ -46,18 +45,17 @@ int SDL_putenv(const char *variable)
 /* Retrieve a variable named "name" from the environment */
 char *SDL_getenv(const char *name)
 {
-	int len, i;
-	char *value;
+	char *value = NULL;
 
-	value = (char *)0;
 	if ( SDL_env ) {
-		len = strlen(name);
-		for ( i=0; SDL_env[i] && !value; ++i ) {
+		int len = strlen(name);
+		for ( int i = 0; SDL_env[i] && !value; ++i ) {
 			if ( (strncmp(SDL_env[i], name, len) == 0) &&
 			     (SDL_env[i][len] == '=') ) {
 				value = &SDL_env[i][len+1];
 			}
 		}
 	}
+
 	return value;
 }
