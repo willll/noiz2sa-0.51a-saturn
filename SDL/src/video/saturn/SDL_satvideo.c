@@ -98,15 +98,15 @@ static unsigned int get_hz()
 
 static SDL_VideoDevice *SAT_CreateDevice(int devindex)
 {
-  SDL_VideoDevice *device;
+  SDL_VideoDevice *device = NULL;
 
   /* Initialize all variables that we clean on shutdown */
   device = (SDL_VideoDevice *)malloc(sizeof(SDL_VideoDevice));
   if ( device ) {
     memset(device, 0, (sizeof *device));
-    device->hidden = (struct SDL_PrivateVideoData *)
-    malloc((sizeof *device->hidden));
+    device->hidden = (struct SDL_PrivateVideoData *)malloc((sizeof *device->hidden));
   }
+
   if ( (device == NULL) || (device->hidden == NULL) ) {
     SDL_OutOfMemory();
     if ( device ) {
@@ -147,8 +147,10 @@ static SDL_VideoDevice *SAT_CreateDevice(int devindex)
 }
 
 VideoBootStrap SAT_bootstrap = {
-  SATURNVID_DRIVER_NAME, "SDL saturn video driver",
-  SAT_Available, SAT_CreateDevice
+  SATURNVID_DRIVER_NAME,
+  "SDL saturn video driver",
+  SAT_Available,
+  SAT_CreateDevice
 };
 
 
@@ -303,6 +305,18 @@ SDL_Surface *SAT_SetVideoMode(_THIS, SDL_Surface *current,
     }
 
     slInitSystem(tv_mode, NULL, 1);
+    
+    slInitBitMap(bmNBG1, BM_512x256, (void *)VDP2_VRAM_A0);
+    slBMPaletteNbg1(1);
+    extern Uint16 VDP2_RAMCTL;
+    VDP2_RAMCTL = VDP2_RAMCTL & 0xFCFF;
+    extern Uint16 VDP2_TVMD;
+    VDP2_TVMD &= 0xFEFF;
+
+    slScrAutoDisp(NBG0ON| NBG1ON);
+
+    slScrCycleSet(0x55EEEEEE , NULL , 0x044EEEEE , NULL);
+
 
     if ( this->hidden->buffer ) {
       free( this->hidden->buffer );
@@ -316,8 +330,8 @@ SDL_Surface *SAT_SetVideoMode(_THIS, SDL_Surface *current,
 
     current = (SDL_Surface*)malloc(sizeof(SDL_Surface));
 
-    current->pixels = (unsigned char*)malloc(sizeof(unsigned char)*width*height);
-    //this->hidden->buffer = malloc(width * height * (bpp / 8));
+    current->pixels = (unsigned char*)malloc( sizeof(unsigned char) * width * height);
+    this->hidden->buffer = malloc(width * height * (bpp / 8));
     this->hidden->buffer = current->pixels;
     if ( ! this->hidden->buffer ) {
       SDL_SetError("Couldn't allocate buffer for requested mode");
@@ -335,12 +349,12 @@ SDL_Surface *SAT_SetVideoMode(_THIS, SDL_Surface *current,
 
 
     /* Allocate the new pixel format for the screen */
-    if ( ! SDL_ReallocFormat(current, bpp, 0, 0, 0, 0) ) {
+    /*if ( ! SDL_ReallocFormat(current, bpp, 0, 0, 0, 0) ) {
       this->hidden->buffer = NULL;
       free(this->hidden->buffer);
       SDL_SetError("Couldn't allocate new pixel format for requested mode");
       return(NULL);
-    }
+    }*/
 
     /* Set up the new mode framebuffer */
     current->flags = (SDL_FULLSCREEN|SDL_HWSURFACE);

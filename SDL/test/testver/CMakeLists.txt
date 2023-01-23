@@ -14,6 +14,39 @@ project( ${TARGET_NAME} VERSION 1.0
 
 set(as_flags )
 
+set( c_flags
+        -Os -m2
+        -save-temps
+        -fno-lto
+        -Wshadow
+        -Wall
+        -Wswitch
+        #-Wpadded
+        -fno-common -Wextra -Wno-narrowing -fno-web
+        -fno-builtin -funit-at-a-time -Wwrite-strings
+        -Wl,--strip-all -Wl,--verbose -mno-fsrra
+        -Wno-padded
+        #-Wno-unused
+        #-Wno-implicit-fallthrough
+        -maccumulate-outgoing-args -fomit-frame-pointer
+        )
+
+set(cxx_flags
+        -O2 -g3 -m2
+        -fpermissive
+        -Wno-conversion-null
+        -fno-lto -Wshadow -Wall -Wswitch -Wpadded
+        -fno-common -Wextra -Wno-narrowing -fno-web
+        -fno-builtin -funit-at-a-time -Wwrite-strings
+        -Wl,--strip-all -Wl,--verbose -mno-fsrra
+        -Wno-padded
+        -maccumulate-outgoing-args
+        -fomit-frame-pointer
+        -fno-rtti
+        -fno-exceptions
+        -Wdeprecated-declarations   # FIXME!
+         )
+
 set(SOURCES
   ${SATURN_COMMON}/crt0.s
   testver.c

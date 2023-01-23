@@ -36,6 +36,10 @@ static char rcsid =
 #include "SDL_leaks.h"
 #endif
 
+#ifdef ENABLE_SATURN
+#include "SDL_saturn.h"
+#endif
+
 /* Initialization/Cleanup routines */
 #ifndef DISABLE_JOYSTICK
 extern int  SDL_JoystickInit(void);
@@ -50,6 +54,7 @@ extern void SDL_StartTicks(void);
 extern int  SDL_TimerInit(void);
 extern void SDL_TimerQuit(void);
 #endif
+
 
 /* The current SDL version */
 static SDL_version version =
@@ -145,15 +150,21 @@ int SDL_InitSubSystem(Uint32 flags)
 		return(-1);
 	}
 #endif
+
 	return(0);
 }
 
 int SDL_Init(Uint32 flags)
 {
+
 #if !defined(DISABLE_THREADS) && defined(ENABLE_PTH)
 	if (!pth_init()) {
 		return -1;
 	}
+#endif
+
+#ifdef ENABLE_SATURN
+  MEM_Init( ( Uint32 )__heap, sizeof( __heap ));
 #endif
 
 	/* Clear the error message */
@@ -168,6 +179,7 @@ int SDL_Init(Uint32 flags)
 	if ( !(flags & SDL_INIT_NOPARACHUTE) ) {
 		SDL_InstallParachute();
 	}
+
 	return(0);
 }
 

@@ -11,7 +11,8 @@ int main(int argc, char *argv[]) {
     SDL_Init(SDL_INIT_EVERYTHING);
     SDL_WM_SetCaption("Hello World! :D", NULL);
     SDL_SetVideoMode(320, 240, 8, SDL_HWSURFACE);
-    //SDL_SetVideoMode(800, 600, 32, SDL_HWSURFACE);
+    SDL_ShowCursor(0);
+
     while (gogogo) {
         SDL_WaitEvent(&event);
         if (event.type == SDL_QUIT)

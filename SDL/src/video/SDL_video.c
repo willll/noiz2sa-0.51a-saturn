@@ -101,11 +101,6 @@ int SDL_VideoInit (const char *driver_name, Uint32 flags)
 	index = 0;
 	video = NULL;
 	if ( driver_name != NULL ) {
-#if 0	/* This will be replaced with a better driver selection API */
-		if ( strrchr(driver_name, ':') != NULL ) {
-			index = atoi(strrchr(driver_name, ':')+1);
-		}
-#endif
 		for ( i=0; bootstrap[i]; ++i ) {
 			if ( strncmp(bootstrap[i]->name, driver_name,
 			             strlen(bootstrap[i]->name)) == 0 ) {
@@ -125,10 +120,12 @@ int SDL_VideoInit (const char *driver_name, Uint32 flags)
 			}
 		}
 	}
+
 	if ( video == NULL ) {
 		SDL_SetError("No available video device");
 		return(-1);
 	}
+
 	current_video = video;
 	current_video->name = bootstrap[i]->name;
 
@@ -182,20 +179,9 @@ int SDL_VideoInit (const char *driver_name, Uint32 flags)
 		SDL_VideoQuit();
 		return(-1);
 	}
+
 	SDL_PublicSurface = NULL;	/* Until SDL_SetVideoMode() */
 
-#if 0 /* Don't change the current palette - may be used by other programs.
-       * The application can't do anything with the display surface until
-       * a video mode has been set anyway. :)
-       */
-	/* If we have a palettized surface, create a default palette */
-	if ( SDL_VideoSurface->format->palette ) {
-	        SDL_PixelFormat *vf = SDL_VideoSurface->format;
-		SDL_DitherColors(vf->palette->colors, vf->BitsPerPixel);
-		video->SetColors(video,
-				 0, vf->palette->ncolors, vf->palette->colors);
-	}
-#endif
 	video->info.vfmt = SDL_VideoSurface->format;
 
 	/* Start the event loop */
@@ -494,7 +480,7 @@ SDL_Surface * SDL_SetVideoMode (int width, int height, int bpp, Uint32 flags)
 	int video_h;
 	int video_bpp;
 	int is_opengl;
-	SDL_GrabMode saved_grab;
+	//SDL_GrabMode saved_grab;
 
 	/* Start up the video driver, if necessary..
 	   WARNING: This is the only function protected this way!
@@ -516,9 +502,9 @@ SDL_Surface * SDL_SetVideoMode (int width, int height, int bpp, Uint32 flags)
 	video_w = width;
 	video_h = height;
 	video_bpp = bpp;
-	if ( ! SDL_GetVideoMode(&video_w, &video_h, &video_bpp, flags) ) {
-		return(NULL);
-	}
+	//if ( ! SDL_GetVideoMode(&video_w, &video_h, &video_bpp, flags) ) {
+	//	return(NULL);
+	//}
 
 	/* Check the requested flags */
 	/* There's no palette in > 8 bits-per-pixel mode */
@@ -562,11 +548,11 @@ SDL_Surface * SDL_SetVideoMode (int width, int height, int bpp, Uint32 flags)
 	}
 
 	/* Save the previous grab state and turn off grab for mode switch */
-	saved_grab = SDL_WM_GrabInputOff();
+	//saved_grab = SDL_WM_GrabInputOff();
 
 	/* Try to set the video mode, along with offset and clipping */
 	prev_mode = SDL_VideoSurface;
-	SDL_LockCursor();
+	//SDL_LockCursor();
 	SDL_VideoSurface = NULL;	/* In case it's freed by driver */
 	mode = video->SetVideoMode(this, prev_mode, video_w, video_h, video_bpp, flags);
 	if ( mode ) { /* Prevent resize events from mode change */
@@ -617,12 +603,7 @@ SDL_Surface * SDL_SetVideoMode (int width, int height, int bpp, Uint32 flags)
 		video->offset_y = (mode->h-height)/2;
 		mode->offset = video->offset_y*mode->pitch +
 				video->offset_x*mode->format->BytesPerPixel;
-#ifdef DEBUG_VIDEO
-  fprintf(stderr,
-	"Requested mode: %dx%dx%d, obtained mode %dx%dx%d (offset %d)\n",
-		width, height, bpp,
-		mode->w, mode->h, mode->format->BitsPerPixel, mode->offset);
-#endif
+
 		mode->w = width;
 		mode->h = height;
 		SDL_SetClipRect(mode, NULL);
@@ -645,8 +626,8 @@ SDL_Surface * SDL_SetVideoMode (int width, int height, int bpp, Uint32 flags)
 	if ( video->UpdateMouse ) {
 		video->UpdateMouse(this);
 	}
-	SDL_WM_GrabInput(saved_grab);
-	SDL_GetRelativeMouseState(NULL, NULL); /* Clear first large delta */
+	//SDL_WM_GrabInput(saved_grab);
+	//SDL_GetRelativeMouseState(NULL, NULL); /* Clear first large delta */
 
 	/* If we're running OpenGL, make the context current */
 	if ( (video->screen->flags & SDL_OPENGL) &&
@@ -718,6 +699,7 @@ do { \
 		if ( ! SDL_VideoSurface ) {
 			return(NULL);
 		}
+
 		SDL_VideoSurface->flags = mode->flags | SDL_OPENGLBLIT;
 
 		/* Free the original video mode surface (is this safe?) */
