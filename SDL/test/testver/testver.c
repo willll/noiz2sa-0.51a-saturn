@@ -66,7 +66,7 @@ int main()
 	slPrint(text_buffer, slLocate (1,line++));
 
 	for(;;) {
-				slSynch();
+		slSynch();
 	}
 
 	SDL_Quit();

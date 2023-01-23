@@ -3,13 +3,13 @@ cmake_minimum_required(VERSION 3.0)
 SET(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-set( TARGET_NAME testver )
-set( TARGET_PATH testver )
+set( TARGET_NAME testtypes )
+set( TARGET_PATH testtypes )
 
 set(INSTALL_DESTINATION exe)
 
 project( ${TARGET_NAME} VERSION 1.0
-                  DESCRIPTION "Check the version and dynamic loading and endianness"
+                  DESCRIPTION "Check to see if the data types are the correct size"
                   LANGUAGES C CXX ASM)
 
 set(as_flags )
@@ -49,7 +49,7 @@ set(cxx_flags
 
 set(SOURCES
   ${SATURN_COMMON}/crt0.s
-  testver.c
+  testtypes.c
   )
 
 set(CD_FILES
