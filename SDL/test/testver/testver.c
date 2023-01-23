@@ -8,8 +8,6 @@
 #include "SDL.h"
 #include "SDL_byteorder.h"
 
-
-#include <sega_dbg.h>
 #include <sega_sys.h>
 
 #include <sgl.h>

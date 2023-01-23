@@ -34,3 +34,6 @@ SDL_Joystick
 SDL_Surface
 SDL_Rect
 SDL_PixelFormat
+
+
+rm -rf * && cmake -DCMAKE_TOOLCHAIN_FILE=$SATURN_CMAKE/sega_saturn.cmake -DCMAKE_INSTALL_PREFIX=/saturn/SDL ../SDL/ && make -j && make install && rm -rf * && cmake -DCMAKE_TOOLCHAIN_FILE=$SATURN_CMAKE/sega_saturn.cmake -DCMAKE_INSTALL_PREFIX=/saturn/SDL ../SDL/test/ && make -j && make install

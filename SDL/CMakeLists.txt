@@ -94,7 +94,7 @@ add_compile_definitions( MODEL_S
                         ENABLE_SATURN
                         DISABLE_JOYSTICK
                         DISABLE_CDROM
-                        DISABLE_TIMERS
+#                        DISABLE_TIMERS
                         DISABLE_THREADS
                         DISABLE_ENDIAN
   #                      DISABLE_FILE
