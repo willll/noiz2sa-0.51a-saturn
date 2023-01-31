@@ -29,6 +29,8 @@ set( c_flags
         -Wshadow
         -Wall
         -Wswitch
+        -Wno-unused-variable
+        -Wfatal-errors
         -fomit-frame-pointer
         -Wl,--strip-all -Wl,--verbose -mno-fsrra
         -Wpointer-sign

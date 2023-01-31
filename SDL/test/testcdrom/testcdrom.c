@@ -70,7 +70,7 @@ static void PrintUsage(char *argv0)
 	fprintf(stderr, "	-sleep <milliseconds>\n");
 }
 
-int main(int argc, char *argv[])
+int main()
 {
 	int drive;
 	int i;
@@ -96,9 +96,9 @@ int main(int argc, char *argv[])
 	/* Open the CD-ROM */
 	drive = 0;
 	i=1;
-	if ( argv[i] && isdigit(argv[i][0]) ) {
-		drive = atoi(argv[i++]);
-	}
+	//if ( argv[i] && isdigit(argv[i][0]) ) {
+	//	drive = atoi(argv[i++]);
+	//}
 	cdrom = SDL_CDOpen(drive);
 	if ( cdrom == NULL ) {
 		fprintf(stderr, "Couldn't open drive %d: %s\n", drive,
@@ -108,16 +108,16 @@ int main(int argc, char *argv[])
 #ifdef TEST_NULLCD
 	cdrom = NULL;
 #endif
-	
+
 	/* Find out which function to perform */
-	for ( ; argv[i]; ++i ) {
-		if ( strcmp(argv[i], "-status") == 0 ) {
+	//for ( ; argv[i]; ++i ) {
+		//if ( strcmp(argv[i], "-status") == 0 ) {
 			/* PrintStatus(drive, cdrom); */
-		} else
-		if ( strcmp(argv[i], "-list") == 0 ) {
+		//} else
+		//if ( strcmp(argv[i], "-list") == 0 ) {
 			ListTracks(cdrom);
-		} else
-		if ( strcmp(argv[i], "-play") == 0 ) {
+		//} else
+		/*if ( strcmp(argv[i], "-play") == 0 ) {
 			int strack, sframe;
 			int ntrack, nframe;
 
@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
 			SDL_CDClose(cdrom);
 			exit(1);
 		}
-	}
+	}*/
 	PrintStatus(drive, cdrom);
 	SDL_CDClose(cdrom);
 
