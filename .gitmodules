@@ -1,3 +1,3 @@
-[submodule "SDL_Saturn"]
+[submodule "SDL"]
 	path = SDL
 	url = https://github.com/willll/SDL_Saturn.git
