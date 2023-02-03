@@ -49,49 +49,38 @@ static int timer_alive = 0;
 	ms  = jif * 1000/HZ
 */
 
-unsigned short sc_tmr_lap()
-{
-    return (TIM_FRT_GET_16());
-}
+Uint32 previousmillis, previouscount;
 
-unsigned long sc_tmr_tick2usec(unsigned long tick)
+//--------------------------------------------------------------------------------------------------------------------------------------
+Uint32 SDL_GetTicks(void)
 {
-    Float32 f = TIM_FRT_CNT_TO_MCR(tick);
-    return ((unsigned long)(f));
-}
+    Uint32 tmp = TIM_FRT_CNT_TO_MCR(TIM_FRT_GET_16())+previousmillis;
+    Uint32 tmp2 = tmp/ 1000;
 
-void sc_tmr_start()
-{
-    TIM_FRT_INIT(8); // 8, 32 or 128
+    previouscount += tmp2;
     TIM_FRT_SET_16(0);
+    previousmillis= (tmp-(tmp2*1000));
+    //set_imask(imask);
+    //
+    return previouscount;
 }
-
-void sc_tick_sleep(unsigned short tick)
+//--------------------------------------------------------------------------------------------------------------------------------------
+void SDL_Delay(Uint32 ms)
 {
-    sc_tmr_start();
-    while(sc_tmr_lap() < tick);
-}
+    ms*=1000; // milliseconds to microseconds
+    Uint32 tmp = TIM_FRT_CNT_TO_MCR(TIM_FRT_GET_16());
+    Uint32 duration=0;
 
-void sc_usleep(unsigned long usec)
-{
-    /* Convert delay to tick value. */
-    unsigned long delay_tick = 0;
-    if(usec < 50*1000)
-    { /* Compute tick value at good precision for delay lower than 50 msec. */
-        delay_tick = (usec*60000) / (sc_tmr_tick2usec(60000));
-    }
-    else
-    { /* Poor precision, but no overflow (up to 42 seconds) for higher values. */
-        delay_tick = (usec*100) / (sc_tmr_tick2usec(100));
-    }
-
-    /* Sleep at most 60000 ticks. */
-    unsigned long i;
-    for(i=0; i<delay_tick; i+=60000)
+    while(duration<=ms)
     {
-        unsigned long s = ((i+60000) < delay_tick ? 60000 : delay_tick - i);
-        sc_tick_sleep(s);
+        Uint32 tmp2 = TIM_FRT_CNT_TO_MCR(TIM_FRT_GET_16());
+        if(tmp2>tmp)
+            duration=tmp2-tmp;
+        else if(tmp2<tmp)
+            duration=(0xffffffff-tmp)+tmp2;
     }
+
+//    sc_usleep(delay);
 }
 
 void SDL_StartTicks()
@@ -99,18 +88,6 @@ void SDL_StartTicks()
 	/* Set first ticks value */
 	//start = jiffies; // FIXME
 }
-
-Uint32 SDL_GetTicks()
-{
-	//return((jiffies-start)*1000/HZ);
-  return 0; // FIXME
-}
-
-void SDL_Delay(Uint32 ms)
-{
-	sc_usleep(ms);
-}
-
 
 
 static int RunTimer(void *unused)

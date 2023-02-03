@@ -19,6 +19,7 @@ static	volatile Uint16	PadData1  = 0x0000;
 static char text_buffer[buffer_size];
 static unsigned char line = 1;
 
+unsigned int * lowworkram = (unsigned int*)(0x200100);
 
 static Uint32 ticktock(Uint32 interval)
 {
@@ -46,6 +47,9 @@ int main()
 		slPrint(text_buffer, slLocate (1,line++));
 		SYS_Exit(1);
 	}
+
+	SDL_SetVideoMode(320, 240, 8, SDL_HWSURFACE);
+	SDL_ShowCursor(0);
 
 	atexit(SDL_Quit);
 
@@ -82,6 +86,7 @@ int main()
 		sprintf(text_buffer, "Could not create timer 1");
 		slPrint(text_buffer, slLocate (1,line++));
 	}
+
 	t2 = SDL_AddTimer(50, callback, (void*)2);
 	if(!t2) {
 		sprintf(text_buffer, "Could not create timer 2");
