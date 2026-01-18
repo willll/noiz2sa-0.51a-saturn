@@ -29,12 +29,11 @@
 #include "attractmanager.h"
 #include "gamepad.h"
 
-static int noSound = 1;
-static int accframe = 0;
+static int noSound = 0;
 
 // Initialize and load preference.
 static void initFirst() {
-  //loadPreference(); TODO : Create default !!
+  loadPreference();
   srand(SDL_GetTicks());
   initBarragemanager();
   initAttractManager();
@@ -225,14 +224,36 @@ static void draw() {
 }
 
 
-static void parseArgs(int argc, char *argv[]) {
+static int accframe = 0;
 
-    noSound = 1;
-    windowMode = 1;
-    buttonReversed = 1;
-    brightness = DEFAULT_BRIGHTNESS;
-    nowait = 0;
-    accframe = 0;
+static void usage(char *argv0) {
+  fprintf(stderr, "Usage: %s [-nosound] [-window] [-reverse] [-brightness n] [-nowait] [-accframe]\n", argv0);
+}
+
+static void parseArgs(int argc, char *argv[]) {
+  int i;
+  for ( i=1 ; i<argc ; i++ ) {
+    if ( strcmp(argv[i], "-nosound") == 0 ) {
+      noSound = 1;
+    } else if ( strcmp(argv[i], "-window") == 0 ) {
+      windowMode = 1;
+    } else if ( strcmp(argv[i], "-reverse") == 0 ) {
+      buttonReversed = 1;
+    } else if ( (strcmp(argv[i], "-brightness") == 0) && argv[i+1] ) {
+      i++;
+      brightness = (int)atoi(argv[i]);
+      if ( brightness < 0 || brightness > 256 ) {
+	brightness = DEFAULT_BRIGHTNESS;
+      }
+    } else if ( strcmp(argv[i], "-nowait") == 0 ) {
+      nowait = 1;
+    } else if ( strcmp(argv[i], "-accframe") == 0 ) {
+      accframe = 1;
+    } else {
+      usage(argv[0]);
+      exit(1);
+    }
+  }
 }
 
 int interval = INTERVAL_BASE;
@@ -249,55 +270,55 @@ int main(int argc, char *argv[]) {
 
   parseArgs(argc, argv);
 
-  // initDegutil();
-  // initSDL(windowMode);
-  // if ( !noSound ) initSound();
-  // initFirst();
-  // initTitle();
-  //
-  // while ( !done ) {
-  //   int startBtn = 0, backBtn = 0;
-  //   SDL_PollEvent(&event);
-  //   keys = SDL_GetKeyState(NULL);
-  //   startBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_START);
-  //   backBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_BACK);
-  //   if ( keys[SDLK_ESCAPE] == SDL_PRESSED || event.type == SDL_QUIT || backBtn ) done = 1;
-  //   if ( keys[SDLK_p] == SDL_PRESSED || startBtn ) {
-  //     if ( !pPrsd ) {
-	// if ( status == IN_GAME ) {
-	//   status = PAUSE;
-	// } else if ( status == PAUSE ) {
-	//   status = IN_GAME;
-	// }
-  //     }
-  //     pPrsd = 1;
-  //   } else {
-  //     pPrsd = 0;
-  //   }
-  //
-  //   nowTick = SDL_GetTicks();
-  //   frame = (int)(nowTick-prvTickCount) / interval;
-  //   if ( frame <= 0 ) {
-  //     frame = 1;
-  //     SDL_Delay(prvTickCount+interval-nowTick);
-  //     if ( accframe ) {
-	// prvTickCount = SDL_GetTicks();
-  //     } else {
-	// prvTickCount += interval;
-  //     }
-  //   } else if ( frame > 5 ) {
-  //     frame = 5;
-  //     prvTickCount = nowTick;
-  //   } else {
-  //     prvTickCount += frame*interval;
-  //   }
-  //   for ( i=0 ; i<frame ; i++ ) {
-  //     move();
-  //     tick++;
-  //   }
-  //   smokeScreen();
-  //   draw();
-  //   flipScreen();
-  // }
+  initDegutil();
+  initSDL(windowMode);
+  if ( !noSound ) initSound();
+  initFirst();
+  initTitle();
+
+  while ( !done ) {
+    int startBtn = 0, backBtn = 0;
+    SDL_PollEvent(&event);
+    keys = SDL_GetKeyState(NULL);
+    startBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_START);
+    backBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_BACK);
+    if ( keys[SDLK_ESCAPE] == SDL_PRESSED || event.type == SDL_QUIT || backBtn ) done = 1;
+    if ( keys[SDLK_p] == SDL_PRESSED || startBtn ) {
+      if ( !pPrsd ) {
+	if ( status == IN_GAME ) {
+	  status = PAUSE;
+	} else if ( status == PAUSE ) {
+	  status = IN_GAME;
+	}
+      }
+      pPrsd = 1;
+    } else {
+      pPrsd = 0;
+    }
+
+    nowTick = SDL_GetTicks();
+    frame = (int)(nowTick-prvTickCount) / interval;
+    if ( frame <= 0 ) {
+      frame = 1;
+      SDL_Delay(prvTickCount+interval-nowTick);
+      if ( accframe ) {
+	prvTickCount = SDL_GetTicks();
+      } else {
+	prvTickCount += interval;
+      }
+    } else if ( frame > 5 ) {
+      frame = 5;
+      prvTickCount = nowTick;
+    } else {
+      prvTickCount += frame*interval;
+    }
+    for ( i=0 ; i<frame ; i++ ) {
+      move();
+      tick++;
+    }
+    smokeScreen();
+    draw();
+    flipScreen();
+  }
   quitLast();
 }

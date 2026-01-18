@@ -98,7 +98,7 @@ static void initPalette() {
   SDL_SetColors(rpanel, color, 0, 256);
 }
 
- static int lyrSize;
+static int lyrSize;
 
 static void makeSmokeBuf() {
   int x, y, mx, my;
@@ -195,11 +195,11 @@ void initSDL(int window) {
   clearRPanel();
 
   loadSprites();
-  // if (joystickMode == 1) {
-  //   stick = SDL_JoystickOpen(0);
-  //   SDL_GameControllerAddMappingsFromFile(SHARE_LOC "gamecontrollerdb.txt", 1);
-  //   gamepad = SDL_GameControllerOpen(0);
-  // }
+  if (joystickMode == 1) {
+    stick = SDL_JoystickOpen(0);
+    SDL_GameControllerAddMappingsFromFile(SHARE_LOC "gamecontrollerdb.txt", 1);
+    gamepad = SDL_GameControllerOpen(0);
+  }
 
   SDL_WM_SetCaption(CAPTION, NULL);
   SDL_ShowCursor(SDL_DISABLE);
@@ -532,7 +532,7 @@ int drawNumCenter(int n, int x ,int y, int s, int c1, int c2) {
 }
 
 
- #define JOYSTICK_AXIS 16384
+#define JOYSTICK_AXIS 16384
 
 int getPadState() {
   int x = 0, y = 0, dpup = 0, dpdown = 0, dpleft = 0, dpright = 0;
@@ -567,7 +567,7 @@ int getPadState() {
   return pad;
 }
 
- int buttonReversed = 0;
+int buttonReversed = 0;
 
 int getButtonState() {
   int btn = 0;

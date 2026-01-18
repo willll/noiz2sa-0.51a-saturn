@@ -4,7 +4,7 @@
 #include "bulletmlerror.h"
 #include "formula-variables.h"
 
-//#include "auto_ptr_fix.h"
+#include "auto_ptr_fix.h"
 
 #include <cassert>
 #include <cmath>
@@ -57,7 +57,7 @@ double BulletMLRunnerImpl::getDirection(BulletMLNode* dirNode,
     }
 
     if (isDefault) {
-		// ÔøΩÔøΩÔøΩÁÇ©ÔøΩ…îÔøΩÔøΩÔøΩÔøΩÔøΩ
+		// ñæÇÁÇ©Ç…îÒå¯ó¶
 		dir += runner_->getAimDirection();
     }
 
@@ -85,7 +85,7 @@ double BulletMLRunnerImpl::getSpeed(BulletMLNode* spdNode) {
 		}
     }
 
-    // ÔøΩfÔøΩtÔøΩHÔøΩÔøΩÔøΩgÔøΩ≈ÇÕâÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ»ÇÔøΩ
+    // ÉfÉtÉHÉãÉgÇ≈ÇÕâΩÇ‡ÇµÇ»Ç¢
 
     prevSpd_ = spd;
 
@@ -162,54 +162,54 @@ void BulletMLRunnerImpl::changes() {
 	int now = runner_->getTurn();
 
     if (changeDir_.get() != 0) {
-			if (changeDir_->isLast(now)) {
-				runner_->doChangeDirection(changeDir_->getLast());
-				//delete changeDir_;
-			}
-			else {
-				runner_->doChangeDirection(changeDir_->getValue(now));
-			}
+		if (changeDir_->isLast(now)) {
+			runner_->doChangeDirection(changeDir_->getLast());
+			delete auto_ptr_release(changeDir_);
+		}
+		else {
+			runner_->doChangeDirection(changeDir_->getValue(now));
+		}
     }
 
     if (changeSpeed_.get() != 0) {
-			if (changeSpeed_->isLast(now)) {
-				runner_->doChangeSpeed(changeSpeed_->getLast());
-				//delete changeSpeed_;
-			}
-			else {
-				runner_->doChangeSpeed(changeSpeed_->getValue(now));
-			}
+		if (changeSpeed_->isLast(now)) {
+			runner_->doChangeSpeed(changeSpeed_->getLast());
+			delete auto_ptr_release(changeSpeed_);
+		}
+		else {
+			runner_->doChangeSpeed(changeSpeed_->getValue(now));
+		}
     }
 
     if (accelx_.get() != 0) {
-			if (accelx_->isLast(now)) {
-				runner_->doAccelX(accelx_->getLast());
-				//delete accelx_;
-			}
-			else {
-				runner_->doAccelX(accelx_->getValue(now));
-			}
+		if (accelx_->isLast(now)) {
+			runner_->doAccelX(accelx_->getLast());
+			delete auto_ptr_release(accelx_);
+		}
+		else {
+			runner_->doAccelX(accelx_->getValue(now));
+		}
     }
 
     if (accely_.get() != 0) {
-			if (accely_->isLast(now)) {
-				runner_->doAccelY(accely_->getLast());
-				//delete accely_;
-			}
-			else {
-				runner_->doAccelY(accely_->getValue(now));
-			}
+		if (accely_->isLast(now)) {
+			runner_->doAccelY(accely_->getLast());
+			delete auto_ptr_release(accely_);
+		}
+		else {
+			runner_->doAccelY(accely_->getValue(now));
+		}
     }
 }
 
 void BulletMLRunnerImpl::runSub() {
-	// ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ»ÇÔøΩÔøΩRÔøΩ[ÔøΩhÔøΩÔøΩÔøΩÀÅB
+	// å©ÇΩÇ≠Ç‡Ç»Ç¢ÉRÅ[ÉhÇæÇÀÅB
 	while (act_ != 0 && !isTurnEnd()) {
 		BulletMLNode* prev = act_;
 		Method fp = commandMap_[act_->getName()];
 		(this->*fp)();
 
-		// ref ÔøΩÔøΩÔøΩÔøΩÔøΩﬂÇÔøΩ
+		// ref Ç©ÇÁñﬂÇÈ
 		if (act_ == 0 &&
 			prev->getParent() != 0 &&
 			prev->getParent()->getName() == BulletMLNode::bulletml)
@@ -220,10 +220,10 @@ void BulletMLRunnerImpl::runSub() {
 			refStack_.pop();
 		}
 
-		// ÔøΩÔøΩÔøΩÔøΩ node ÔøΩÔøΩÔøΩTÔøΩÔøΩ
+		// éüÇÃ node ÇíTÇ∑
 		if (act_ == 0) act_ = prev->next();
 
-		// ÔøΩÔøΩÔøΩ…ëkÔøΩÔøΩÔøΩƒéÔøΩÔøΩÔøΩ node ÔøΩÔøΩÔøΩTÔøΩÔøΩ
+		// è„Ç…ëkÇ¡ÇƒéüÇÃ node ÇíTÇ∑
 		while (act_ == 0) {
 			if (prev->getParent() != 0 &&
 				prev->getParent()->getName() == BulletMLNode::repeat)
@@ -266,7 +266,7 @@ void BulletMLRunnerImpl::run() {
 
 	endTurn_ = runner_->getTurn();
 
-	// ÔøΩ≈åÔøΩÔøΩÔøΩ wait, changeÔøΩnÔøΩÔøΩÔøΩ“Ç¬ÇÔøΩÔøΩÔøΩ
+	// ç≈å„ÇÃ wait, changeånÇë“Ç¬ÇæÇØ
 	if (act_ == 0) {
 		if (!isTurnEnd()) {
 			if (changeDir_.get() == 0 && changeSpeed_.get() == 0 &&
@@ -374,7 +374,7 @@ void BulletMLRunnerImpl::runRepeat() {
 }
 
 void BulletMLRunnerImpl::runFireRef() {
-	std::shared_ptr<Parameters> prevPara = parameters_;
+	boost::shared_ptr<Parameters> prevPara = parameters_;
 	parameters_.reset(getParameters());
 
 	refStack_.push(std::make_pair(act_, prevPara));
@@ -382,7 +382,7 @@ void BulletMLRunnerImpl::runFireRef() {
 }
 
 void BulletMLRunnerImpl::runActionRef() {
-	std::shared_ptr<Parameters> prevPara = parameters_;
+	boost::shared_ptr<Parameters> prevPara = parameters_;
 	parameters_.reset(getParameters());
 
 	refStack_.push(std::make_pair(act_, prevPara));
@@ -390,7 +390,7 @@ void BulletMLRunnerImpl::runActionRef() {
 }
 
 void BulletMLRunnerImpl::runBulletRef() {
-	std::shared_ptr<Parameters> prevPara = parameters_;
+	boost::shared_ptr<Parameters> prevPara = parameters_;
 	parameters_.reset(getParameters());
 
 	refStack_.push(std::make_pair(act_, prevPara));
@@ -424,7 +424,7 @@ void BulletMLRunnerImpl::runChangeSpeed() {
 		spd = getNumberContents(spdNode) * (double)term
 			+ runner_->getBulletSpeed();
 	}
-
+	
 
 	calcChangeSpeed(spd, term);
 
@@ -461,14 +461,14 @@ void BulletMLRunnerImpl::calcChangeDirection(double direction, int term,
 	double dirFirst = runner_->getBulletDirection();
 
 	if (seq) {
-		changeDir_ =  std::make_unique<LinearFunc<int, double>>
+		auto_ptr_copy(changeDir_, new LinearFunc<int, double>
 					  (actTurn_, finalTurn,
-					   dirFirst, dirFirst + direction * term);
+					   dirFirst, dirFirst + direction * term));
 	}
 	else {
 		double dirSpace;
 
-		// ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ∆ãﬂÇÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩƒÇÔøΩÔøΩÔøΩÔøΩÃÇÕåÔøΩÔøΩ\ÔøΩÔÇµÔøΩÔøΩÔøΩÔøΩ
+		// ÇøÇ·ÇÒÇ∆ãﬂÇ¢ï˚ÇâÒÇ¡ÇƒÇ¢Ç≠ÇÃÇÕåãç\ìÔÇµÇ¢ÇÀ
 		double dirSpace1 = direction - dirFirst;
 		double dirSpace2;
 		if (dirSpace1 > 0) dirSpace2 = dirSpace1 - 360;
@@ -476,8 +476,8 @@ void BulletMLRunnerImpl::calcChangeDirection(double direction, int term,
 		if (abs(dirSpace1) < abs(dirSpace2)) dirSpace = dirSpace1;
 		else dirSpace = dirSpace2;
 
-		changeDir_ = std::make_unique<LinearFunc<int, double>>
-					  (actTurn_, finalTurn, dirFirst, dirFirst + dirSpace);
+		auto_ptr_copy(changeDir_, new LinearFunc<int, double>
+					  (actTurn_, finalTurn, dirFirst, dirFirst + dirSpace));
 	}
 }
 
@@ -486,8 +486,8 @@ void BulletMLRunnerImpl::calcChangeSpeed(double speed, int term) {
 
 	double spdFirst = runner_->getBulletSpeed();
 
-	changeSpeed_ = std::make_unique<LinearFunc<int, double>>
-				  (actTurn_, finalTurn, spdFirst, speed);
+	auto_ptr_copy(changeSpeed_, new LinearFunc<int, double>
+				  (actTurn_, finalTurn, spdFirst, speed));
 }
 
 void BulletMLRunnerImpl::calcAccelY(double horizontal, int term,
@@ -508,8 +508,8 @@ void BulletMLRunnerImpl::calcAccelY(double horizontal, int term,
 		finalSpd = horizontal;
 	}
 
-	accely_ = std::make_unique<LinearFunc<int, double>>
-				  (actTurn_, finalTurn, firstSpd, finalSpd);
+	auto_ptr_copy(accely_, new LinearFunc<int, double>
+				  (actTurn_, finalTurn, firstSpd, finalSpd));
 }
 
 void BulletMLRunnerImpl::calcAccelX(double vertical, int term,
@@ -530,8 +530,8 @@ void BulletMLRunnerImpl::calcAccelX(double vertical, int term,
 		finalSpd = vertical;
 	}
 
-	accelx_ = std::make_unique<LinearFunc<int, double>>
-				  (actTurn_, finalTurn, firstSpd, finalSpd);
+	auto_ptr_copy(accelx_ ,new LinearFunc<int, double>
+				  (actTurn_, finalTurn, firstSpd, finalSpd));
 }
 
 void BulletMLRunnerImpl::runVanish() {
@@ -552,7 +552,7 @@ BulletMLRunnerImpl::Parameters* BulletMLRunnerImpl::getParameters() {
 		if (first) {
 			first = false;
 			para = new Parameters;
-			// 0ÔøΩ‘óvÔøΩfÔøΩÕégÔøΩÔøΩÔøΩ»ÇÔøΩ
+			// 0î‘óvëfÇÕégÇÌÇ»Ç¢
 			para->push_back(0);
 		}
 
@@ -561,3 +561,5 @@ BulletMLRunnerImpl::Parameters* BulletMLRunnerImpl::getParameters() {
 
 	return para;
 }
+
+	

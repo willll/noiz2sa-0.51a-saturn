@@ -1,7 +1,7 @@
-/// BulletML ï¿½ï¿½ï¿½ï¿½ï¿½sï¿½ï¿½ï¿½ï¿½
+/// BulletML ‚ğÀs‚·‚é
 /**
- * ï¿½gï¿½ï¿½ï¿½ï¿½ï¿½F
- * BulletMLRunner ï¿½ï¿½ï¿½pï¿½ï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½ï¿½ï¿½Â‚ï¿½ï¿½Ìï¿½ï¿½ï¿½ï¿½ï¿½ï¿½zï¿½Öï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½B
+ * g‚¢•ûF
+ * BulletMLRunner ‚ğŒp³‚µ‚Ä‚¢‚­‚Â‚©‚Ìƒˆ‰¼‘zŠÖ”‚ğÀ‘•‚·‚éB
  */
 
 #ifndef BULLETRUNNER_H_
@@ -11,7 +11,7 @@
 #include "bulletmlcommon.h"
 
 #include <vector>
-//#include <boost/smart_ptr.hpp>
+#include <boost/smart_ptr.hpp>
 
 class BulletMLParser;
 class BulletMLNode;
@@ -19,136 +19,136 @@ class BulletMLRunnerImpl;
 
 typedef std::vector<double> BulletMLParameter;
 
-/// BulletMLRunner ï¿½ï¿½ï¿½ï¿½ï¿½Ô“`ï¿½Bï¿½Égï¿½pï¿½ï¿½ï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½X
+/// BulletMLRunner ‚ªó‘Ô“`’B‚Ég—p‚·‚éƒNƒ‰ƒX
 class BulletMLState {
 public:
-	BulletMLState(BulletMLParser* bulletml,
+	DECLSPEC BulletMLState(BulletMLParser* bulletml,
 						   const std::vector<BulletMLNode*>& node,
-						   std::shared_ptr<BulletMLParameter> para)
+						   boost::shared_ptr<BulletMLParameter> para)
 		: bulletml_(bulletml), node_(node.begin(), node.end()), para_(para) {}
 
-	BulletMLParser* getBulletML() { return bulletml_; }
-	const std::vector<BulletMLNode*>& getNode() const { return node_; }
-	std::shared_ptr<BulletMLParameter> getParameter() { return para_; }
+	DECLSPEC BulletMLParser* getBulletML() { return bulletml_; }
+	DECLSPEC const std::vector<BulletMLNode*>& getNode() const { return node_; }
+	DECLSPEC boost::shared_ptr<BulletMLParameter> getParameter() { return para_; }
 
 private:
 	BulletMLParser* bulletml_;
 	std::vector<BulletMLNode*> node_;
-	std::shared_ptr<BulletMLParameter> para_;
+	boost::shared_ptr<BulletMLParameter> para_;
 
 };
 
-/// BulletML ï¿½ï¿½ï¿½ï¿½ï¿½sï¿½ï¿½ï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½X
+/// BulletML ‚ğÀs‚·‚éƒNƒ‰ƒX
 /**
  * <pre>
- * ï¿½gï¿½ï¿½ï¿½ï¿½ï¿½B
- *  1. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½pï¿½ï¿½ï¿½ï¿½ï¿½ÄABullet ï¿½ï¿½ï¿½ï¿½ï¿½Û‚É“ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½Xï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½B
- *  2. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½zï¿½Öï¿½ï¿½ï¿½ï¿½Sï¿½Äï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½B
- *  3. ï¿½Kï¿½vï¿½È‚ï¿½ï¿½AchangeDirection ï¿½È‚Ç‚Ì‚ï¿½ï¿½ß‚É•Kï¿½vï¿½È‰ï¿½ï¿½zï¿½Öï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½B
- *  4. ï¿½ï¿½ï¿½ÌƒNï¿½ï¿½ï¿½Xï¿½ÌƒIï¿½uï¿½Wï¿½Fï¿½Nï¿½gï¿½É‘Î‚ï¿½ï¿½ÄAcom_->run(); ï¿½È‚Ç‚Æ‚ï¿½ï¿½ï¿½ï¿½B
+ * g‚¢•ûB
+ *  1. ‚±‚ê‚ğŒp³‚µ‚ÄABullet ‚ğÀÛ‚É“®‚©‚¹‚éƒNƒ‰ƒX‚ğì‚éB
+ *  2. ƒˆ‰¼‘zŠÖ”‚ğ‘S‚ÄÀ‘•‚·‚éB
+ *  3. •K—v‚È‚çAchangeDirection ‚È‚Ç‚Ì‚½‚ß‚É•K—v‚È‰¼‘zŠÖ”‚ğÀ‘•‚·‚éB
+ *  4. ‚±‚ÌƒNƒ‰ƒX‚ÌƒIƒuƒWƒFƒNƒg‚É‘Î‚µ‚ÄAcom_->run(); ‚È‚Ç‚Æ‚·‚éB
  * </pre>
  */
 
 class BulletMLRunner {
 public:
-	explicit BulletMLRunner(BulletMLParser* bulletml);
-  explicit BulletMLRunner(BulletMLState* state);
-  virtual ~BulletMLRunner();
+	DECLSPEC explicit BulletMLRunner(BulletMLParser* bulletml);
+    DECLSPEC explicit BulletMLRunner(BulletMLState* state);
+    DECLSPEC virtual ~BulletMLRunner();
 
-	/// ï¿½ï¿½ï¿½sï¿½ï¿½ï¿½ï¿½
-  void run();
-
-public:
-	/// ï¿½ï¿½ï¿½sï¿½ï¿½ï¿½Iï¿½ï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½é‚©ï¿½Ç‚ï¿½ï¿½ï¿½
-	bool isEnd() const;
+	/// Às‚·‚é
+    DECLSPEC void run();
 
 public:
-	// ----- ï¿½ï¿½ï¿½Îï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È‚ï¿½ï¿½ï¿½ï¿½Î‚È‚ï¿½ï¿½È‚ï¿½ï¿½Öï¿½ï¿½Qï¿½Ìnï¿½Ü‚ï¿½ -----
+	/// Às‚ªI—¹‚µ‚Ä‚¢‚é‚©‚Ç‚¤‚©
+	DECLSPEC bool isEnd() const;
+
+public:
+	// ----- â‘ÎÀ‘•‚µ‚È‚¯‚ê‚Î‚È‚ç‚È‚¢ŠÖ”ŒQ‚Ìn‚Ü‚è -----
 	//@{
-	/// ï¿½ï¿½ï¿½Ì’eï¿½ÌŠpï¿½xï¿½ï¿½ï¿½ï¿½ï¿½ß‚ï¿½
+	/// ‚±‚Ì’e‚ÌŠp“x‚ğ‹‚ß‚é
 	/**
-	 * @return ï¿½pï¿½xï¿½ï¿½ï¿½xï¿½Pï¿½Ê‚ÅAï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 0 ï¿½Åï¿½ï¿½vï¿½ï¿½ï¿½ï¿½ï¿½Å•Ô‚ï¿½
+	 * @return Šp“x‚ğ“x’PˆÊ‚ÅAã•ûŒü 0 ‚ÅŒvü‚è‚Å•Ô‚·
 	 */
-	virtual double getBulletDirection() =0;
-	/// ï¿½ï¿½ï¿½Ì’eï¿½ï¿½ï¿½ç©ï¿½@ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½pï¿½xï¿½ï¿½ï¿½ï¿½ï¿½ß‚ï¿½
+	DECLSPEC virtual double getBulletDirection() =0;
+	/// ‚±‚Ì’e‚©‚ç©‹@‚ğ‘_‚¤Šp“x‚ğ‹‚ß‚é
 	/**
-	 * @return ï¿½pï¿½xï¿½ï¿½ï¿½xï¿½Pï¿½Ê‚ÅAï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 0 ï¿½Åï¿½ï¿½vï¿½ï¿½ï¿½ï¿½ï¿½Å•Ô‚ï¿½
+	 * @return Šp“x‚ğ“x’PˆÊ‚ÅAã•ûŒü 0 ‚ÅŒvü‚è‚Å•Ô‚·
 	 */
-	virtual double getAimDirection() =0;
-	/// ï¿½ï¿½ï¿½Ì’eï¿½Ì‘ï¿½ï¿½xï¿½ï¿½ï¿½ï¿½ï¿½ß‚ï¿½
-	virtual double getBulletSpeed() =0;
-	/// ï¿½fï¿½tï¿½Hï¿½ï¿½ï¿½gï¿½Ì‘ï¿½ï¿½xï¿½ï¿½ï¿½ï¿½ï¿½ß‚ï¿½
-	virtual double getDefaultSpeed() =0;
-	/// ï¿½ï¿½ï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½ï¿½ï¿½ß‚ï¿½
+	DECLSPEC virtual double getAimDirection() =0;
+	/// ‚±‚Ì’e‚Ì‘¬“x‚ğ‹‚ß‚é
+	DECLSPEC virtual double getBulletSpeed() =0;
+	/// ƒfƒtƒHƒ‹ƒg‚Ì‘¬“x‚ğ‹‚ß‚é
+	DECLSPEC virtual double getDefaultSpeed() =0;
+	/// ƒ‰ƒ“ƒN‚ğ‹‚ß‚é
 	/**
-	 * @return 0 ï¿½ï¿½ï¿½ï¿½ 1 ï¿½Ü‚Å‚Ìï¿½ï¿½ï¿½
+	 * @return 0 ‚©‚ç 1 ‚Ü‚Å‚ÌÀ”
 	 */
-	virtual double getRank() =0;
-	/// action ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È‚ï¿½ï¿½eï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-	virtual void createSimpleBullet(double direction, double speed) =0;
-	/// action ï¿½ï¿½ï¿½ï¿½ï¿½Â’eï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	DECLSPEC virtual double getRank() =0;
+	/// action ‚ğ‚½‚È‚¢’e‚ğì‚é
+	DECLSPEC virtual void createSimpleBullet(double direction, double speed) =0;
+	/// action ‚ğ‚Â’e‚ğì‚é
 	/**
 	 * @param state
-	 * ï¿½Vï¿½ï¿½ï¿½ï¿½ï¿½eï¿½ï¿½ BulletMLRunner ï¿½ÌƒRï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^ï¿½É“nï¿½ï¿½ï¿½ï¿½ï¿½ÆB
-	 * ï¿½ï¿½ï¿½ï¿½ï¿½nï¿½ï¿½ï¿½È‚ï¿½ï¿½Ì‚Å‚ï¿½ï¿½ï¿½ï¿½ÎAdelete ï¿½Å‰ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È‚ï¿½ï¿½ï¿½ï¿½Î‚È‚ï¿½ï¿½È‚ï¿½ï¿½B
+	 * V‚µ‚¢’e‚Ì BulletMLRunner ‚ÌƒRƒ“ƒXƒgƒ‰ƒNƒ^‚É“n‚·‚±‚ÆB
+	 * ‚à‚µ“n‚³‚È‚¢‚Ì‚Å‚ ‚ê‚ÎAdelete ‚Å‰ğ•ú‚µ‚È‚¯‚ê‚Î‚È‚ç‚È‚¢B
 	 */
-	virtual void createBullet(BulletMLState* state,
+	DECLSPEC virtual void createBullet(BulletMLState* state,
 									   double direction, double speed) =0;
-	/// ï¿½eï¿½ÌŠî€ï¿½Æ‚È‚ï¿½ï¿½^ï¿½[ï¿½ï¿½ï¿½Ì’lï¿½ï¿½ï¿½Ô‚ï¿½ï¿½Aï¿½Êï¿½ï¿½Íƒtï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½ï¿½
+	/// ’e‚ÌŠî€‚Æ‚È‚éƒ^[ƒ“‚Ì’l‚ğ•Ô‚·A’Êí‚ÍƒtƒŒ[ƒ€”
 	/**
 	 * @return
-	 * ï¿½Qï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½Æ‚ÌŠî€ï¿½ÅƒIï¿½[ï¿½_ï¿½[ï¿½Í•ÏXï¿½ï¿½ï¿½Ä\ï¿½ï¿½ï¿½Ü‚ï¿½ï¿½ñ‚ªA
-	 * ï¿½ï¿½ï¿½ï¿½ï¿½Í‹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü‚ï¿½ï¿½ï¿½ï¿½B
-	 * xml ï¿½fï¿½[ï¿½^ï¿½ï¿½ï¿½ÅAwait ï¿½ï¿½ term ï¿½ÌƒIï¿½[ï¿½_ï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½ï¿½ï¿½Î–ï¿½ï¿½è‚ ï¿½ï¿½ï¿½Ü‚ï¿½ï¿½ï¿½ï¿½B
+	 * ƒQ[ƒ€‚²‚Æ‚ÌŠî€‚ÅƒI[ƒ_[‚Í•ÏX‚µ‚Ä\‚¢‚Ü‚¹‚ñ‚ªA
+	 * •‰”‚Í‹–‚³‚ê‚Ü‚¹‚ñB
+	 * xml ƒf[ƒ^ã‚ÅAwait ‚Æ term ‚ÌƒI[ƒ_[‚ª‘µ‚Á‚Ä‚¢‚ê‚Î–â‘è‚ ‚è‚Ü‚¹‚ñB
 	 */
-	virtual int getTurn() =0;
-	/// ï¿½ï¿½ï¿½ï¿½
-	virtual void doVanish() =0;
+	DECLSPEC virtual int getTurn() =0;
+	/// €‚Ê
+	DECLSPEC virtual void doVanish() =0;
 	//@}
-	// ----- ï¿½ï¿½ï¿½Îï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È‚ï¿½ï¿½ï¿½ï¿½Î‚È‚ï¿½ï¿½È‚ï¿½ï¿½Öï¿½ï¿½Qï¿½ÌIï¿½ï¿½ï¿½ï¿½ -----
+	// ----- â‘ÎÀ‘•‚µ‚È‚¯‚ê‚Î‚È‚ç‚È‚¢ŠÖ”ŒQ‚ÌI‚í‚è -----
 
-	// ----- ï¿½Kï¿½vï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öï¿½ï¿½Qï¿½Ìnï¿½Ü‚ï¿½ -----
+	// ----- •K—v‚ª‚ ‚ê‚ÎÀ‘•‚·‚éŠÖ”ŒQ‚Ìn‚Ü‚è -----
    	//@{
-	/// ï¿½eï¿½Ì•ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½wï¿½è‚µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É•ÏXï¿½ï¿½ï¿½ï¿½
-	virtual void doChangeDirection(double) {}
-	/// ï¿½eï¿½Ì‘ï¿½ï¿½xï¿½ï¿½ï¿½wï¿½è‚µï¿½ï¿½ï¿½lï¿½É•ÏXï¿½ï¿½ï¿½ï¿½
-	virtual void doChangeSpeed(double) {}
-	/// accel ï¿½É‘Î‚ï¿½ï¿½ï¿½ï¿½Cï¿½ï¿½ï¿½^ï¿½[ï¿½tï¿½Fï¿½Cï¿½X
+	/// ’e‚Ì•ûŒü‚ğw’è‚µ‚½•ûŒü‚É•ÏX‚·‚é
+	DECLSPEC virtual void doChangeDirection(double) {}
+	/// ’e‚Ì‘¬“x‚ğw’è‚µ‚½’l‚É•ÏX‚·‚é
+	DECLSPEC virtual void doChangeSpeed(double) {}
+	/// accel ‚É‘Î‚·‚éƒCƒ“ƒ^[ƒtƒFƒCƒX
 	/**
 	 * @todo
-	 * horizontal, vertical ï¿½ï¿½ type ï¿½Í–ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Å‚ï¿½ï¿½B
-	 * ï¿½Ç‚ï¿½ï¿½ï¿½ absolute ï¿½É‚È‚ï¿½ï¿½Ä‚ï¿½ï¿½Ü‚ï¿½ï¿½Ü‚ï¿½ï¿½B
+	 * horizontal, vertical ‚Ì type ‚Í–¢À‘•‚Å‚·B
+	 * ‚Ç‚ê‚à absolute ‚É‚È‚Á‚Ä‚µ‚Ü‚¢‚Ü‚·B
 	 */
-	virtual void doAccelX(double) {}
-	/// accel ï¿½É‘Î‚ï¿½ï¿½ï¿½ï¿½Cï¿½ï¿½ï¿½^ï¿½[ï¿½tï¿½Fï¿½Cï¿½X
+	DECLSPEC virtual void doAccelX(double) {}
+	/// accel ‚É‘Î‚·‚éƒCƒ“ƒ^[ƒtƒFƒCƒX
 	/**
 	 * @todo
-	 * horizontal, vertical ï¿½ï¿½ type ï¿½Í–ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Å‚ï¿½ï¿½B
-	 * ï¿½Ç‚ï¿½ï¿½ï¿½ absolute ï¿½É‚È‚ï¿½ï¿½Ä‚ï¿½ï¿½Ü‚ï¿½ï¿½Ü‚ï¿½ï¿½B
+	 * horizontal, vertical ‚Ì type ‚Í–¢À‘•‚Å‚·B
+	 * ‚Ç‚ê‚à absolute ‚É‚È‚Á‚Ä‚µ‚Ü‚¢‚Ü‚·B
 	 */
-	virtual void doAccelY(double) {}
-	/// ï¿½eï¿½Ì‘ï¿½ï¿½ï¿½ï¿½ï¿½ X ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô‚ï¿½ï¿½Ü‚ï¿½
+	DECLSPEC virtual void doAccelY(double) {}
+	/// ’e‚Ì‘¬‚³‚Ì X •ûŒü¬•ª‚ğ•Ô‚µ‚Ü‚·
 	/**
-	 * accel ï¿½ï¿½ï¿½gï¿½ï¿½ï¿½ê‡ï¿½ÍƒIï¿½[ï¿½oï¿½[ï¿½ï¿½ï¿½Cï¿½hï¿½ï¿½ï¿½Ä‰ï¿½ï¿½ï¿½ï¿½ï¿½
+	 * accel ‚ğg‚¤ê‡‚ÍƒI[ƒo[ƒ‰ƒCƒh‚µ‚Ä‰º‚³‚¢
  	 */
-	virtual double getBulletSpeedX() { return 0; }
-	/// ï¿½eï¿½Ì‘ï¿½ï¿½ï¿½ï¿½ï¿½ Y ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô‚ï¿½ï¿½Ü‚ï¿½
+	DECLSPEC virtual double getBulletSpeedX() { return 0; }
+	/// ’e‚Ì‘¬‚³‚Ì Y •ûŒü¬•ª‚ğ•Ô‚µ‚Ü‚·
 	/**
-	 * accel ï¿½ï¿½ï¿½gï¿½ï¿½ï¿½ê‡ï¿½ÍƒIï¿½[ï¿½oï¿½[ï¿½ï¿½ï¿½Cï¿½hï¿½ï¿½ï¿½Ä‰ï¿½ï¿½ï¿½ï¿½ï¿½
+	 * accel ‚ğg‚¤ê‡‚ÍƒI[ƒo[ƒ‰ƒCƒh‚µ‚Ä‰º‚³‚¢
  	 */
-	virtual double getBulletSpeedY() { return 0; }
+	DECLSPEC virtual double getBulletSpeedY() { return 0; }
     //@}
-	// ----- ï¿½Kï¿½vï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öï¿½ï¿½Qï¿½ÌIï¿½ï¿½ï¿½ï¿½ -----
+	// ----- •K—v‚ª‚ ‚ê‚ÎÀ‘•‚·‚éŠÖ”ŒQ‚ÌI‚í‚è -----
 
-	/// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô‚ï¿½
+	/// —”‚ğ•Ô‚·
 	/**
-	 * ï¿½ï¿½ï¿½Ä‚Ì‚Æ‚ï¿½ï¿½ï¿½ï¿½Aï¿½fï¿½tï¿½Hï¿½ï¿½ï¿½gï¿½Å‚ï¿½ std::rand ï¿½ï¿½ï¿½pï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü‚ï¿½ï¿½B
+	 * Œ©‚Ä‚Ì‚Æ‚¨‚èAƒfƒtƒHƒ‹ƒg‚Å‚Í std::rand ‚ª—p‚¢‚ç‚ê‚Ü‚·B
 	 */
-	virtual double getRand() { return (double)rand() / RAND_MAX; }
+	DECLSPEC virtual double getRand() { return (double)rand() / RAND_MAX; }
 
 private:
-	/// BulletMLRunnerImpl ï¿½ï¿½ï¿½Iï¿½[ï¿½oï¿½[ï¿½ï¿½ï¿½Cï¿½hï¿½ï¿½ï¿½ï¿½ï¿½ê‡ï¿½Aï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Iï¿½[ï¿½oï¿½[ï¿½ï¿½ï¿½Cï¿½hï¿½ï¿½ï¿½ï¿½
-	virtual BulletMLRunnerImpl* makeImpl(BulletMLState* state);
+	/// BulletMLRunnerImpl ‚ğƒI[ƒo[ƒ‰ƒCƒh‚·‚éê‡A‚±‚ê‚àƒI[ƒo[ƒ‰ƒCƒh‚·‚é
+	DECLSPEC virtual BulletMLRunnerImpl* makeImpl(BulletMLState* state);
 
 protected:
 	std::vector<BulletMLRunnerImpl*> impl_;
@@ -156,3 +156,4 @@ protected:
 };
 
 #endif // ! BULLETRUNNER_H_
+

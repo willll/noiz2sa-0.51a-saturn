@@ -1,6 +1,6 @@
-/// BulletMLï¿½cï¿½ï¿½ï¿½[ï¿½B
+/// BulletMLƒcƒŠ[B
 /**
- * BulletML ï¿½É“ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½Ä”ï¿½ï¿½ï¿½ï¿½É‚ï¿½ï¿½ñ‚¿‚ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì‚ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½B
+ * BulletML ‚É“Á‰»‚µ‚Ä‚¢‚Ä”ñí‚É‚¢‚ñ‚¿‚«‚­‚³‚¢‚Ì‚ª“Á’¥B
  */
 
 #ifndef BULLETMLTREE_H_
@@ -35,42 +35,42 @@ public:
     typedef TreeNode<BulletMLNode>::ChildIterator ChildIterator;
 
 public:
-	explicit BulletMLNode(const std::string& name);
-    virtual ~BulletMLNode();
+	DECLSPEC explicit BulletMLNode(const std::string& name);
+    DECLSPEC virtual ~BulletMLNode();
 
-    Name getName() const { return name_; }
+    DECLSPEC Name getName() const { return name_; }
 
-    void setValue(const std::string& val);
-    double getValue() const { return val_->value(); }
+    DECLSPEC void setValue(const std::string& val);
+    DECLSPEC double getValue() const { return val_->value(); }
 
-	void setType(const std::string& type) { type_ = string2type(type); }
-	Type getType() const { return type_; }
+	DECLSPEC void setType(const std::string& type) { type_ = string2type(type); }
+	DECLSPEC Type getType() const { return type_; }
 
-	void setRefID(int id) { refID_ = id; }
-	int getRefID() const { return refID_; }
+	DECLSPEC void setRefID(int id) { refID_ = id; }
+	DECLSPEC int getRefID() const { return refID_; }
 
-    BulletMLNode* getChild(Name name);
+    DECLSPEC BulletMLNode* getChild(Name name);
 /*
 
     template <class OutIte_>
     void getAllChildren(Name name, OutIte_ outIte);
 */
-    void getAllChildrenVec(Name name, std::vector<BulletMLNode*>& outvec);
+    DECLSPEC void getAllChildrenVec(Name name, std::vector<BulletMLNode*>& outvec);
 
 
 
-    /// ï¿½qï¿½ï¿½ï¿½Ì’ï¿½ï¿½Éwï¿½è‚µï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½Éˆï¿½ï¿½vï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì‚ï¿½ï¿½ï¿½ï¿½é‚©ï¿½Ç‚ï¿½ï¿½ï¿½
-    bool findNode(Name name) const;
+    /// q‘·‚Ì’†‚Éw’è‚µ‚½–¼‘O‚Éˆê’v‚·‚é‚à‚Ì‚ª‚ ‚é‚©‚Ç‚¤‚©
+    DECLSPEC bool findNode(Name name) const;
 
-    BulletMLNode* next();
+    DECLSPEC BulletMLNode* next();
 
-    void dump();
+    virtual void dump();
 
 protected:
     Name name_;
 	Type type_;
 	int refID_;
-    std::unique_ptr<Number> val_;
+    std::auto_ptr<Number> val_;
 };
 
 

@@ -33,15 +33,17 @@ class FoeCommand : public BulletMLRunner {
   virtual void createBullet(BulletMLState* state, double direction, double speed);
   virtual int getTurn();
   virtual void doVanish();
-
+  
   virtual void doChangeDirection(double d);
   virtual void doChangeSpeed(double s);
-  virtual void doAccelX(double ax);
-  virtual void doAccelY(double ay);
-  virtual double getBulletSpeedX();
-  virtual double getBulletSpeedY();
-
+  virtual void FoeCommand::doAccelX(double ax);
+  virtual void FoeCommand::doAccelY(double ay);
+  virtual double FoeCommand::getBulletSpeedX();
+  virtual double FoeCommand::getBulletSpeedY();
+  
  private:
   struct foe *foe;
 };
 #endif
+
+

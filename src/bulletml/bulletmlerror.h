@@ -5,25 +5,26 @@
 
 #include <stdexcept>
 
-/// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É‚ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ[ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ‚Ë‚ï¿½
-class BulletMLError  {
+/// ‚³‚·‚ª‚É‚à‚¤‚¿‚å‚Á‚Æ[À‚³‚¹‚ñ‚Æ‚Ë‚¦
+class BulletMLError : public std::runtime_error {
 public:
- BulletMLError(const std::string& msg)
- {}
+	DECLSPEC BulletMLError(const std::string& msg)
+		: std::runtime_error(msg) {}
 
-	static void doAssert(const char* str) {
-
+	DECLSPEC static void doAssert(const char* str) {
+		throw BulletMLError(str);
 	}
-	static void doAssert(const std::string& str) {
-
+	DECLSPEC static void doAssert(const std::string& str) {
+		throw BulletMLError(str);
 	}
-	static void doAssert(bool t, const char* str) {
-
+	DECLSPEC static void doAssert(bool t, const char* str) {
+		if (!t) throw BulletMLError(str);
 	}
-	static void doAssert(bool t, const std::string& str) {
-		//if (!t) throw BulletMLError(str);
+	DECLSPEC static void doAssert(bool t, const std::string& str) {
+		if (!t) throw BulletMLError(str);
 	}
 
 };
 
 #endif // ! BULLETMLERROR_H_
+

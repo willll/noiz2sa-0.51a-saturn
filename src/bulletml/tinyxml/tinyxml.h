@@ -1,23 +1,23 @@
 /*
 Copyright (c) 2000 Lee Thomason (www.grinninglizard.com)
 
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any
+This software is provided 'as-is', without any express or implied 
+warranty. In no event will the authors be held liable for any 
 damages arising from the use of this software.
 
-Permission is granted to anyone to use this software for any
-purpose, including commercial applications, and to alter it and
+Permission is granted to anyone to use this software for any 
+purpose, including commercial applications, and to alter it and 
 redistribute it freely, subject to the following restrictions:
 
-1. The origin of this software must not be misrepresented; you must
-not claim that you wrote the original software. If you use this
-software in a product, an acknowledgment in the product documentation
+1. The origin of this software must not be misrepresented; you must 
+not claim that you wrote the original software. If you use this 
+software in a product, an acknowledgment in the product documentation 
 would be appreciated but is not required.
 
-2. Altered source versions must be plainly marked as such, and
+2. Altered source versions must be plainly marked as such, and 
 must not be misrepresented as being the original software.
 
-3. This notice may not be removed or altered from any source
+3. This notice may not be removed or altered from any source 
 distribution.
 */
 
@@ -26,7 +26,6 @@ distribution.
 #define TINYXML_INCLUDED
 
 #include <string>
-#include <cstring>
 #include <stdio.h>
 #include <assert.h>
 
@@ -66,11 +65,11 @@ class TiXmlBase
 	friend class TiXmlNode;
 	friend class TiXmlElement;
 	friend class TiXmlDocument;
-
+ 
   public:
-	TiXmlBase()								{}
+	TiXmlBase()								{}	
 	virtual ~TiXmlBase()					{}
-
+	
 	/*	All TinyXml classes can print themselves to a filestream.
 	*/
 	virtual void Print( FILE* fp, int depth )	= 0;
@@ -83,7 +82,7 @@ class TiXmlBase
 	static const char* SkipWhiteSpace( const char* p );
 
 	/*	Reads an XML name into the string provided. Returns
-		a pointer just past the last character of the name,
+		a pointer just past the last character of the name, 
 		or 0 if the function has an error.
 	*/
 	static const char* ReadName( const char* p, std::string* name );
@@ -131,7 +130,7 @@ class TiXmlNode : public TiXmlBase
 	/** The types of XML nodes supported by TinyXml. (All the
 		unsupported types are picked up by UNKNOWN.)
 	*/
-	enum NodeType
+	enum NodeType 
 	{
 		DOCUMENT, ELEMENT, COMMENT, UNKNOWN, TEXT, DECLARATION, TYPECOUNT
 	};
@@ -171,7 +170,7 @@ class TiXmlNode : public TiXmlBase
 
 	TiXmlNode* FirstChild()	const	{ return firstChild; }		///< The first child of this node. Will be null if there are no children.
 	TiXmlNode* FirstChild( const std::string& value ) const;	///< The first child of this node with the matching 'value'. Will be null if none found.
-
+	
 	TiXmlNode* LastChild() const	{ return lastChild; }		/// The last child of this node. Will be null if there are no children.
 	TiXmlNode* LastChild( const std::string& value ) const;		/// The last child of this node matching 'value'. Will be null if there are no children.
 
@@ -195,11 +194,11 @@ class TiXmlNode : public TiXmlBase
 
 	/// This flavor of IterateChildren searches for children with a particular 'value'
 	TiXmlNode* IterateChildren( const std::string& value, TiXmlNode* previous );
-
+		
 	/** Add a new node related to this. Adds a child past the LastChild.
 		Returns a pointer to the new object or NULL if an error occured.
 	*/
-	TiXmlNode* InsertEndChild( const TiXmlNode& addThis );
+	TiXmlNode* InsertEndChild( const TiXmlNode& addThis );					
 
 	/** Add a new node related to this. Adds a child before the specified child.
 		Returns a pointer to the new object or NULL if an error occured.
@@ -210,12 +209,12 @@ class TiXmlNode : public TiXmlBase
 		Returns a pointer to the new object or NULL if an error occured.
 	*/
 	TiXmlNode* InsertAfterChild(  TiXmlNode* afterThis, const TiXmlNode& addThis );
-
+	
 	/** Replace a child of this node.
 		Returns a pointer to the new object or NULL if an error occured.
 	*/
 	TiXmlNode* ReplaceChild( TiXmlNode* replaceThis, const TiXmlNode& withThis );
-
+	
 	/// Delete a child of this node.
 	bool RemoveChild( TiXmlNode* removeThis );
 
@@ -224,20 +223,20 @@ class TiXmlNode : public TiXmlBase
 
 	/// Navigate to a sibling node.
 	TiXmlNode* PreviousSibling( const std::string& ) const;
-
+	
 	/// Navigate to a sibling node.
 	TiXmlNode* NextSibling() const				{ return next; }
 
 	/// Navigate to a sibling node with the given 'value'.
 	TiXmlNode* NextSibling( const std::string& ) const;
 
-	/** Convenience function to get through elements.
+	/** Convenience function to get through elements. 
 		Calls NextSibling and ToElement. Will skip all non-Element
 		nodes. Returns 0 if there is not another element.
 	*/
 	TiXmlElement* NextSiblingElement() const;
 
-	/** Convenience function to get through elements.
+	/** Convenience function to get through elements. 
 		Calls NextSibling and ToElement. Will skip all non-Element
 		nodes. Returns 0 if there is not another element.
 	*/
@@ -245,14 +244,14 @@ class TiXmlNode : public TiXmlBase
 
 	/// Convenience function to get through elements.
 	TiXmlElement* FirstChildElement()	const;
-
+	
 	/// Convenience function to get through elements.
 	TiXmlElement* FirstChildElement( const std::string& value ) const;
 
 	/// Query the type (as an enumerated value, above) of this node.
 	virtual int Type()	{ return type; }
 
-	/** Return a pointer to the Document this node lives in.
+	/** Return a pointer to the Document this node lives in. 
 		Returns null if not in a document.
 	*/
 	TiXmlDocument* GetDocument() const;
@@ -279,14 +278,14 @@ class TiXmlNode : public TiXmlBase
 
 	void CopyToClone( TiXmlNode* target ) const	{ target->value = value; }
 
-	TiXmlNode*		parent;
+	TiXmlNode*		parent;		
 	NodeType		type;
-
+	
 	TiXmlNode*		firstChild;
 	TiXmlNode*		lastChild;
 
 	std::string		value;
-
+	
 	TiXmlNode*		prev;
 	TiXmlNode*		next;
 };
@@ -327,13 +326,13 @@ class TiXmlAttribute : public TiXmlBase
 	bool operator<( const TiXmlAttribute& rhs )	 const { return name < rhs.name; }
 	bool operator>( const TiXmlAttribute& rhs )  const { return name > rhs.name; }
 
-	/*	[internal use]
+	/*	[internal use] 
 		Attribtue parsing starts: first letter of the name
 						 returns: the next char after the value end quote
-	*/
+	*/	
 	const char* Parse( const char* );
 
-	// [internal use]
+	// [internal use] 
 	virtual void Print( FILE* fp, int depth );
 
 	// [internal use]
@@ -352,9 +351,9 @@ class TiXmlAttribute : public TiXmlBase
 
 /*	A class used to manage a group of attributes.
 	It is only used internally, both by the ELEMENT and the DECLARATION.
-
+	
 	The set can be changed transparent to the Element and Declaration
-	classes that use it, but NOT transparent to the Attribute
+	classes that use it, but NOT transparent to the Attribute 
 	which has to implement a next() and previous() method. Which makes
 	it a bit problematic and prevents the use of STL.
 
@@ -373,7 +372,7 @@ class TiXmlAttributeSet
 
 	TiXmlAttribute* First() const	{ return ( sentinel.next == &sentinel ) ? 0 : sentinel.next; }
 	TiXmlAttribute* Last()  const	{ return ( sentinel.prev == &sentinel ) ? 0 : sentinel.prev; }
-
+	
 	TiXmlAttribute*	Find( const std::string& name ) const;
 
   private:
@@ -406,13 +405,13 @@ class TiXmlElement : public TiXmlNode
 	/** Sets an attribute of name to a given value. The attribute
 		will be created if it does not exist, or changed if it does.
 	*/
-	void SetAttribute( const std::string& name,
+	void SetAttribute( const std::string& name, 
 					   const std::string& value );
 
 	/** Sets an attribute of name to a given value. The attribute
 		will be created if it does not exist, or changed if it does.
 	*/
-	void SetAttribute( const std::string& name,
+	void SetAttribute( const std::string& name, 
 					   int value );
 
 	/** Deletes an attribute with the given name.
@@ -424,14 +423,14 @@ class TiXmlElement : public TiXmlNode
 
 	// [internal use] Creates a new Element and returs it.
 	virtual TiXmlNode* Clone() const;
-	// [internal use]
+	// [internal use] 
 	virtual void Print( FILE* fp, int depth );
 
   protected:
-	/*	[internal use]
+	/*	[internal use] 
 		Attribtue parsing starts: next char past '<'
 						 returns: next char past '>'
-	*/
+	*/	
 	virtual const char* Parse( const char* );
 	const char* ReadValue( const char* p );
 
@@ -451,14 +450,14 @@ class TiXmlComment : public TiXmlNode
 
 	// [internal use] Creates a new Element and returs it.
 	virtual TiXmlNode* Clone() const;
-	// [internal use]
+	// [internal use] 
 	virtual void Print( FILE* fp, int depth );
 
   protected:
-	/*	[internal use]
+	/*	[internal use] 
 		Attribtue parsing starts: at the ! of the !--
 						 returns: next char past '>'
-	*/
+	*/	
 	virtual const char* Parse( const char* );
 };
 
@@ -474,15 +473,15 @@ class TiXmlText : public TiXmlNode
 
 	// [internal use] Creates a new Element and returns it.
 	virtual TiXmlNode* Clone() const;
-	// [internal use]
+	// [internal use] 
 	virtual void Print( FILE* fp, int depth );
-	// [internal use]
+	// [internal use] 	
 	bool Blank();	// returns true if all white space and new lines
 
-	/*	[internal use]
+	/*	[internal use] 
 		Attribtue parsing starts: First char of the text
 						 returns: next char past '>'
-	*/
+	*/	
 	virtual const char* Parse( const char* );
 };
 
@@ -510,7 +509,7 @@ protected :
 	@endverbatim
 
 	TinyXml will happily read or write files without a declaration,
-	however. There are 3 possible attributes to the declaration:
+	however. There are 3 possible attributes to the declaration: 
 	version, encoding, and standalone.
 
 	Note: In this version of the code, the attributes are
@@ -524,7 +523,7 @@ class TiXmlDeclaration : public TiXmlNode
 	TiXmlDeclaration()   : TiXmlNode( TiXmlNode::DECLARATION ) {}
 
 	/// Construct.
-	TiXmlDeclaration( const std::string& version,
+	TiXmlDeclaration( const std::string& version, 
 					  const std::string& encoding,
 					  const std::string& standalone );
 
@@ -534,19 +533,19 @@ class TiXmlDeclaration : public TiXmlNode
 	const std::string& Version()		{ return version; }
 	/// Encoding. Will return empty if none was found.
 	const std::string& Encoding()		{ return encoding; }
-	/// Is this a standalone document?
+	/// Is this a standalone document? 
 	const std::string& Standalone()		{ return standalone; }
 
 	// [internal use] Creates a new Element and returs it.
 	virtual TiXmlNode* Clone() const;
-	// [internal use]
+	// [internal use] 
 	virtual void Print( FILE* fp, int depth );
 
   protected:
-	//	[internal use]
+	//	[internal use] 
 	//	Attribtue parsing starts: next char past '<'
 	//					 returns: next char past '>'
-
+	
 	virtual const char* Parse( const char* );
 
   private:
@@ -556,9 +555,9 @@ class TiXmlDeclaration : public TiXmlNode
 };
 
 
-/** Any tag that tinyXml doesn't recognize is save as an
+/** Any tag that tinyXml doesn't recognize is save as an 
 	unknown. It is a tag of text, but should not be modified.
-	It will be written back to the XML, unchanged, when the file
+	It will be written back to the XML, unchanged, when the file 
 	is saved.
 */
 class TiXmlUnknown : public TiXmlNode
@@ -567,16 +566,16 @@ class TiXmlUnknown : public TiXmlNode
 	TiXmlUnknown() : TiXmlNode( TiXmlNode::UNKNOWN ) {}
 	virtual ~TiXmlUnknown() {}
 
-	// [internal use]
+	// [internal use] 	
 	virtual TiXmlNode* Clone() const;
-	// [internal use]
+	// [internal use] 	
 	virtual void Print( FILE* fp, int depth );
 
   protected:
-	/*	[internal use]
+	/*	[internal use] 
 		Attribute parsing starts: First char of the text
 						 returns: next char past '>'
-	*/
+	*/	
 	virtual const char* Parse( const char* );
 };
 
@@ -592,10 +591,10 @@ class TiXmlDocument : public TiXmlNode
 	TiXmlDocument();
 	/// Create a document with a name. The name of the document is also the filename of the xml.
 	TiXmlDocument( const std::string& documentName );
-
+	
 	virtual ~TiXmlDocument() {}
 
-	/** Load a file using the current document value.
+	/** Load a file using the current document value. 
 		Returns true if successful. Will delete any existing
 		document data before loading.
 	*/
@@ -611,7 +610,7 @@ class TiXmlDocument : public TiXmlNode
 
 	/// Parse the given null terminated block of xml data.
 	const char* Parse( const char* );
-
+	
 	/// If, during parsing, a error occurs, Error will be set to true.
 	bool Error()						{ return error; }
 	/// Contains a textual (english) description of the error if one occurs.
@@ -621,20 +620,21 @@ class TiXmlDocument : public TiXmlNode
 	virtual void Print( FILE* fp, int depth = 0 );
 	/// Dump the document to standard out.
 	void Print()										{ Print( stdout, 0 ); }
-
-	// [internal use]
+  
+	// [internal use] 	
 	virtual TiXmlNode* Clone() const;
-	// [internal use]
+	// [internal use] 	
 	void SetError( int err ) {		assert( err > 0 && err < TIXML_ERROR_STRING_COUNT );
-									error   = true;
+									error   = true; 
 									errorId = err;
 									errorDesc = errorString[ errorId ]; }
 
   private:
 	bool error;
-	int  errorId;
+	int  errorId;	
 	std::string errorDesc;
 };
 
 
 #endif
+

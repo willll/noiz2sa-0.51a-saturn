@@ -12,7 +12,7 @@
 extern "C" {
 #include "SDL.h"
 #include <sys/types.h>
-//#include <dirent.h>
+#include <dirent.h>
 #include "noiz2sa.h"
 #include "degutil.h"
 #include "vector.h"
@@ -25,8 +25,6 @@ extern "C" {
 
 #include "barragemanager.h"
 #include "foe.h"
-
-#include <cstring>
 
 #define BARRAGE_PATTERN_MAX 32
 #define SHARE_LOC "/usr/share/games/noiz2sa/"
@@ -42,7 +40,7 @@ static const char *BARRAGE_DIR_NAME[] = {
 };
 
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
-//  DIR *dp;
+  DIR *dp;
   struct dirent *dir;
   int i = 0;
   char fileName[256];
@@ -51,20 +49,20 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   strcpy(fullDirPath, SHARE_LOC);
   strcat(fullDirPath, dirPath);
 
-  // if ( (dp = opendir(fullDirPath)) == NULL ) {
-  //   fprintf(stderr, "Can't open directory: %s\n", dirPath);
-  //   exit(1);
-  // }
-  // while ((dir = readdir(dp)) != NULL) {
-  //   if ( strcmp(strrchr(dir->d_name, '.'), ".xml") != 0 ) continue; // Read .xml files.
-  //   strcpy(fileName, fullDirPath);
-  //   strcat(fileName, "/");
-  //   strcat(fileName, dir->d_name);
-  //   brg[i].bulletml = new BulletMLParserTinyXML(fileName);
-  //   brg[i].bulletml->build(); i++;
-  //   printf("%s\n", fileName);
-  // }
-  // closedir(dp);
+  if ( (dp = opendir(fullDirPath)) == NULL ) {
+    fprintf(stderr, "Can't open directory: %s\n", dirPath);
+    exit(1);
+  }
+  while ((dir = readdir(dp)) != NULL) {
+    if ( strcmp(strrchr(dir->d_name, '.'), ".xml") != 0 ) continue; // Read .xml files.
+    strcpy(fileName, fullDirPath);
+    strcat(fileName, "/");
+    strcat(fileName, dir->d_name);
+    brg[i].bulletml = new BulletMLParserTinyXML(fileName);
+    brg[i].bulletml->build(); i++;
+    printf("%s\n", fileName);
+  }
+  closedir(dp);
   return i;
 }
 
@@ -165,7 +163,7 @@ static int quickAppType;
  * Make the barrage pattern of this scene.
  */
 void setBarrages(float level, int bm, int midMode) {
-  int bpn = 0, bn;
+  int bpn = 0, bn, i;
   int barrageMax, addFrqLoop = 0;
 
   barrageNum = 0;
