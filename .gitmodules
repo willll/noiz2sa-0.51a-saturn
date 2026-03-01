@@ -1,3 +1,10 @@
 [submodule "SDL"]
 	path = SDL
 	url = https://github.com/willll/SDL_Saturn.git
+[submodule "SDL_mixer"]
+	path = SDL_mixer
+	url = https://github.com/willll/SDL_mixer_Saturn.git
+[submodule "SaturnRingLib"]
+	path = SaturnRingLib
+	url = https://github.com/ReyeMe/SaturnRingLib.git
+	branch = features/USB-dev-cart
