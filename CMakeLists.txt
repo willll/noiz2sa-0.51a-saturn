@@ -48,21 +48,21 @@ set(SOURCES_NOIZ2SA
 
   ${SATURN_COMMON}/crt0.s
 
-  src/noiz2sa.c
-  src/degutil.c
-  src/vector.c
-  src/screen.c
-  src/shot.c
-  src/ship.c
-  src/bonus.c
-  src/frag.c
-  src/clrtbl.c
-  src/letterrender.c
-  src/gamepad.c
-  src/rand.c
-  src/attractmanager.c
-  src/soundmanager.c
-  src/background.c
+  src/noiz2sa.cpp
+  src/degutil.cpp
+  src/vector.cpp
+  src/screen.cpp
+  src/shot.cpp
+  src/ship.cpp
+  src/bonus.cpp
+  src/frag.cpp
+  src/clrtbl.cpp
+  src/letterrender.cpp
+  src/gamepad.cpp
+  src/rand.cpp
+  src/attractmanager.cpp
+  src/soundmanager.cpp
+  src/background.cpp
   src/foe.cc
   src/foecommand.cc
   src/barragemanager.cc
