@@ -16,6 +16,45 @@ Recent maintenance in this fork includes:
 - migration of the top-level game sources in `src/` from C to C++
 - a documented BulletML binary format (`.bmlb`)
 - XML-to-binary conversion tooling in `src/bulletml_binary/`
+- Complete SaturnRingLib CMake integration with shared.mk feature parity
+
+## Building
+
+The build system uses `/opt/saturn/CMake/sega_saturn.cmake` for toolchain configuration.
+
+### Quick Start
+
+```bash
+# Configure (toolchain auto-loaded)
+cmake -B build
+
+# Build (automatically creates .bin file and asset directories)
+cmake --build build
+```
+
+**Build Outputs:**
+- `build/noiz2sa.elf` - Main executable
+- `build/cd/data/0.bin` - Saturn binary format (auto-generated)
+- `build/cd/data/` - Asset directory with required metadata files
+- `build/cd/music/` - Music asset directory
+
+### Create ISO Image
+
+```bash
+# Enable ISO creation
+cp postbuild.cmake.example postbuild.cmake
+
+# Rebuild
+cmake --build build
+
+# Outputs: build/noiz2sa.iso and build/noiz2sa.cue
+```
+
+### Documentation
+
+- [BUILD_GUIDE.md](BUILD_GUIDE.md) - Complete build instructions and configuration options
+- [SRL_CMAKE_MIGRATION.md](SRL_CMAKE_MIGRATION.md) - SaturnRingLib CMake integration details
+- [src/bulletml_binary/README.md](src/bulletml_binary/README.md) - BulletML binary format documentation
 
 ## Upstream / Legacy Readme
 
