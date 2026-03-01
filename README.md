@@ -1,3 +1,26 @@
+# noiz2sa-0.51a-saturn
+
+Sega Saturn-focused port and modernization of Kenta Cho's abstract shoot-em-up **Noiz2sa**.
+
+## Project Description
+
+This repository contains the Saturn build of Noiz2sa with platform integrations for:
+
+- SDL and SDL_mixer Saturn submodules
+- SaturnRingLib integration
+- BulletML-based barrage pattern system
+- CMake-based cross-build flow for Saturn toolchains
+
+Recent maintenance in this fork includes:
+
+- migration of the top-level game sources in `src/` from C to C++
+- a documented BulletML binary format (`.bmlb`)
+- XML-to-binary conversion tooling in `src/bulletml_binary/`
+
+## Upstream / Legacy Readme
+
+The original README content from the classic PC release is preserved below for historical reference.
+
 Noiz2sa  readme_e.txt
 for Windows98/2000/XP
 ver. 0.60

@@ -27,6 +27,8 @@ project( noiz2sa VERSION 1.0
                   DESCRIPTION "Sega Saturn noiz2sa"
                   LANGUAGES C CXX ASM)
 
+include(${CMAKE_SOURCE_DIR}/SRL.cmake)
+
 set(as_flags )
 set(cxx_flags
         -O2 -g3 -m2
@@ -101,6 +103,7 @@ target_link_options(noiz2sa.elf PUBLIC
 )
 
 target_link_libraries (noiz2sa.elf PUBLIC bulletml sdl_mixer sdl )
+srl_link_target(noiz2sa.elf)
 
 #target_link_libraries(noiz2sa.elf PUBLIC ${SEGASGL}/lib/libsgl.a )
 #target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_scl.a )
