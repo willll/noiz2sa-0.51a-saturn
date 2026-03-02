@@ -5,7 +5,17 @@ cmake_minimum_required(VERSION 3.0)
 # ============================================================================
 # Use the standard Saturn toolchain file
 if(NOT CMAKE_TOOLCHAIN_FILE)
-    set(CMAKE_TOOLCHAIN_FILE "/opt/saturn/CMake/sega_saturn.cmake")
+    if(DEFINED ENV{CMAKE_MODULE_PATH})
+        list(PREPEND CMAKE_MODULE_PATH $ENV{CMAKE_MODULE_PATH})
+    endif()
+    find_file(SATURN_TOOLCHAIN_FILE
+        NAMES sega_saturn.cmake
+        PATHS ${CMAKE_MODULE_PATH}
+        NO_DEFAULT_PATH)
+    if(NOT SATURN_TOOLCHAIN_FILE)
+        set(SATURN_TOOLCHAIN_FILE "/opt/saturn/CMake/sega_saturn.cmake")
+    endif()
+    set(CMAKE_TOOLCHAIN_FILE "${SATURN_TOOLCHAIN_FILE}")
     include("${CMAKE_TOOLCHAIN_FILE}")
 endif()
 
@@ -35,11 +45,10 @@ else()
 endif()
 
 # Add subdirectories
-add_subdirectory(src/bulletml)
-add_subdirectory(SDL)
-add_subdirectory(SDL_mixer)
+add_subdirectory(src/bulletml_binary)
 
-include(${CMAKE_SOURCE_DIR}/cmake/SRL.cmake)
+set(SRL_ROOT "${SRL_INSTALL_ROOT}" CACHE PATH "Path to SaturnRingLib root" FORCE)
+include("/saturn/noiz2sa-0.51a-saturn/cmake/SRL.cmake")
 
 # ============================================================================
 # SaturnRingLib Configuration Options (from shared.mk)
@@ -162,18 +171,23 @@ endif()
 
 set(as_flags )
 set(cxx_flags
-        -O2 -g3 -m2
+    -O2 -g3 -m2 -c
         -fpermissive
         -Wno-conversion-null
-        -fno-lto -Wshadow -Wall -Wswitch -Wpadded
+    -Wno-strict-aliasing
+    -fno-lto -Wshadow -Wall -Wswitch -Wpadded
         -fno-common -Wextra -Wno-narrowing -fno-web
         -fno-builtin -funit-at-a-time -Wwrite-strings
-        -Wl,--strip-all -Wl,--verbose -mno-fsrra
+    -mno-fsrra
         -Wno-padded
         -maccumulate-outgoing-args
         -fomit-frame-pointer
         -fno-rtti
         -fno-exceptions
+    -fno-unwind-tables
+    -fno-asynchronous-unwind-tables
+    -fno-threadsafe-statics
+    -fno-use-cxa-atexit
         -Wdeprecated-declarations   # FIXME!
          )
 
@@ -184,9 +198,6 @@ if(NOT SRL_CUSTOM_CCFLAGS STREQUAL "")
 endif()
 
 set(SOURCES_NOIZ2SA
-
-  ${SATURN_COMMON}/crt0.s
-
   src/noiz2sa.cpp
   src/degutil.cpp
   src/vector.cpp
@@ -208,7 +219,7 @@ set(SOURCES_NOIZ2SA
   )
 
 # Add SGL workarea source (from SaturnRingLib's shared.mk SYSSOURCES)
-set(SGL_WORKAREA_SOURCE "${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/SRC/workarea.c")
+set(SGL_WORKAREA_SOURCE "${SRL_SGL_DIR}/SRC/workarea.c")
 if(EXISTS "${SGL_WORKAREA_SOURCE}")
     list(APPEND SOURCES_NOIZ2SA "${SGL_WORKAREA_SOURCE}")
 else()
@@ -216,7 +227,7 @@ else()
 endif()
 
 # Add SGL preloader source (C++ preloader for SGL initialization)
-set(SGL_PRELOADER_SOURCE "${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/SRC/preloader.cxx")
+set(SGL_PRELOADER_SOURCE "${SRL_SGL_DIR}/SRC/preloader.cxx")
 if(EXISTS "${SGL_PRELOADER_SOURCE}")
     list(APPEND SOURCES_NOIZ2SA "${SGL_PRELOADER_SOURCE}")
 else()
@@ -240,10 +251,6 @@ target_include_directories(
     ${SRL_INSTALL_ROOT}/modules/dummy
     ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
     ${SRL_INSTALL_ROOT}/modules/tlsf
-    ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/INC
-    ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/dummy
-    ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/SaturnMathPP
-    ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/tlsf
     # Project headers
     .
     src
@@ -261,7 +268,7 @@ target_link_options(noiz2sa.elf PUBLIC
     "SHELL:-Xlinker --strip-debug"
     "SHELL:-Xlinker -fno-lto"
     "SHELL:-m2 -nostartfiles"
-    "SHELL:-T${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/sgl.linker"
+    "SHELL:-T${SRL_SGL_DIR}/sgl.linker"
     "SHELL:-lc -lgcc -lm"
 )
 
@@ -270,7 +277,7 @@ if(NOT SRL_CUSTOM_LDFLAGS STREQUAL "")
     target_link_options(noiz2sa.elf PUBLIC "SHELL:${SRL_CUSTOM_LDFLAGS}")
 endif()
 
-target_link_libraries (noiz2sa.elf PUBLIC bulletml sdl_mixer sdl )
+target_link_libraries (noiz2sa.elf PUBLIC bulletml_binary )
 srl_link_target(noiz2sa.elf)
 
 # ============================================================================
