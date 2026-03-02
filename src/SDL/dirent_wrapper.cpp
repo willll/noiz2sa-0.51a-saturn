@@ -1,9 +1,6 @@
 #include <dirent.h>
 
 // Manual definitions to replace stddef.h (not available on Saturn)
-#ifndef null_ptr
-#define null_ptr ((void*)0)
-#endif
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
 typedef unsigned int size_t;
@@ -18,7 +15,7 @@ DIR* opendir(const char* name) {
 
 struct dirent* readdir(DIR* dirp) {
     (void)dirp;
-    return null_ptr;
+    return nullptr;
 }
 
 int closedir(DIR* dirp) {

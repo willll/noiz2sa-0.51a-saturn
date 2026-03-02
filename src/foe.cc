@@ -46,7 +46,7 @@ static void removeFoeForced(Foe *fe) {
   removeFoeForcedNoDeleteCmd(fe);
   if ( fe->cmd ) {
     delete fe->cmd;
-    fe->cmd = null_ptr;
+    fe->cmd = nullptr;
   }
 }
 
@@ -81,7 +81,7 @@ static Foe* getNextFoe() {
     foeIdx--; if ( foeIdx < 0 ) foeIdx = FOE_MAX-1;
     if ( foe[i].spc == NOT_EXIST ) break;
   }
-  if ( i >= FOE_MAX ) return null_ptr;
+  if ( i >= FOE_MAX ) return nullptr;
   return &(foe[i]);
 }
 
@@ -89,7 +89,7 @@ Foe* addFoe(int x, int y, double rank, int d, int spd, int type, int shield,
 	    BulletMLParser *parser) {
   int i;
   Foe *fe = getNextFoe();
-  if ( !fe ) return null_ptr;
+  if ( !fe ) return nullptr;
 
   fe->parser = parser;
 
@@ -115,7 +115,7 @@ Foe* addFoe(int x, int y, double rank, int d, int spd, int type, int shield,
 Foe* addFoeBossActiveBullet(int x, int y, double rank, 
 			    int d, int spd, BulletMLParser *parser) {
   Foe *fe = addFoe(x, y, rank, d, spd, BOSS_TYPE, 0, parser);
-  if ( !fe ) return null_ptr;
+  if ( !fe ) return nullptr;
   foeCnt--; enNum[BOSS_TYPE]--;
   fe->spc = BOSS_ACTIVE_BULLET;
   return fe;
@@ -139,7 +139,7 @@ void addFoeActiveBullet(Vector *pos, double rank,
 void addFoeNormalBullet(Vector *pos, double rank, int d, int spd, int color) {
   Foe *fe = getNextFoe();
   if ( !fe ) return;
-  fe->cmd = null_ptr;
+  fe->cmd = nullptr;
   fe->spos = fe->ppos = fe->pos = *pos;
   fe->vel.x = fe->vel.y = 0;
   fe->rank = rank;
@@ -203,7 +203,7 @@ void moveFoes() {
       if ( fe->spc == NOT_EXIST ) {
 	if ( fe->cmd ) {
 	  delete fe->cmd;
-	  fe->cmd = null_ptr;
+	  fe->cmd = nullptr;
 	}
 	continue;
       }

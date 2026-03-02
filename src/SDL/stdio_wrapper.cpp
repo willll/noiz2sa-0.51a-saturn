@@ -92,7 +92,7 @@ int vsnprintf(char* buf, size_t size, const char* fmt, va_list args) {
 FILE* fopen(const char* filename, const char* mode) {
     (void)filename;
     (void)mode;
-    return null_ptr;
+    return nullptr;
 }
 
 int fclose(FILE* file) {
@@ -104,7 +104,7 @@ FILE* freopen(const char* filename, const char* mode, FILE* file) {
     (void)filename;
     (void)mode;
     (void)file;
-    return null_ptr;
+    return nullptr;
 }
 
 int fgetc(FILE* file) {
@@ -122,7 +122,7 @@ char* fgets(char* str, int size, FILE* file) {
     (void)str;
     (void)size;
     (void)file;
-    return null_ptr;
+    return nullptr;
 }
 
 int fputs(const char* str, FILE* file) {
@@ -268,12 +268,12 @@ int setvbuf(FILE* file, char* buf, int mode, size_t size) {
 }
 
 FILE* tmpfile(void) {
-    return null_ptr;
+    return nullptr;
 }
 
 char* tmpnam(char* buf) {
     if (buf) buf[0] = '\0';
-    return null_ptr;
+    return nullptr;
 }
 
 int remove(const char* filename) {

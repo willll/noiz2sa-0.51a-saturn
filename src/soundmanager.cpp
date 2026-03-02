@@ -67,7 +67,7 @@ static void loadSounds() {
     strcpy(name, SHARE_LOC);
     strcat(name, "sounds/");
     strcat(name, musicFileName[i]);
-    if ( null_ptr == (music[i] = Mix_LoadMUS(name)) ) {
+    if ( nullptr == (music[i] = Mix_LoadMUS(name)) ) {
       fprintf(stderr, "Couldn't load: %s\n", name);
       useAudio = 0;
       return;
@@ -77,7 +77,7 @@ static void loadSounds() {
     strcpy(name, SHARE_LOC);
     strcat(name, "sounds/");
     strcat(name, chunkFileName[i]);
-    if ( null_ptr == (chunk[i] = Mix_LoadWAV(name)) ) {
+    if ( nullptr == (chunk[i] = Mix_LoadWAV(name)) ) {
       fprintf(stderr, "Couldn't load: %s\n", name);
       useAudio = 0;
       return;
