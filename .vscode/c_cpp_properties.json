@@ -1,0 +1,52 @@
+{
+    "configurations": [
+        {
+            "name": "Saturn",
+            "includePath": [
+                "${workspaceFolder}/SaturnRingLib/modules/sgl/INC",
+                "${workspaceFolder}/SaturnRingLib/modules/dummy",
+                "${workspaceFolder}/SaturnRingLib/modules/SaturnMathPP",
+                "${workspaceFolder}/SaturnRingLib/modules/tlsf",
+                "${workspaceFolder}",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/src/bulletml",
+                "${workspaceFolder}/sdl",
+                "${workspaceFolder}/SDL/include",
+                "${workspaceFolder}/SDL_mixer",
+                "/opt/saturn/sgl/inc",
+                "/opt/saturn/sbl/segalib/include",
+                "/opt/saturn/toolchain/include",
+                "/opt/saturn/toolchain/lib/gcc/sh-elf/14.3.0/include",
+                "/opt/saturn/toolchain/lib/gcc/sh-elf/14.3.0/include-fixed",
+                "/opt/saturn/toolchain/lib/gcc/sh-elf/14.3.0/../../../../sh-elf/include"
+            ],
+            "defines": [
+                "MODEL_S",
+                "_SH",
+                "SRL_MAX_CD_BACKGROUND_JOBS=1",
+                "SRL_MAX_CD_FILES=255",
+                "SRL_MAX_CD_RETRIES=5",
+                "SRL_FRAMERATE=0",
+                "SRL_MODE_NTSC",
+                "SRL_MAX_TEXTURES=100",
+                "SRL_DEBUG_MAX_PRINT_LENGTH=45",
+                "SRL_DEBUG_MAX_LOG_LENGTH=80",
+                "SGL_MAX_VERTICES=2500",
+                "SGL_MAX_POLYGONS=1700",
+                "SGL_MAX_EVENTS=64",
+                "SGL_MAX_WORKS=256"
+            ],
+            "compilerPath": "/opt/saturn/toolchain/bin/sh-elf-g++",
+            "cStandard": "c17",
+            "cppStandard": "c++23",
+            "intelliSenseMode": "gcc-x64",
+            "compilerArgs": [
+                "-m2",
+                "-fno-rtti",
+                "-fno-exceptions",
+                "-fno-builtin"
+            ]
+        }
+    ],
+    "version": 4
+}
