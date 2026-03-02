@@ -73,6 +73,9 @@ if(NOT TARGET SRL::Core)
     set_property(TARGET SRL::Core PROPERTY
         INTERFACE_LINK_LIBRARIES
             "${SRL_LIBS}")
+    
+    set_property(TARGET SRL::Core PROPERTY
+        IMPORTED_NO_SYSTEM TRUE)
 endif()
 
 function(srl_link_target target_name)
