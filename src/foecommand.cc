@@ -9,9 +9,7 @@
  *
  * @version $Revision: 1.2 $
  */
-#include "bulletml/bulletmlparser.h"
-#include "bulletml/bulletmlparser-tinyxml.h"
-#include "bulletml/bulletmlrunner.h"
+#include "bulletml_binary/bulletmlparser_binary.hpp"
 #include "foe.h"
 
 extern "C" {

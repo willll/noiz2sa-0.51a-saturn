@@ -225,7 +225,6 @@ set(SOURCES_NOIZ2SA
   src/SDL/SDL.cpp
   src/SDL/stdio_wrapper.cpp
   src/SDL/dirent_wrapper.cpp
-  src/bulletml/bulletmlparser-tinyxml.cpp
   )
 
 # Add SGL workarea source (from SaturnRingLib's shared.mk SYSSOURCES)

@@ -12,9 +12,7 @@
 #ifndef BARRAGEMANAGER_H_
 #define BARRAGEMANAGER_H_
 
-#include "bulletml/bulletmlparser.h"
-#include "bulletml/bulletmlparser-tinyxml.h"
-#include "bulletml/bulletmlrunner.h"
+#include "bulletml_binary/bulletmlparser_binary.hpp"
 
 #define BARRAGE_TYPE_NUM 3
 #define BARRAGE_MAX 16
