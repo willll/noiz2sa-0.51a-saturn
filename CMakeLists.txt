@@ -35,7 +35,7 @@ add_subdirectory(src/bulletml)
 add_subdirectory(${SDL_LIB})
 add_subdirectory(${SDL_MIXER_LIB})
 
-include(${CMAKE_SOURCE_DIR}/SRL.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/SRL.cmake)
 
 # ============================================================================
 # SaturnRingLib Configuration Options (from shared.mk)
@@ -230,13 +230,18 @@ add_executable( noiz2sa.elf ${SOURCES_NOIZ2SA} )
 
 target_include_directories(
     noiz2sa.elf PUBLIC
+    # SaturnRingLib headers (MUST come first to override system headers)
+    ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/INC
+    ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/dummy
+    ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/SaturnMathPP
+    ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/tlsf
+    # Project headers
     .
     src
     sdl
     SDL/include
     SDL_mixer
     ${BULLETML_INCLUDE_DIRS}
-    #${SEGALIB}/include
     )
 
 target_compile_options(noiz2sa.elf PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
@@ -247,7 +252,7 @@ target_link_options(noiz2sa.elf PUBLIC
     "SHELL:-Xlinker --strip-debug"
     "SHELL:-Xlinker -fno-lto"
     "SHELL:-m2 -nostartfiles"
-    "SHELL:-T${SATURN_COMMON}/Saturn.lnk"
+    "SHELL:-T${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/sgl.linker"
     "SHELL:-lc -lgcc -lm"
 )
 
@@ -339,7 +344,7 @@ if(SRL_MALLOC_METHOD STREQUAL "TLSF")
 else()
     message(STATUS "Memory allocator: Default")
 endif()
-message(STATUS "========================================="
+message(STATUS "=========================================")
 
 # ============================================================================
 # Pre/Post-build Script Support (equivalent to shared.mk -include hooks)
