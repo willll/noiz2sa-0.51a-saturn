@@ -24,14 +24,6 @@ extern "C" {
 // Additional declarations for Saturn compatibility
 extern "C" void exit(int status);
 
-// Formatting functions for string/buffer output
-int printf(const char* fmt, ...);
-int sprintf(char* buf, const char* fmt, ...);
-int snprintf(char* buf, size_t size, const char* fmt, ...);
-int vprintf(const char* fmt, va_list args);
-int vsprintf(char* buf, const char* fmt, va_list args);
-int vsnprintf(char* buf, size_t size, const char* fmt, va_list args);
-
 #ifdef __cplusplus
 }
 #endif
