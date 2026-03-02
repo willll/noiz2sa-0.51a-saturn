@@ -30,10 +30,11 @@ int ferror(FILE* file) {
     return 0;
 }
 
-int fflush(FILE* file) {
-    (void)file;
-    return 0;
-}
+// fflush is provided by newlib/libc.a on Saturn
+// int fflush(FILE* file) {
+//     (void)file;
+//     return 0;
+// }
 
 // Minimalist implementations of stdio functions
 int fprintf(FILE* file, const char* fmt, ...) {
@@ -288,4 +289,11 @@ int rename(const char* oldname, const char* newname) {
 
 void perror(const char* str) {
     (void)str;
+}
+
+// Exit function (stub for Saturn)
+void exit(int status) {
+    (void)status;
+    // On Saturn, we can't actually exit, just return
+    // The game would typically reset or loop
 }

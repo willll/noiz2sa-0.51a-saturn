@@ -2,6 +2,7 @@
 #define SDL_WRAPPER_H
 
 #include <stdint.h>
+#include "stdio.h"
 
 // Manual definitions to replace stddef.h (not available on Saturn)
 #ifndef null_ptr

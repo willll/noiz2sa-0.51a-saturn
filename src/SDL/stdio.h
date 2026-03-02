@@ -32,6 +32,9 @@ extern FILE* stderr;
 extern FILE* stdout;
 extern FILE* stdin;
 
+// Additional declarations for Saturn compatibility
+extern "C" void exit(int status);
+
 int clearerr(FILE* file);
 int fclose(FILE* file);
 int feof(FILE* file);
