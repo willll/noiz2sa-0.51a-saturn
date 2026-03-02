@@ -51,8 +51,8 @@ static char *spriteFile[SPRITE_NUM] = {
 };
 
 Uint8 *keys;
-SDL_Joystick *stick = NULL;
-SDL_GameController *gamepad = NULL;
+SDL_Joystick *stick = null_ptr;
+SDL_GameController *gamepad = null_ptr;
 
 static void loadSprites() {
   SDL_Surface *img;
@@ -65,7 +65,7 @@ static void loadSprites() {
     strcat(name, "images/");
     strcat(name, spriteFile[i]);
     img = SDL_LoadBMP(name);
-    if ( img == NULL ) {
+    if ( img == null_ptr ) {
       fprintf(stderr, "Unable to load: %s\n", name);
       SDL_Quit();
       exit(1);
@@ -82,7 +82,7 @@ static void loadSprites() {
 void drawSprite(int n, int x, int y) {
   SDL_Rect pos;
   pos.x = x; pos.y = y;
-  SDL_BlitSurface(sprite[n], NULL, video, &pos);
+  SDL_BlitSurface(sprite[n], null_ptr, video, &pos);
 }
 
 // Initialize palletes.
@@ -104,13 +104,13 @@ static int lyrSize;
 static void makeSmokeBuf() {
   int x, y, mx, my;
   lyrSize = sizeof(LayerBit)*pitch*LAYER_HEIGHT;
-  if ( NULL == (smokeBuf = (LayerBit**)malloc(sizeof(LayerBit*)*pitch*LAYER_HEIGHT)) ) {
+  if ( null_ptr == (smokeBuf = (LayerBit**)malloc(sizeof(LayerBit*)*pitch*LAYER_HEIGHT)) ) {
     fprintf(stderr, "Couldn't malloc smokeBuf.");
     exit(1);
   }
-  if ( NULL == (pbuf  = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ||
-       NULL == (l1buf = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ||
-       NULL == (l2buf = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ) {
+  if ( null_ptr == (pbuf  = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ||
+       null_ptr == (l1buf = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ||
+       null_ptr == (l2buf = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ) {
     fprintf(stderr, "Couldn't malloc buffer.");
     exit(1);
   }
@@ -147,7 +147,7 @@ void initSDL(int window) {
   videoFlags = SDL_DOUBLEBUF | SDL_HWSURFACE | SDL_HWPALETTE;
   if ( !window ) videoFlags |= SDL_FULLSCREEN;
 
-  if ( (video = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, videoBpp, videoFlags)) == NULL ) {
+  if ( (video = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, videoBpp, videoFlags)) == null_ptr ) {
     fprintf(stderr, "Unable to create SDL screen: %s\n", SDL_GetError());
     SDL_Quit();
     exit(1);
@@ -155,13 +155,13 @@ void initSDL(int window) {
   screenRect.x = screenRect.y = 0;
   screenRect.w = SCREEN_WIDTH; screenRect.h = SCREEN_HEIGHT;
   pfrm = video->format;
-  if ( NULL == ( layer = SDL_CreateRGBSurface
+  if ( null_ptr == ( layer = SDL_CreateRGBSurface
 		(SDL_SWSURFACE, LAYER_WIDTH, LAYER_HEIGHT, videoBpp,
 		 pfrm->Rmask, pfrm->Gmask, pfrm->Bmask, pfrm->Amask)) ||
-       NULL == ( lpanel = SDL_CreateRGBSurface
+       null_ptr == ( lpanel = SDL_CreateRGBSurface
 		(SDL_SWSURFACE, PANEL_WIDTH, PANEL_HEIGHT, videoBpp,
 		 pfrm->Rmask, pfrm->Gmask, pfrm->Bmask, pfrm->Amask)) ||
-       NULL == ( rpanel = SDL_CreateRGBSurface
+       null_ptr == ( rpanel = SDL_CreateRGBSurface
 		(SDL_SWSURFACE, PANEL_WIDTH, PANEL_HEIGHT, videoBpp,
 		 pfrm->Rmask, pfrm->Gmask, pfrm->Bmask, pfrm->Amask)) ) {
       fprintf(stderr, "Couldn't create surface: %s\n", SDL_GetError());
@@ -202,7 +202,7 @@ void initSDL(int window) {
     gamepad = SDL_GameControllerOpen(0);
   }
 
-  SDL_WM_SetCaption(CAPTION, NULL);
+  SDL_WM_SetCaption(CAPTION, null_ptr);
   SDL_ShowCursor(SDL_DISABLE);
   //SDL_WM_GrabInput(SDL_GRAB_ON);
 }
@@ -219,9 +219,9 @@ void blendScreen() {
 }
 
 void flipScreen() {
-  SDL_BlitSurface(layer, NULL, video, &layerRect);
-  SDL_BlitSurface(lpanel, NULL, video, &lpanelRect);
-  SDL_BlitSurface(rpanel, NULL, video, &rpanelRect);
+  SDL_BlitSurface(layer, null_ptr, video, &layerRect);
+  SDL_BlitSurface(lpanel, null_ptr, video, &lpanelRect);
+  SDL_BlitSurface(rpanel, null_ptr, video, &rpanelRect);
   if ( status == TITLE ) {
     drawTitle();
   }
@@ -538,7 +538,7 @@ int drawNumCenter(int n, int x ,int y, int s, int c1, int c2) {
 int getPadState() {
   int x = 0, y = 0, dpup = 0, dpdown = 0, dpleft = 0, dpright = 0;
   int pad = 0;
-  if ( stick != NULL ) {
+  if ( stick != null_ptr ) {
     x = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_LEFTX);
     if (x == 0) {
       x = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_RIGHTX);
@@ -573,7 +573,7 @@ int buttonReversed = 0;
 int getButtonState() {
   int btn = 0;
   int fireBtn1 = 0, fireBtn2 = 0, slowBtn1 = 0, slowBtn2 = 0, slowBtn3 = 0, slowBtn4 = 0;
-  if ( stick != NULL ) {
+  if ( stick != null_ptr ) {
     fireBtn1 = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_A);
     fireBtn2 = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_B);
 

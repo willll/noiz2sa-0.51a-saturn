@@ -17,7 +17,7 @@ struct _SDL_GameController {
     int index;
 };
 
-static SDL_GameController *g_controller = NULL;
+static SDL_GameController *g_controller = null_ptr;
 
 // Initialize game controller subsystem
 int SDL_GameControllerInit(void) {
@@ -53,7 +53,7 @@ Uint8 SDL_GameControllerAddMappingsFromFile(char *db_path, Uint8 freerw) {
 // Open a game controller
 SDL_GameController *SDL_GameControllerOpen(int joystick_index) {
     if (joystick_index < 0 || joystick_index >= SDL_NumJoysticks()) {
-        return NULL;
+        return null_ptr;
     }
     
     // Reuse existing controller if already open
@@ -64,7 +64,7 @@ SDL_GameController *SDL_GameControllerOpen(int joystick_index) {
     
     SDL_Joystick *joystick = SDL_JoystickOpen(joystick_index);
     if (!joystick) {
-        return NULL;
+        return null_ptr;
     }
     
     // Allocate new controller structure
@@ -72,7 +72,7 @@ SDL_GameController *SDL_GameControllerOpen(int joystick_index) {
         g_controller = (SDL_GameController*)malloc(sizeof(SDL_GameController));
         if (!g_controller) {
             SDL_JoystickClose(joystick);
-            return NULL;
+            return null_ptr;
         }
     }
     
@@ -93,7 +93,7 @@ void SDL_GameControllerClose(SDL_GameController *gamecontroller) {
     if (gamecontroller->ref_count <= 0) {
         if (gamecontroller->joystick) {
             SDL_JoystickClose(gamecontroller->joystick);
-            gamecontroller->joystick = NULL;
+            gamecontroller->joystick = null_ptr;
         }
     }
 }
@@ -181,7 +181,7 @@ Sint16 SDL_GameControllerGetAxis(SDL_GameController *gamecontroller, SDL_GameCon
 // Get controller name
 const char *SDL_GameControllerName(SDL_GameController *gamecontroller) {
     if (!gamecontroller || !gamecontroller->joystick) {
-        return NULL;
+        return null_ptr;
     }
     return SDL_JoystickName(gamecontroller->index);
 }
@@ -189,7 +189,7 @@ const char *SDL_GameControllerName(SDL_GameController *gamecontroller) {
 // Get name for joystick index
 const char *SDL_GameControllerNameForIndex(int joystick_index) {
     if (joystick_index < 0 || joystick_index >= SDL_NumJoysticks()) {
-        return NULL;
+        return null_ptr;
     }
     return "Saturn Controller";
 }
@@ -202,7 +202,7 @@ void SDL_GameControllerUpdate(void) {
 // Get underlying joystick
 SDL_Joystick *SDL_GameControllerGetJoystick(SDL_GameController *gamecontroller) {
     if (!gamecontroller) {
-        return NULL;
+        return null_ptr;
     }
     return gamecontroller->joystick;
 }
@@ -226,7 +226,7 @@ void SDL_GameControllerQuit(void) {
     if (g_controller) {
         SDL_GameControllerClose(g_controller);
         free(g_controller);
-        g_controller = NULL;
+        g_controller = null_ptr;
     }
     
     if (g_joystick_initialized) {

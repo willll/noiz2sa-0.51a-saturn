@@ -50,11 +50,11 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   strcpy(fullDirPath, SHARE_LOC);
   strcat(fullDirPath, dirPath);
 
-  if ( (dp = opendir(fullDirPath)) == NULL ) {
+  if ( (dp = opendir(fullDirPath)) == null_ptr ) {
     fprintf(stderr, "Can't open directory: %s\n", dirPath);
     exit(1);
   }
-  while ((dir = readdir(dp)) != NULL) {
+  while ((dir = readdir(dp)) != null_ptr) {
     if ( strcmp(strrchr(dir->d_name, '.'), ".xml") != 0 ) continue; // Read .xml files.
     strcpy(fileName, fullDirPath);
     strcat(fileName, "/");
@@ -312,11 +312,11 @@ void bossDestroied() {
 
 void addBossBullet() {
   Foe *bl;
-  bossBullet = NULL;
+  bossBullet = null_ptr;
 
   for ( int i=0 ; i<barrageNum ; i++ ) {
     if ( barrage[i]->type != 2 ) continue;
-    if ( bossBullet == NULL ) {
+    if ( bossBullet == null_ptr ) {
       bl = addFoe(SCAN_WIDTH_8/2, SCAN_HEIGHT_8/5, barrage[i]->rank, 512, 0,
 		  BOSS_TYPE, BOSS_SHIELD, barrage[i]->bulletml);
       bossBullet = bl;

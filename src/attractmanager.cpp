@@ -63,7 +63,7 @@ void loadPreference() {
   strcpy(name, tmpname);
   strcat(name, PREF_FILE);
 
-  if ( NULL == (fp = fopen(name,"rb")) ) {
+  if ( null_ptr == (fp = fopen(name,"rb")) ) {
     initHiScore();
     return;
   }
@@ -96,7 +96,7 @@ void savePreference() {
   strcpy(name, tmpname);
   strcat(name, PREF_FILE);
 
-  if ( NULL == (fp = fopen(name,"wb")) ) return;
+  if ( null_ptr == (fp = fopen(name,"wb")) ) return;
   putw(VERSION_NUM, fp);
   for ( i=0 ; i<STAGE_NUM ; i++ ) {
     putw(hiScore.stageScore[i], fp);
