@@ -10,6 +10,7 @@
  * @version $Revision: 1.4 $
  */
 #include "SDL.h"
+#include "stdio.h"  // For fprintf/stderr stubs
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_log.hpp>     // for logging
 #include <signal.h>

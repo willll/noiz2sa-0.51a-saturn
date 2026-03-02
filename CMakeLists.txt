@@ -50,7 +50,6 @@ else()
 endif()
 
 # Add subdirectories
-add_subdirectory(src/bulletml)
 add_subdirectory(src/bulletml_binary)
 
 set(SRL_ROOT "${SRL_INSTALL_ROOT}" CACHE PATH "Path to SaturnRingLib root" FORCE)

@@ -10,6 +10,7 @@
  * @version $Revision: 1.4 $
  */
 #include "SDL.h"
+#include "stdio.h"  // For FILE/fopen/fclose stubs
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_log.hpp>     // for file I/O logging
 #include <srl_string.hpp>  // for string functions

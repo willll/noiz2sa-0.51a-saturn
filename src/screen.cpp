@@ -15,6 +15,7 @@
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_string.hpp>  // for string and memory functions
 #include "SDL.h"
+#include "stdio.h"  // For fprintf/stderr stubs
 
 #include "noiz2sa.h"
 #include "screen.h"

@@ -10,6 +10,7 @@
  * @version $Revision: 1.8 $
  */
 #include "SDL.h"
+#include "stdio.h"  // For fprintf/stderr stubs
 #include <srl_memory.hpp>  // for malloc/free, atoi, srand
 #include <srl_log.hpp>     // for logging
 #include <srl_string.hpp>  // for string functions

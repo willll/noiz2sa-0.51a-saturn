@@ -15,7 +15,6 @@
 extern "C" {
 #include "SDL.h"
 #include <stdlib.h>
-#include <stdio.h>
 
 #include "noiz2sa.h"
 #include "screen.h"
