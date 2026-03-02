@@ -27,6 +27,21 @@
 
 #include <cstdint>
 
+// Manual size_t definition (stddef.h not available on Saturn)
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef unsigned int size_t;
+#endif
+
+// Forward declare FILE for file loading support
+struct __sFILE;
+typedef struct __sFILE FILE;
+extern "C" {
+    FILE* fopen(const char* filename, const char* mode);
+    size_t fread(void* ptr, size_t size, size_t nmemb, FILE* file);
+    int fclose(FILE* file);
+}
+
 // Platform-specific export declarations
 #ifndef DECLSPEC
 #define DECLSPEC
@@ -205,6 +220,86 @@ struct BulletMLNodeHeader {
     uint32_t ref_id;         // Reference ID (0xFFFFFFFF if none)
     uint32_t value_string_id; // String table index (0xFFFFFFFF if none)
     uint32_t label_string_id; // String table index (0xFFFFFFFF if none)
+};
+
+// Forward declarations for dependency resolution
+class BulletMLParserBinary;
+class BulletMLState;
+
+/// Type alias for compatibility
+typedef BulletMLParserBinary BulletMLParser;
+
+/// BulletML State - Minimal state object for BulletML execution
+class BulletMLState {
+public:
+    explicit BulletMLState(BulletMLParser* parser = nullptr)
+        : parser_(parser) {}
+    
+    virtual ~BulletMLState() {}
+    
+    BulletMLParser* getParser() const { return parser_; }
+    void setParser(BulletMLParser* parser) { parser_ = parser; }
+
+private:
+    BulletMLParser* parser_;
+};
+
+/// BulletML Runner - Base class for BulletML execution
+class BulletMLRunner {
+public:
+    /// Constructor from parser
+    explicit BulletMLRunner(BulletMLParser* parser) 
+        : parser_(parser), state_(nullptr) {}
+    
+    /// Constructor from state
+    explicit BulletMLRunner(BulletMLState* state)
+        : parser_(nullptr), state_(state) {}
+    
+    /// Virtual destructor
+    virtual ~BulletMLRunner() {}
+    
+    /// Get bullet direction (degrees)
+    virtual double getBulletDirection() { return 0.0; }
+    
+    /// Get aim direction (degrees)
+    virtual double getAimDirection() { return 0.0; }
+    
+    /// Get bullet speed
+    virtual double getBulletSpeed() { return 0.0; }
+    
+    /// Get default speed
+    virtual double getDefaultSpeed() { return 1.0; }
+    
+    /// Get difficulty rank
+    virtual double getRank() { return 0.0; }
+    
+    /// Create a simple bullet
+    virtual void createSimpleBullet(double direction, double speed) { (void)direction; (void)speed; }
+    
+    /// Create a bullet
+    virtual void createBullet(BulletMLNode* node, double direction, double speed) { (void)node; (void)direction; (void)speed; }
+    
+    /// Add a command
+    virtual int addCommand(BulletMLNode* node) { (void)node; return 0; }
+    
+    /// Execute commands
+    virtual void execute() {}
+    
+    /// Check if execution is finished
+    virtual bool isEnd() { return true; }
+    
+    /// Run one execution cycle
+    virtual void run() {}
+    
+    /// Get the parser
+    BulletMLParser* getParser() const { return parser_; }
+    
+    /// Get the state
+    BulletMLState* getState() const { return state_; }
+
+protected:
+    BulletMLParser* parser_;
+    BulletMLState* state_;
 };
 
 /// Binary BulletML Parser - Standalone Implementation
@@ -696,5 +791,63 @@ protected:
     char name_[BULLETML_MAX_FILENAME];
     bool is_horizontal_;
 };
+
+/// BulletMLParserTinyXML - File loading wrapper for Saturn
+/// Loads binary BulletML files (.blb format) from storage
+class BulletMLParserTinyXML : public BulletMLParserBinary {
+public:
+    /// Constructor that loads a binary BulletML file
+    explicit BulletMLParserTinyXML(const char* filename)
+        : BulletMLParserBinary(filename, nullptr, 0) {
+        if (filename && loadFromFile(filename)) {
+            // Data loaded successfully, update base class pointers
+            data_ = file_buffer_;
+            data_size_ = buffer_size_;
+            owns_data_ = false;
+        } else {
+            // Loading failed, set error
+            error_message_[0] = 'F';
+            error_message_[1] = 'a';
+            error_message_[2] = 'i';
+            error_message_[3] = 'l';
+            error_message_[4] = '\0';
+        }
+    }
+    
+    /// Virtual destructor
+    virtual ~BulletMLParserTinyXML() {}
+    
+private:
+    /// Static buffer for file data (64KB max per file)
+    static uint8_t file_buffer_[65536];
+    static uint32_t buffer_size_;
+    
+    /// Load binary file from storage
+    bool loadFromFile(const char* filename) {
+        if (!filename) {
+            return false;
+        }
+        
+        FILE* file = fopen(filename, "rb");
+        if (!file) {
+            return false;
+        }
+        
+        // Read file into static buffer
+        size_t bytes_read = fread(file_buffer_, 1, sizeof(file_buffer_), file);
+        fclose(file);
+        
+        if (bytes_read == 0) {
+            return false;
+        }
+        
+        buffer_size_ = (uint32_t)bytes_read;
+        return true;
+    }
+};
+
+// Static buffer allocation for BulletMLParserTinyXML
+uint8_t BulletMLParserTinyXML::file_buffer_[65536];
+uint32_t BulletMLParserTinyXML::buffer_size_ = 0;
 
 #endif // BULLETMLPARSER_BINARY_HPP_
