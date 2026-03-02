@@ -652,7 +652,7 @@ inline const char* readStringAt(uint32_t index) {
     #undef CHECK_BOUNDS
     #undef CHECK_BOUNDS_PTR
 
-private:
+protected:
     const uint8_t* data_;        // Pointer to binary data
     uint32_t data_size_;         // Size of data
     uint32_t offset_;            // Current read offset

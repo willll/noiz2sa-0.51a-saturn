@@ -13,10 +13,7 @@ add_library(bulletml_binary STATIC
     bulletmlparser-bin.cpp
 )
 
-# Link with parent bulletml library
-target_link_libraries(bulletml_binary
-    bulletml
-)
+# No external dependencies needed for Saturn port (header-only)
 
 # BulletML Converter Tool
 add_executable(bulletml-converter
