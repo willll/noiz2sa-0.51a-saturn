@@ -222,9 +222,10 @@ set(SOURCES_NOIZ2SA
   src/foe.cc
   src/foecommand.cc
   src/barragemanager.cc
-  src/SDL/SDL.c
-  src/SDL/stdio_wrapper.c
-    src/SDL/dirent_wrapper.c
+  src/SDL/SDL.cpp
+  src/SDL/stdio_wrapper.cpp
+  src/SDL/dirent_wrapper.cpp
+  src/bulletml/bulletmlparser-tinyxml.cpp
   )
 
 # Add SGL workarea source (from SaturnRingLib's shared.mk SYSSOURCES)
