@@ -1,8 +1,7 @@
 // Minimal stdio implementation for Saturn
 // These stubs satisfy the C++ standard library requirements
 
-#include <stdio.h>
-#include <stdarg.h>
+#include "stdio.h"
 #include <string.h>
 
 // Basic FILE implementation (opaque, only for pointer passing)

@@ -1,5 +1,13 @@
 #include <dirent.h>
-#include <stddef.h>
+
+// Manual definitions to replace stddef.h (not available on Saturn)
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+#ifndef __SIZE_T_DEFINED
+#define __SIZE_T_DEFINED
+typedef unsigned int size_t;
+#endif
 
 static DIR g_dir_stub = {0};
 
