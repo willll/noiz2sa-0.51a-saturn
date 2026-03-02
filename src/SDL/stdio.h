@@ -2,8 +2,8 @@
 #define SDL_STDIO_WRAPPER_H
 
 // Manual definitions to replace stddef.h (not available on Saturn)
-#ifndef NULL
-#define NULL ((void*)0)
+#ifndef null_ptr
+#define null_ptr ((void*)0)
 #endif
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED

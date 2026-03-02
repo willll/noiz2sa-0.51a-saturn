@@ -4,8 +4,8 @@
 #include <stdint.h>
 
 // Manual definitions to replace stddef.h (not available on Saturn)
-#ifndef NULL
-#define NULL ((void*)0)
+#ifndef null_ptr
+#define null_ptr ((void*)0)
 #endif
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
@@ -144,7 +144,7 @@ static inline SDL_Surface* SDL_CreateRGBSurface(uint32_t flags, int width, int h
     return &stub_surface;
 }
 
-static inline SDL_Surface* SDL_LoadBMP(const char* file) { (void)file; return NULL; }
+static inline SDL_Surface* SDL_LoadBMP(const char* file) { (void)file; return null_ptr; }
 static inline SDL_Surface* SDL_ConvertSurface(SDL_Surface* src, SDL_PixelFormat* fmt, uint32_t flags) {
     (void)fmt; (void)flags; return src;
 }
@@ -171,7 +171,7 @@ static inline int SDL_ShowCursor(int toggle) { (void)toggle; return 0; }
 
 // SDL event and input functions
 static inline int SDL_PollEvent(SDL_Event* event) { (void)event; return 0; }
-static inline const uint8_t* SDL_GetKeyState(int* numkeys) { if(numkeys) *numkeys=0; return NULL; }
+static inline const uint8_t* SDL_GetKeyState(int* numkeys) { if(numkeys) *numkeys=0; return null_ptr; }
 static inline uint32_t SDL_GetTicks(void) { return 0; }
 static inline void SDL_Delay(uint32_t ms) { (void)ms; }
 
@@ -191,7 +191,7 @@ typedef int SDL_bool;
 #define SDL_HAT_LEFT      0x08
 
 static inline int SDL_NumJoysticks(void) { return 0; }
-static inline SDL_Joystick* SDL_JoystickOpen(int device_index) { (void)device_index; return NULL; }
+static inline SDL_Joystick* SDL_JoystickOpen(int device_index) { (void)device_index; return null_ptr; }
 static inline void SDL_JoystickClose(SDL_Joystick* joystick) { (void)joystick; }
 static inline void SDL_JoystickUpdate(void) { }
 static inline SDL_bool SDL_JoystickOpened(int device_index) { (void)device_index; return SDL_FALSE; }
