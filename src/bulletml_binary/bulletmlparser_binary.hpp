@@ -25,16 +25,159 @@
 #ifndef BULLETMLPARSER_BINARY_HPP_
 #define BULLETMLPARSER_BINARY_HPP_
 
-#include "bulletmlparser.h"
-#include "bulletmlerror.h"
 #include <cstdint>
 
+// Platform-specific export declarations
+#ifndef DECLSPEC
+#define DECLSPEC
+#endif
+
 // Maximum fixed sizes for static allocation
+#define BULLETML_MAX_CHILDREN 32
 #define BULLETML_MAX_FILENAME 256
 #define BULLETML_MAX_STRINGS 1000
 #define BULLETML_MAX_STRING_TABLE_SIZE 65536
 #define BULLETML_MAX_NODES 2000
 #define BULLETML_MAX_REFS 500
+
+/// Minimal BulletMLNode definition - embedded for standalone use
+class BulletMLNode {
+public:
+    enum Name {
+        bulletml = 0, bullet, action, fire, changeDirection, changeSpeed,
+        accel, wait, repeat, bulletRef, actionRef, fireRef,
+        vanish, horizontal, vertical, term, times, direction,
+        speed, param
+    };
+    
+    enum Type {
+        type_none = 0, type_aim, type_absolute, type_relative, type_sequence
+    };
+    
+    explicit BulletMLNode(const char* name) 
+        : name_(name), type_(type_none), value_(nullptr), refID_(0xFFFFFFFF), 
+          child_count_(0), parent_(nullptr) {
+        for (uint32_t i = 0; i < BULLETML_MAX_CHILDREN; ++i) {
+            children_[i] = nullptr;
+        }
+    }
+    
+    ~BulletMLNode() {
+        for (uint32_t i = 0; i < child_count_; ++i) {
+            delete children_[i];
+        }
+    }
+    
+    void setType(const char* typeStr) {
+        if (!typeStr) return;
+        // Compare by first character for efficiency
+        switch (typeStr[0]) {
+            case 'a':
+                if (typeStr[1] == 'i' && typeStr[2] == 'm' && typeStr[3] == '\0') {
+                    type_ = type_aim;
+                } else if (typeStr[1] == 'b' && typeStr[2] == 's') {
+                    type_ = type_absolute;
+                }
+                break;
+            case 'r':
+                if (typeStr[1] == 'e' && typeStr[2] == 'l') {
+                    type_ = type_relative;
+                }
+                break;
+            case 's':
+                if (typeStr[1] == 'e' && typeStr[2] == 'q') {
+                    type_ = type_sequence;
+                }
+                break;
+        }
+    }
+    
+    void setValue(const char* value) { value_ = value; }
+    void setRefID(uint32_t id) { refID_ = id; }
+    
+    void addChild(BulletMLNode* child) {
+        if (child_count_ < BULLETML_MAX_CHILDREN) {
+            children_[child_count_++] = child;
+            child->parent_ = this;
+        }
+    }
+    
+    const char* getName() const { return name_; }
+    Name getNameAsName() const {
+        // Convert string name to enum
+        if (!name_) return bulletml;
+        switch (name_[0]) {
+            case 'b':
+                if (name_[1] == 'u' && name_[2] == 'l') {
+                    if (name_[6] == 'm') return bulletml; // bulletml
+                    if (name_[6] == 't') return bullet;   // bullet
+                    if (name_[6] == 'R') return bulletRef; // bulletRef
+                }
+                break;
+            case 'a':
+                if (name_[1] == 'c' && name_[2] == 't') {
+                    if (name_[6] == '\0') return action;  // action
+                    if (name_[6] == 'R') return actionRef; // actionRef
+                } else if (name_[1] == 'c' && name_[2] == 'c') {
+                    return accel; // accel
+                }
+                break;
+            case 'f':
+                if (name_[1] == 'i' && name_[2] == 'r') {
+                    if (name_[4] == '\0') return fire;    // fire
+                    if (name_[4] == 'R') return fireRef;   // fireRef
+                }
+                break;
+            case 'c':
+                if (name_[7] == 'D') return changeDirection;
+                if (name_[7] == 'S') return changeSpeed;
+                break;
+            case 'w': return wait;
+            case 'r': return repeat;
+            case 'v': 
+                if (name_[1] == 'a') return vanish;
+                if (name_[1] == 'e') return vertical;
+                break;
+            case 'h': return horizontal;
+            case 't':
+                if (name_[1] == 'e') return term;
+                if (name_[1] == 'i') return times;
+                break;
+            case 'd': return direction;
+            case 's':
+                if (name_[1] == 'p') return speed;
+                break;
+            case 'p': return param;
+        }
+        return bulletml;
+    }
+    
+    Type getType() const { return type_; }
+    const char* getValue() const { return value_ ? value_ : ""; }
+    uint32_t getRefID() const { return refID_; }
+    
+    // Iterator support (pointer-based)
+    typedef BulletMLNode** ChildIterator;
+    ChildIterator childBegin() { return children_; }
+    ChildIterator childEnd() { return children_ + child_count_; }
+    uint32_t getChildCount() const { return child_count_; }
+    BulletMLNode* getChild(uint32_t index) const {
+        return index < child_count_ ? children_[index] : nullptr;
+    }
+    
+private:
+    const char* name_;
+    Type type_;
+    const char* value_;
+    uint32_t refID_;
+    BulletMLNode* children_[BULLETML_MAX_CHILDREN];
+    uint32_t child_count_;
+    BulletMLNode* parent_;
+    
+    // Non-copyable
+    BulletMLNode(const BulletMLNode&);
+    BulletMLNode& operator=(const BulletMLNode&);
+};
 
 /// Binary format header structure (24 bytes, little-endian)
 struct BulletMLBinaryHeader {
@@ -64,38 +207,81 @@ struct BulletMLNodeHeader {
     uint32_t label_string_id; // String table index (0xFFFFFFFF if none)
 };
 
-/// Binary BulletML Parser
-class BulletMLParserBinary : public BulletMLParser {
+/// Binary BulletML Parser - Standalone Implementation
+class BulletMLParserBinary {
 public:
     /// Constructor from memory buffer (filename for identification)
-    DECLSPEC explicit BulletMLParserBinary(const char* filename, const uint8_t* data, size_t size)
+    DECLSPEC explicit BulletMLParserBinary(const char* filename, const uint8_t* data, uint32_t size)
         : data_(data), data_size_(size), offset_(0), owns_data_(false),
           current_node_id_(0), string_table_count_(0),
           bullet_refs_count_(0), action_refs_count_(0), fire_refs_count_(0),
-          node_map_count_(0)
+          node_map_count_(0), bulletml_(nullptr), 
+          bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
+          topActions_count_(0), is_horizontal_(false)
     {
         setName(filename);
         error_message_[0] = '\0';
     }
     
     /// Constructor from memory buffer (unnamed)
-    DECLSPEC explicit BulletMLParserBinary(const uint8_t* data, size_t size)
+    DECLSPEC explicit BulletMLParserBinary(const uint8_t* data, uint32_t size)
         : data_(data), data_size_(size), offset_(0), owns_data_(false),
           current_node_id_(0), string_table_count_(0),
           bullet_refs_count_(0), action_refs_count_(0), fire_refs_count_(0),
-          node_map_count_(0)
+          node_map_count_(0), bulletml_(nullptr),
+          bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
+          topActions_count_(0), is_horizontal_(false)
     {
         setName("(memory)");
         error_message_[0] = '\0';
     }
     
     DECLSPEC virtual ~BulletMLParserBinary() {
+        if (bulletml_) {
+            delete bulletml_;
+            bulletml_ = nullptr;
+        }
     }
+    
+    /// Build the parser (calls parse internally)
+    DECLSPEC void build() {
+        parse();
+    }
+    
+    /// Get the root node
+    DECLSPEC BulletMLNode* getRoot() const { return bulletml_; }
+    
+    /// Get bullet by reference ID
+    DECLSPEC BulletMLNode* getBullet(uint32_t id) const {
+        return id < bulletMap_count_ ? bulletMap_[id] : nullptr;
+    }
+    
+    /// Get action by reference ID
+    DECLSPEC BulletMLNode* getAction(uint32_t id) const {
+        return id < actionMap_count_ ? actionMap_[id] : nullptr;
+    }
+    
+    /// Get fire by reference ID  
+    DECLSPEC BulletMLNode* getFire(uint32_t id) const {
+        return id < fireMap_count_ ? fireMap_[id] : nullptr;
+    }
+    
+    /// Get top-level actions
+    DECLSPEC BulletMLNode** getTopActions(uint32_t* count) const {
+        if (count) *count = topActions_count_;
+        return const_cast<BulletMLNode**>(topActions_);
+    }
+    
+    /// Check if pattern is horizontal
+    DECLSPEC bool isHorizontal() const { return is_horizontal_; }
+    
+    /// Get parser name
+    DECLSPEC const char* getName() const { return name_; }
 
     /// Parse the binary file (called by build())
     DECLSPEC virtual void parse() {
         if (!data_ || data_size_ == 0) {
-            BulletMLError::doAssert(false, "No data to parse");
+            setError("No data to parse");
             return;
         }
         
@@ -108,19 +294,19 @@ public:
         
         // Verify header
         if (!verifyHeader()) {
-            BulletMLError::doAssert(false, "Header verification failed");
+            setError("Header verification failed");
             return;
         }
         
         // Load string table
         if (!loadStringTable()) {
-            BulletMLError::doAssert(false, "Failed to load string table");
+            setError("Failed to load string table");
             return;
         }
         
         // Load reference maps
         if (!loadReferenceMaps()) {
-            BulletMLError::doAssert(false, "Failed to load reference maps");
+            setError("Failed to load reference maps");
             return;
         }
         
@@ -129,50 +315,54 @@ public:
         bulletml_ = parseNode();
         
         if (!bulletml_) {
-            BulletMLError::doAssert(false, "Failed to parse tree");
+            setError("Failed to parse tree");
             return;
         }
         
-        // Build reference maps for BulletMLParser
+        // Build reference maps
+        bulletMap_count_ = 0;
+        actionMap_count_ = 0;
+        fireMap_count_ = 0;
+        
         // Process bullet references
-            for (size_t i = 0; i < bullet_refs_count_; ++i) {
+        for (uint32_t i = 0; i < bullet_refs_count_; ++i) {
             uint32_t node_id = bullet_refs_[i].node_id;
             if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
-                if (i >= bulletMap_.size()) {
-                    bulletMap_.resize(i + 1);
+                if (bulletMap_count_ < BULLETML_MAX_REFS) {
+                    bulletMap_[bulletMap_count_++] = node_map_[node_id];
                 }
-                bulletMap_[i] = node_map_[node_id];
             }
         }
         
         // Process action references
-            for (size_t i = 0; i < action_refs_count_; ++i) {
+        for (uint32_t i = 0; i < action_refs_count_; ++i) {
             uint32_t node_id = action_refs_[i].node_id;
             if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
-                if (i >= actionMap_.size()) {
-                    actionMap_.resize(i + 1);
+                if (actionMap_count_ < BULLETML_MAX_REFS) {
+                    actionMap_[actionMap_count_++] = node_map_[node_id];
                 }
-                actionMap_[i] = node_map_[node_id];
             }
         }
         
         // Process fire references
-            for (size_t i = 0; i < fire_refs_count_; ++i) {
+        for (uint32_t i = 0; i < fire_refs_count_; ++i) {
             uint32_t node_id = fire_refs_[i].node_id;
             if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
-                if (i >= fireMap_.size()) {
-                    fireMap_.resize(i + 1);
+                if (fireMap_count_ < BULLETML_MAX_REFS) {
+                    fireMap_[fireMap_count_++] = node_map_[node_id];
                 }
-                fireMap_[i] = node_map_[node_id];
             }
         }
         
         // Find and populate top actions
+        topActions_count_ = 0;
         if (bulletml_) {
             BulletMLNode::ChildIterator ite;
             for (ite = bulletml_->childBegin(); ite != bulletml_->childEnd(); ++ite) {
-                if ((*ite)->getName() == BulletMLNode::action) {
-                    topActions_.push_back(*ite);
+                if ((*ite)->getNameAsName() == BulletMLNode::action) {
+                    if (topActions_count_ < BULLETML_MAX_REFS) {
+                        topActions_[topActions_count_++] = *ite;
+                    }
                 }
             }
         }
@@ -182,6 +372,18 @@ public:
     DECLSPEC const char* getErrorMessage() const { return error_message_; }
 
 private:
+    inline void setName(const char* name) {
+        uint32_t i = 0;
+        for (; i < BULLETML_MAX_FILENAME - 1 && name && name[i] != '\0'; ++i) {
+            name_[i] = name[i];
+        }
+        name_[i] = '\0';
+    }
+    
+    inline void setHorizontal() {
+        is_horizontal_ = true;
+    }
+    
     inline void setError(const char* msg) {
         uint32_t i = 0;
         for (; i < sizeof(error_message_) - 1 && msg[i] != '\0'; ++i) {
@@ -452,8 +654,8 @@ inline const char* readStringAt(uint32_t index) {
 
 private:
     const uint8_t* data_;        // Pointer to binary data
-    size_t data_size_;           // Size of data
-    size_t offset_;              // Current read offset
+    uint32_t data_size_;         // Size of data
+    uint32_t offset_;            // Current read offset
     bool owns_data_;             // True if we allocated data_
     
     BulletMLBinaryHeader header_;
@@ -479,6 +681,20 @@ private:
     // Map of node_id to BulletMLNode* for resolving references
     BulletMLNode* node_map_[BULLETML_MAX_NODES];
     uint32_t node_map_count_;
+    
+    // Parsed tree and reference maps (replaces BulletMLParser base members)
+    BulletMLNode* bulletml_;
+    BulletMLNode* bulletMap_[BULLETML_MAX_REFS];
+    uint32_t bulletMap_count_;
+    BulletMLNode* actionMap_[BULLETML_MAX_REFS];
+    uint32_t actionMap_count_;
+    BulletMLNode* fireMap_[BULLETML_MAX_REFS];
+    uint32_t fireMap_count_;
+    BulletMLNode* topActions_[BULLETML_MAX_REFS];
+    uint32_t topActions_count_;
+    
+    char name_[BULLETML_MAX_FILENAME];
+    bool is_horizontal_;
 };
 
 #endif // BULLETMLPARSER_BINARY_HPP_
