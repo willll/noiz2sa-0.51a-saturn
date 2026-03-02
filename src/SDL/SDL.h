@@ -2,13 +2,8 @@
 #define SDL_WRAPPER_H
 
 #include <stdint.h>
+#include <stddef.h>
 #include "stdio.h"
-
-// Manual definitions to replace stddef.h (not available on Saturn)
-#ifndef __SIZE_T_DEFINED
-#define __SIZE_T_DEFINED
-typedef unsigned int size_t;
-#endif
 
 // SDL type stubs for Saturn noiz2sa - Hybrid approach
 // These stubs allow compilation now, can be replaced with SRL incrementally later
