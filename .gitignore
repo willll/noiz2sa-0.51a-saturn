@@ -34,7 +34,7 @@
 
 bin/*
 build/*
-.vscode/*
+#.vscode/*
 
 Makefile.am
 .cvsignore
