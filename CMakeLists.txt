@@ -26,14 +26,18 @@ project( noiz2sa VERSION 1.0
                   DESCRIPTION "Sega Saturn noiz2sa"
                   LANGUAGES C CXX ASM)
 
-# Submodule library paths
-set(SDL_LIB ${CMAKE_SOURCE_DIR}/SDL)
-set(SDL_MIXER_LIB ${CMAKE_SOURCE_DIR}/SDL_mixer)
+# SaturnRingLib include path configuration
+# Use environment variable if available, otherwise use relative path
+if(DEFINED ENV{SRL_INSTALL_ROOT})
+    set(SRL_INSTALL_ROOT $ENV{SRL_INSTALL_ROOT})
+else()
+    set(SRL_INSTALL_ROOT "${CMAKE_SOURCE_DIR}/SaturnRingLib")
+endif()
 
 # Add subdirectories
 add_subdirectory(src/bulletml)
-add_subdirectory(${SDL_LIB})
-add_subdirectory(${SDL_MIXER_LIB})
+add_subdirectory(SDL)
+add_subdirectory(SDL_mixer)
 
 include(${CMAKE_SOURCE_DIR}/cmake/SRL.cmake)
 
@@ -231,6 +235,11 @@ add_executable( noiz2sa.elf ${SOURCES_NOIZ2SA} )
 target_include_directories(
     noiz2sa.elf PUBLIC
     # SaturnRingLib headers (MUST come first to override system headers)
+    ${SRL_INSTALL_ROOT}/saturnringlib
+    ${SRL_INSTALL_ROOT}/modules/sgl/INC
+    ${SRL_INSTALL_ROOT}/modules/dummy
+    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+    ${SRL_INSTALL_ROOT}/modules/tlsf
     ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/INC
     ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/dummy
     ${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/SaturnMathPP

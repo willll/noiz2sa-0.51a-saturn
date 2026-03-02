@@ -10,10 +10,10 @@
  * @version $Revision: 1.4 $
  */
 #include "SDL.h"
-#include <stdlib.h>
-#include <stdio.h>
+#include <srl_memory.hpp>  // for malloc/free
+#include <srl_log.hpp>     // for logging
 #include <signal.h>
-#include <string.h>
+#include <srl_string.hpp>  // for string functions
 
 #include "SDL_mixer.h"
 #include "soundmanager.h"

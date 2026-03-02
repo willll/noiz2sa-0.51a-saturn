@@ -11,9 +11,9 @@
  * @version $Revision: 1.3 $
  */
 #include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <srl_log.hpp>     // for logging
+#include <srl_memory.hpp>  // for malloc/free
+#include <srl_string.hpp>  // for string and memory functions
 #include "SDL.h"
 
 #include "noiz2sa.h"

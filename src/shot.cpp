@@ -10,8 +10,8 @@
  * @version $Revision: 1.1.1.1 $
  */
 #include "SDL.h"
-#include <stdlib.h>
-#include <stdio.h>
+#include <srl_memory.hpp>  // for memory allocation
+#include <srl_log.hpp>     // for logging
 
 #include "noiz2sa.h"
 #include "screen.h"

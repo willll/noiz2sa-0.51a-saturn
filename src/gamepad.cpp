@@ -5,7 +5,7 @@
  */
 
 #include <SDL.h>
-#include <stdlib.h>
+#include <srl_memory.hpp>  // for memory allocation
 #include "gamepad.h"
 
 static int g_joystick_initialized = 0;

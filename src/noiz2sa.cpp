@@ -10,9 +10,9 @@
  * @version $Revision: 1.8 $
  */
 #include "SDL.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include <srl_memory.hpp>  // for malloc/free, atoi, srand
+#include <srl_log.hpp>     // for logging
+#include <srl_string.hpp>  // for string functions
 
 #include "noiz2sa.h"
 #include "screen.h"
