@@ -26,6 +26,7 @@ extern "C" {
 
 #include "barragemanager.h"
 #include "foe.h"
+#include <srl_log.hpp>
 
 #define BARRAGE_PATTERN_MAX 32
 #define SHARE_LOC "/usr/share/games/noiz2sa/"
@@ -51,7 +52,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   strcat(fullDirPath, dirPath);
 
   if ( (dp = opendir(fullDirPath)) == nullptr ) {
-    fprintf(stderr, "Can't open directory: %s\n", dirPath);
+    SRL::Logger::LogFatal("Can't open directory: %s", dirPath);
     exit(1);
   }
   while ((dir = readdir(dp)) != nullptr) {
@@ -61,7 +62,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     strcat(fileName, dir->d_name);
     brg[i].bulletml = new BulletMLParserTinyXML(fileName);
     brg[i].bulletml->build(); i++;
-    printf("%s\n", fileName);
+    SRL::Logger::LogInfo(fileName);
   }
   closedir(dp);
   return i;
@@ -72,7 +73,7 @@ static unsigned int rnd;
 void initBarragemanager() {
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
     barragePatternNum[i] = readBulletMLFiles(BARRAGE_DIR_NAME[i], barragePattern[i]);
-    printf("--------\n");
+    SRL::Logger::LogInfo("--------");
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
       barragePattern[i][j].type = i;
     }

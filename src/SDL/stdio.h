@@ -21,54 +21,16 @@ typedef __builtin_va_list va_list;
 extern "C" {
 #endif
 
-typedef long fpos_t;
-struct __sFILE;
-typedef struct __sFILE FILE;
-
-extern FILE* stderr;
-extern FILE* stdout;
-extern FILE* stdin;
-
 // Additional declarations for Saturn compatibility
 extern "C" void exit(int status);
 
-int clearerr(FILE* file);
-int feof(FILE* file);
-int ferror(FILE* file);
-int fflush(FILE* file);
-int fgetc(FILE* file);
-int fgetpos(FILE* file, fpos_t* pos);
-char* fgets(char* str, int size, FILE* file);
-int fprintf(FILE* file, const char* fmt, ...);
-int fputc(int c, FILE* file);
-int fputs(const char* str, FILE* file);
-int fscanf(FILE* file, const char* fmt, ...);
-int fsetpos(FILE* file, const fpos_t* pos);
-int getc(FILE* file);
-int getchar(void);
-void perror(const char* str);
+// Formatting functions for string/buffer output
 int printf(const char* fmt, ...);
-int putc(int c, FILE* file);
-int putchar(int c);
-int puts(const char* str);
-int remove(const char* filename);
-int rename(const char* oldname, const char* newname);
-int scanf(const char* fmt, ...);
-void setbuf(FILE* file, char* buf);
-int setvbuf(FILE* file, char* buf, int mode, size_t size);
 int sprintf(char* buf, const char* fmt, ...);
-int sscanf(const char* str, const char* fmt, ...);
-FILE* tmpfile(void);
-char* tmpnam(char* buf);
-int ungetc(int c, FILE* file);
-int vfprintf(FILE* file, const char* fmt, va_list args);
+int snprintf(char* buf, size_t size, const char* fmt, ...);
 int vprintf(const char* fmt, va_list args);
 int vsprintf(char* buf, const char* fmt, va_list args);
-int snprintf(char* buf, size_t size, const char* fmt, ...);
-int vfscanf(FILE* file, const char* fmt, va_list args);
-int vscanf(const char* fmt, va_list args);
 int vsnprintf(char* buf, size_t size, const char* fmt, va_list args);
-int vsscanf(const char* str, const char* fmt, va_list args);
 
 #ifdef __cplusplus
 }

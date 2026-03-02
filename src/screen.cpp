@@ -15,7 +15,7 @@
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_string.hpp>  // for string and memory functions
 #include "SDL.h"
-#include "stdio.h"  // For fprintf/stderr stubs
+#include "stdio.h"  // For stdio stubs
 
 #include "noiz2sa.h"
 #include "screen.h"
@@ -66,7 +66,7 @@ static void loadSprites() {
     strcat(name, spriteFile[i]);
     img = SDL_LoadBMP(name);
     if ( img == nullptr ) {
-      fprintf(stderr, "Unable to load: %s\n", name);
+      SRL::Logger::LogFatal("Unable to load: %s", name);
       SDL_Quit();
       exit(1);
     }
@@ -105,13 +105,13 @@ static void makeSmokeBuf() {
   int x, y, mx, my;
   lyrSize = sizeof(LayerBit)*pitch*LAYER_HEIGHT;
   if ( nullptr == (smokeBuf = (LayerBit**)malloc(sizeof(LayerBit*)*pitch*LAYER_HEIGHT)) ) {
-    fprintf(stderr, "Couldn't malloc smokeBuf.");
+    SRL::Logger::LogFatal("Couldn't malloc smokeBuf.");
     exit(1);
   }
   if ( nullptr == (pbuf  = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ||
        nullptr == (l1buf = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ||
        nullptr == (l2buf = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ) {
-    fprintf(stderr, "Couldn't malloc buffer.");
+    SRL::Logger::LogFatal("Couldn't malloc buffer.");
     exit(1);
   }
   pbuf[pitch*LAYER_HEIGHT] = 0;
@@ -134,12 +134,12 @@ void initSDL(int window) {
   SDL_PixelFormat *pfrm;
 
   if ( SDL_Init(SDL_INIT_VIDEO) < 0 ) {
-    fprintf(stderr, "Unable to initialize SDL: %s\n", SDL_GetError());
+    SRL::Logger::LogFatal("Unable to initialize SDL: %s", SDL_GetError());
     exit(1);
   }
   atexit(SDL_Quit);
   if ( SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0 ) {
-    printf( "Unable to initialize SDL_JOYSTICK: %s\n", SDL_GetError());
+    SRL::Logger::LogWarning("Unable to initialize SDL_JOYSTICK");
     joystickMode = 0;
   }
 
@@ -148,7 +148,7 @@ void initSDL(int window) {
   if ( !window ) videoFlags |= SDL_FULLSCREEN;
 
   if ( (video = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, videoBpp, videoFlags)) == nullptr ) {
-    fprintf(stderr, "Unable to create SDL screen: %s\n", SDL_GetError());
+    SRL::Logger::LogFatal("Unable to create SDL screen: %s", SDL_GetError());
     SDL_Quit();
     exit(1);
   }
@@ -164,7 +164,7 @@ void initSDL(int window) {
        nullptr == ( rpanel = SDL_CreateRGBSurface
 		(SDL_SWSURFACE, PANEL_WIDTH, PANEL_HEIGHT, videoBpp,
 		 pfrm->Rmask, pfrm->Gmask, pfrm->Bmask, pfrm->Amask)) ) {
-      fprintf(stderr, "Couldn't create surface: %s\n", SDL_GetError());
+        SRL::Logger::LogFatal("Couldn't create surface: %s", SDL_GetError());
       exit(1);
   }
   layerRect.x = (SCREEN_WIDTH-LAYER_WIDTH)/2;

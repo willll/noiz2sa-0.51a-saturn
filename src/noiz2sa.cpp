@@ -10,7 +10,7 @@
  * @version $Revision: 1.8 $
  */
 #include "SDL.h"
-#include "stdio.h"  // For fprintf/stderr stubs
+#include "stdio.h"  // For stdio stubs
 #include <srl_memory.hpp>  // for malloc/free, atoi, srand
 #include <srl_log.hpp>     // for logging
 #include <srl_string.hpp>  // for string functions
@@ -228,7 +228,7 @@ static void draw() {
 static int accframe = 0;
 
 static void usage(char *argv0) {
-  fprintf(stderr, "Usage: %s [-nosound] [-window] [-reverse] [-brightness n] [-nowait] [-accframe]\n", argv0);
+  SRL::Logger::LogWarning("Usage: %s [-nosound] [-window] [-reverse] [-brightness n] [-nowait] [-accframe]", argv0);
 }
 
 static void parseArgs(int argc, char *argv[]) {

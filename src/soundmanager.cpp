@@ -10,7 +10,7 @@
  * @version $Revision: 1.4 $
  */
 #include "SDL.h"
-#include "stdio.h"  // For fprintf/stderr stubs
+#include "stdio.h"  // For stdio stubs
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_log.hpp>     // for logging
 #include <signal.h>
@@ -68,7 +68,7 @@ static void loadSounds() {
     strcat(name, "sounds/");
     strcat(name, musicFileName[i]);
     if ( nullptr == (music[i] = Mix_LoadMUS(name)) ) {
-      fprintf(stderr, "Couldn't load: %s\n", name);
+      SRL::Logger::LogWarning("Couldn't load: %s", name);
       useAudio = 0;
       return;
     }
@@ -78,7 +78,7 @@ static void loadSounds() {
     strcat(name, "sounds/");
     strcat(name, chunkFileName[i]);
     if ( nullptr == (chunk[i] = Mix_LoadWAV(name)) ) {
-      fprintf(stderr, "Couldn't load: %s\n", name);
+      SRL::Logger::LogWarning("Couldn't load: %s", name);
       useAudio = 0;
       return;
     }
@@ -94,7 +94,7 @@ void initSound() {
   int interactive = 0;
 
   if ( SDL_InitSubSystem(SDL_INIT_AUDIO) < 0 ) {
-    fprintf(stderr, "Unable to initialize SDL_AUDIO: %s\n", SDL_GetError());
+    SRL::Logger::LogWarning("Unable to initialize SDL_AUDIO: %s", SDL_GetError());
     return;
   }
 
@@ -104,7 +104,7 @@ void initSound() {
   audio_buffers = 4096;
 
   if (Mix_OpenAudio(audio_rate, audio_format, audio_channels, audio_buffers) < 0) {
-    fprintf(stderr, "Couldn't open audio: %s\n", SDL_GetError());
+    SRL::Logger::LogWarning("Couldn't open audio: %s", SDL_GetError());
     return;
   } else {
     Mix_QuerySpec(&audio_rate, &audio_format, &audio_channels);
