@@ -27,11 +27,14 @@
 
 #include "bulletmlparser.h"
 #include "bulletmlerror.h"
-#include <vector>
-#include <string>
 #include <cstdint>
-#include <cstring>
-#include <fstream>
+
+// Maximum fixed sizes for static allocation
+#define BULLETML_MAX_FILENAME 256
+#define BULLETML_MAX_STRINGS 1000
+#define BULLETML_MAX_STRING_TABLE_SIZE 65536
+#define BULLETML_MAX_NODES 2000
+#define BULLETML_MAX_REFS 500
 
 /// Binary format header structure (24 bytes, little-endian)
 struct BulletMLBinaryHeader {
@@ -64,46 +67,29 @@ struct BulletMLNodeHeader {
 /// Binary BulletML Parser
 class BulletMLParserBinary : public BulletMLParser {
 public:
-    /// Constructor from file path
-    DECLSPEC explicit BulletMLParserBinary(const std::string& filename)
-        : data_(nullptr), data_size_(0), offset_(0), owns_data_(true),
-          current_node_id_(0)
+    /// Constructor from memory buffer (filename for identification)
+    DECLSPEC explicit BulletMLParserBinary(const char* filename, const uint8_t* data, size_t size)
+        : data_(data), data_size_(size), offset_(0), owns_data_(false),
+          current_node_id_(0), string_table_count_(0),
+          bullet_refs_count_(0), action_refs_count_(0), fire_refs_count_(0),
+          node_map_count_(0)
     {
         setName(filename);
-        
-        // Read entire file into memory
-        std::ifstream file(filename.c_str(), std::ios::binary | std::ios::ate);
-        if (!file.is_open()) {
-            error_message_ = "Failed to open file: " + filename;
-            return;
-        }
-        
-        std::streamsize size = file.tellg();
-        file.seekg(0, std::ios::beg);
-        
-        uint8_t* buffer = new uint8_t[size];
-        if (!file.read(reinterpret_cast<char*>(buffer), size)) {
-            error_message_ = "Failed to read file: " + filename;
-            delete[] buffer;
-            return;
-        }
-        
-        data_ = buffer;
-        data_size_ = static_cast<size_t>(size);
+        error_message_[0] = '\0';
     }
     
-    /// Constructor from memory buffer
-    DECLSPEC BulletMLParserBinary(const uint8_t* data, size_t size)
+    /// Constructor from memory buffer (unnamed)
+    DECLSPEC explicit BulletMLParserBinary(const uint8_t* data, size_t size)
         : data_(data), data_size_(size), offset_(0), owns_data_(false),
-          current_node_id_(0)
+          current_node_id_(0), string_table_count_(0),
+          bullet_refs_count_(0), action_refs_count_(0), fire_refs_count_(0),
+          node_map_count_(0)
     {
         setName("(memory)");
+        error_message_[0] = '\0';
     }
     
     DECLSPEC virtual ~BulletMLParserBinary() {
-        if (owns_data_ && data_) {
-            delete[] data_;
-        }
     }
 
     /// Parse the binary file (called by build())
@@ -115,23 +101,26 @@ public:
         
         offset_ = 0;
         current_node_id_ = 0;
-        node_map_.clear();
+        // Initialize node map (static array)
+        for (uint32_t i = 0; i < BULLETML_MAX_NODES; ++i) {
+            node_map_[i] = nullptr;
+        }
         
         // Verify header
         if (!verifyHeader()) {
-            BulletMLError::doAssert(false, "Header verification failed: " + error_message_);
+            BulletMLError::doAssert(false, "Header verification failed");
             return;
         }
         
         // Load string table
         if (!loadStringTable()) {
-            BulletMLError::doAssert(false, "Failed to load string table: " + error_message_);
+            BulletMLError::doAssert(false, "Failed to load string table");
             return;
         }
         
         // Load reference maps
         if (!loadReferenceMaps()) {
-            BulletMLError::doAssert(false, "Failed to load reference maps: " + error_message_);
+            BulletMLError::doAssert(false, "Failed to load reference maps");
             return;
         }
         
@@ -140,15 +129,15 @@ public:
         bulletml_ = parseNode();
         
         if (!bulletml_) {
-            BulletMLError::doAssert(false, "Failed to parse tree: " + error_message_);
+            BulletMLError::doAssert(false, "Failed to parse tree");
             return;
         }
         
         // Build reference maps for BulletMLParser
         // Process bullet references
-        for (size_t i = 0; i < bullet_refs_.size(); ++i) {
+            for (size_t i = 0; i < bullet_refs_count_; ++i) {
             uint32_t node_id = bullet_refs_[i].node_id;
-            if (node_id < node_map_.size() && node_map_[node_id]) {
+            if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
                 if (i >= bulletMap_.size()) {
                     bulletMap_.resize(i + 1);
                 }
@@ -157,9 +146,9 @@ public:
         }
         
         // Process action references
-        for (size_t i = 0; i < action_refs_.size(); ++i) {
+            for (size_t i = 0; i < action_refs_count_; ++i) {
             uint32_t node_id = action_refs_[i].node_id;
-            if (node_id < node_map_.size() && node_map_[node_id]) {
+            if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
                 if (i >= actionMap_.size()) {
                     actionMap_.resize(i + 1);
                 }
@@ -168,9 +157,9 @@ public:
         }
         
         // Process fire references
-        for (size_t i = 0; i < fire_refs_.size(); ++i) {
+            for (size_t i = 0; i < fire_refs_count_; ++i) {
             uint32_t node_id = fire_refs_[i].node_id;
-            if (node_id < node_map_.size() && node_map_[node_id]) {
+            if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
                 if (i >= fireMap_.size()) {
                     fireMap_.resize(i + 1);
                 }
@@ -190,19 +179,27 @@ public:
     }
     
     /// Get last error message
-    DECLSPEC const std::string& getErrorMessage() const { return error_message_; }
+    DECLSPEC const char* getErrorMessage() const { return error_message_; }
 
 private:
+    inline void setError(const char* msg) {
+        uint32_t i = 0;
+        for (; i < sizeof(error_message_) - 1 && msg[i] != '\0'; ++i) {
+            error_message_[i] = msg[i];
+        }
+        error_message_[i] = '\0';
+    }
+
     // Helper macros for bounds checking
     #define CHECK_BOUNDS(size) \
         if (offset_ + (size) > data_size_) { \
-            error_message_ = "Unexpected end of file"; \
+            setError("Unexpected end of file"); \
             return false; \
         }
 
     #define CHECK_BOUNDS_PTR(size) \
         if (offset_ + (size) > data_size_) { \
-            error_message_ = "Unexpected end of file"; \
+            setError("Unexpected end of file"); \
             return nullptr; \
         }
 
@@ -237,41 +234,70 @@ private:
         return value;
     }
     
-    /// Read string from current position
-    inline std::string readString() {
-        uint16_t length = readUInt16();
-        if (offset_ + length > data_size_) {
-            return "";
-        }
-        
-        std::string str(reinterpret_cast<const char*>(data_ + offset_), length);
-        offset_ += length;
-        return str;
+/// Read string from current position and store its offset
+inline const char* readString() {
+    uint16_t length = readUInt16();
+    if (offset_ + length > data_size_) {
+        return "";
     }
+    
+    // Store offset into data buffer for this string
+    if (string_table_count_ < BULLETML_MAX_STRINGS) {
+        string_table_offsets_[string_table_count_] = offset_;  // Store offset into data_
+        string_table_count_++;
+    }
+    
+    const char* str = reinterpret_cast<const char*>(data_ + offset_);
+    offset_ += length;
+    return str;
+}
+
+/// Get string from string table by index
+inline const char* readStringAt(uint32_t index) {
+    if (index >= string_table_count_) {
+        return "";
+    }
+    // string_table_offsets_ stores offsets into data_
+    return reinterpret_cast<const char*>(data_ + string_table_offsets_[index]);
+}
     
     /// Verify header magic and version
     inline bool verifyHeader() {
         CHECK_BOUNDS(sizeof(BulletMLBinaryHeader));
-        
-        // Read header
-        std::memcpy(&header_, data_ + offset_, sizeof(BulletMLBinaryHeader));
+        // Read header without libc helpers
+        const uint8_t* h = data_ + offset_;
+        header_.magic[0] = static_cast<char>(h[0]);
+        header_.magic[1] = static_cast<char>(h[1]);
+        header_.magic[2] = static_cast<char>(h[2]);
+        header_.magic[3] = static_cast<char>(h[3]);
+        header_.version = static_cast<uint16_t>(h[4] | (h[5] << 8));
+        header_.orientation = h[6];
+        header_.flags = h[7];
+        header_.string_table_offset =
+            static_cast<uint32_t>(h[8] | (h[9] << 8) | (h[10] << 16) | (h[11] << 24));
+        header_.refmap_offset =
+            static_cast<uint32_t>(h[12] | (h[13] << 8) | (h[14] << 16) | (h[15] << 24));
+        header_.tree_offset =
+            static_cast<uint32_t>(h[16] | (h[17] << 8) | (h[18] << 16) | (h[19] << 24));
+        header_.file_size =
+            static_cast<uint32_t>(h[20] | (h[21] << 8) | (h[22] << 16) | (h[23] << 24));
         offset_ += sizeof(BulletMLBinaryHeader);
-        
-        // Verify magic number (changed from "BMLB" to "BLB\x00")
-        if (std::memcmp(header_.magic, "BLB\x00", 4) != 0) {
-            error_message_ = "Invalid magic number (not a BulletML binary file)";
+
+        // Verify magic number
+        if (header_.magic[0] != 'B' || header_.magic[1] != 'L' || header_.magic[2] != 'B' || header_.magic[3] != '\0') {
+            setError("Invalid magic number");
             return false;
         }
         
         // Check version
         if (header_.version != 1) {
-            error_message_ = "Unsupported version";
+            setError("Unsupported version");
             return false;
         }
         
         // Verify file size
         if (header_.file_size != data_size_) {
-            error_message_ = "File size mismatch";
+            setError("File size mismatch");
             return false;
         }
         
@@ -290,9 +316,9 @@ private:
         offset_ = header_.string_table_offset;
         uint32_t string_count = readUInt32();
         
-        string_table_.reserve(string_count);
+        if (string_count > BULLETML_MAX_STRINGS) string_count = BULLETML_MAX_STRINGS;
         for (uint32_t i = 0; i < string_count; ++i) {
-            string_table_.push_back(readString());
+            readString();
         }
         
         return true;
@@ -305,44 +331,53 @@ private:
         // Load bullet references
         CHECK_BOUNDS(4);
         uint32_t bullet_count = readUInt32();
-        bullet_refs_.reserve(bullet_count);
+        if (bullet_count > BULLETML_MAX_REFS) bullet_count = BULLETML_MAX_REFS;
+        bullet_refs_count_ = 0;
         for (uint32_t i = 0; i < bullet_count; ++i) {
             CHECK_BOUNDS(8);
             BulletMLRefEntry entry;
             entry.label_id = readUInt32();
             entry.node_id = readUInt32();
-            bullet_refs_.push_back(entry);
+            if (bullet_refs_count_ < BULLETML_MAX_REFS) {
+                bullet_refs_[bullet_refs_count_++] = entry;
+            }
         }
         
         // Load action references
         CHECK_BOUNDS(4);
         uint32_t action_count = readUInt32();
-        action_refs_.reserve(action_count);
+        if (action_count > BULLETML_MAX_REFS) action_count = BULLETML_MAX_REFS;
+        action_refs_count_ = 0;
         for (uint32_t i = 0; i < action_count; ++i) {
             CHECK_BOUNDS(8);
             BulletMLRefEntry entry;
             entry.label_id = readUInt32();
             entry.node_id = readUInt32();
-            action_refs_.push_back(entry);
+            if (action_refs_count_ < BULLETML_MAX_REFS) {
+                action_refs_[action_refs_count_++] = entry;
+            }
         }
         
         // Load fire references
         CHECK_BOUNDS(4);
         uint32_t fire_count = readUInt32();
-        fire_refs_.reserve(fire_count);
+        if (fire_count > BULLETML_MAX_REFS) fire_count = BULLETML_MAX_REFS;
+        fire_refs_count_ = 0;
         for (uint32_t i = 0; i < fire_count; ++i) {
             CHECK_BOUNDS(8);
             BulletMLRefEntry entry;
             entry.label_id = readUInt32();
             entry.node_id = readUInt32();
-            fire_refs_.push_back(entry);
+            if (fire_refs_count_ < BULLETML_MAX_REFS) {
+                fire_refs_[fire_refs_count_++] = entry;
+            }
         }
         
         return true;
     }
     
     /// Convert binary node type to string name
-    inline static std::string nodeTypeToString(uint8_t type) {
+    inline static const char* nodeTypeToString(uint8_t type) {
         static const char* names[] = {
             "bulletml", "bullet", "action", "fire", "changeDirection", "changeSpeed",
             "accel", "wait", "repeat", "bulletRef", "actionRef", "fireRef",
@@ -370,15 +405,14 @@ private:
         node_header.label_string_id = readUInt32();
         
         // Create node
-        std::string node_name = nodeTypeToString(node_header.node_type);
+        const char* node_name = nodeTypeToString(node_header.node_type);
         BulletMLNode* node = new BulletMLNode(node_name);
         
         // Set node ID for reference mapping
         uint32_t this_node_id = current_node_id_++;
-        if (this_node_id >= node_map_.size()) {
-            node_map_.resize(this_node_id + 1);
+        if (this_node_id < BULLETML_MAX_NODES) {
+            node_map_[this_node_id] = node;
         }
-        node_map_[this_node_id] = node;
         
         // Set type if present
         if (node_header.value_type != 0) {
@@ -395,8 +429,8 @@ private:
         
         // Set value if present
         if (node_header.value_string_id != 0xFFFFFFFF) {
-            if (node_header.value_string_id < string_table_.size()) {
-                node->setValue(string_table_[node_header.value_string_id]);
+            if (node_header.value_string_id < string_table_count_) {
+                node->setValue(readStringAt(node_header.value_string_id));
             }
         }
         
@@ -423,20 +457,28 @@ private:
     bool owns_data_;             // True if we allocated data_
     
     BulletMLBinaryHeader header_;
-    std::vector<std::string> string_table_;
+    
+    // String table: static buffer with string offsets
+    char string_table_buffer_[BULLETML_MAX_STRING_TABLE_SIZE];
+    uint32_t string_table_offsets_[BULLETML_MAX_STRINGS];
+    uint32_t string_table_count_;
     
     // Reference maps: label -> node_id
-    std::vector<BulletMLRefEntry> bullet_refs_;
-    std::vector<BulletMLRefEntry> action_refs_;
-    std::vector<BulletMLRefEntry> fire_refs_;
+    BulletMLRefEntry bullet_refs_[BULLETML_MAX_REFS];
+    uint32_t bullet_refs_count_;
+    BulletMLRefEntry action_refs_[BULLETML_MAX_REFS];
+    uint32_t action_refs_count_;
+    BulletMLRefEntry fire_refs_[BULLETML_MAX_REFS];
+    uint32_t fire_refs_count_;
     
-    std::string error_message_;
+    char error_message_[256];
     
     // Node ID counter for tracking nodes during parsing
     uint32_t current_node_id_;
     
     // Map of node_id to BulletMLNode* for resolving references
-    std::vector<BulletMLNode*> node_map_;
+    BulletMLNode* node_map_[BULLETML_MAX_NODES];
+    uint32_t node_map_count_;
 };
 
 #endif // BULLETMLPARSER_BINARY_HPP_

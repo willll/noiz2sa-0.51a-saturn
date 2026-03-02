@@ -5,18 +5,17 @@ project(BulletMLBinary)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Include parent bulletml directory
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
+# Include bulletml headers used by bulletmlparser_binary.hpp
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../bulletml)
 
 # BulletML Binary Library
 add_library(bulletml_binary STATIC
     bulletmlparser-bin.cpp
-    bulletmlparser-bin.h
 )
 
 # Link with parent bulletml library
 target_link_libraries(bulletml_binary
-    ${CMAKE_SOURCE_DIR}/src/bulletml/libbulletml.a
+    bulletml
 )
 
 # BulletML Converter Tool
@@ -25,7 +24,7 @@ add_executable(bulletml-converter
 )
 
 target_link_libraries(bulletml-converter
-    ${CMAKE_SOURCE_DIR}/src/bulletml/libbulletml.a
+    bulletml
 )
 
     # Test program
@@ -35,7 +34,7 @@ target_link_libraries(bulletml-converter
 
     target_link_libraries(test-binary
         bulletml_binary
-        ${CMAKE_SOURCE_DIR}/src/bulletml/libbulletml.a
+        bulletml
     )
 
 # Install targets
@@ -46,7 +45,7 @@ install(TARGETS bulletml_binary bulletml-converter
 )
 
 install(FILES
-    bulletmlparser-bin.h
+    bulletmlparser_binary.hpp
     BINARY_FORMAT.md
     DESTINATION include/bulletml_binary
 )

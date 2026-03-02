@@ -5,7 +5,7 @@
  */
 
 #include "../bulletml/bulletmlparser-tinyxml.h"
-#include "bulletmlparser-bin.h"
+#include "bulletmlparser_binary.hpp"
 #include <string>
 #include <sys/stat.h>
 

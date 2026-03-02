@@ -3,7 +3,7 @@
  * Simple test program to verify binary BulletML parsing
  */
 
-#include "bulletmlparser-bin.h"
+#include "bulletmlparser_binary.hpp"
 #include "../bulletml/bulletmltree.h"
 #include <iostream>
 #include <cstdlib>
