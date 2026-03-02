@@ -36,6 +36,11 @@ project( noiz2sa VERSION 1.0
                   DESCRIPTION "Sega Saturn noiz2sa"
                   LANGUAGES C CXX ASM)
 
+# Require C++20 for SRL compatibility (SaturnMathPP uses consteval, requires)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20")
+
 # SaturnRingLib include path configuration
 # Use environment variable if available, otherwise use relative path
 if(DEFINED ENV{SRL_INSTALL_ROOT})
@@ -182,8 +187,9 @@ set(cxx_flags
     -Wno-padded
     -maccumulate-outgoing-args
         -fomit-frame-pointer
-        -fno-rtti
-        -fno-exceptions
+        # Note: Keeping RTTI and exceptions enabled for bulletml compatibility
+        # -fno-rtti
+        # -fno-exceptions
     -fno-unwind-tables
     -fno-asynchronous-unwind-tables
     -fno-threadsafe-statics
@@ -216,6 +222,8 @@ set(SOURCES_NOIZ2SA
   src/foe.cc
   src/foecommand.cc
   src/barragemanager.cc
+  src/SDL/SDL.c
+  src/SDL/stdio_wrapper.c
   )
 
 # Add SGL workarea source (from SaturnRingLib's shared.mk SYSSOURCES)
@@ -254,9 +262,7 @@ target_include_directories(
     # Project headers
     .
     src
-    sdl
-    SDL/include
-    SDL_mixer
+    src/SDL
     ${BULLETML_INCLUDE_DIRS}
     )
 
