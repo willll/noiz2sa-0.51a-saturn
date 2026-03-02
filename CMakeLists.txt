@@ -49,20 +49,20 @@ else()
     set(SRL_INSTALL_ROOT "${CMAKE_SOURCE_DIR}/SaturnRingLib")
 endif()
 
-# Add subdirectories
-add_subdirectory(src/bulletml_binary)
-
 set(SRL_ROOT "${SRL_INSTALL_ROOT}" CACHE PATH "Path to SaturnRingLib root" FORCE)
 include("/saturn/noiz2sa-0.51a-saturn/cmake/SRL.cmake")
+
+# Add subdirectories after SRL setup so Saturn include paths are available
+add_subdirectory(src/bulletml_binary)
 
 # ============================================================================
 # SaturnRingLib Configuration Options (from shared.mk)
 # ============================================================================
 
 # CD subsystem configuration
-option(SRL_MAX_CD_BACKGROUND_JOBS "Maximum CD background jobs" 1)
-option(SRL_MAX_CD_FILES "Maximum CD files" 255)
-option(SRL_MAX_CD_RETRIES "Maximum CD retries" 5)
+set(SRL_MAX_CD_BACKGROUND_JOBS "1" CACHE STRING "Maximum CD background jobs" FORCE)
+set(SRL_MAX_CD_FILES "255" CACHE STRING "Maximum CD files" FORCE)
+set(SRL_MAX_CD_RETRIES "5" CACHE STRING "Maximum CD retries" FORCE)
 
 # Display configuration
 option(SRL_HIGH_RES "Enable high resolution mode" OFF)

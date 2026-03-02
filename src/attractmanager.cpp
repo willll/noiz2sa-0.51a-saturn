@@ -10,7 +10,7 @@
  * @version $Revision: 1.4 $
  */
 #include "SDL.h"
-#include "stdio.h"  // For FILE/fopen/fclose stubs
+#include <srl_cd.hpp>
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_log.hpp>     // for file I/O logging
 #include <srl_string.hpp>  // for string functions
@@ -33,9 +33,14 @@ static int hsScene, hsScSc, hsOfs;
 
 static HiScore hiScore;
 
-#define PREF_FILE "/.noiz2sa.prf"
+#define PREF_FILE "NOIZ2SA.PRF"
 #define DEFAULT_HISCORE 100000
 #define DEFAULT_SCENE_HISCORE 10000
+
+static bool readInt32FromCd(SRL::Cd::File& file, int* value) {
+  if (!value) return false;
+  return file.Read((int32_t)sizeof(int), value) == (int32_t)sizeof(int);
+}
 
 static void initHiScore() {
   int i, j;
@@ -53,62 +58,55 @@ static void initHiScore() {
 
 // Load preference.
 void loadPreference() {
-  FILE *fp;
   int i, j;
   int version;
-  char *tmpname;
-  char name[128];
+  SRL::Cd::File prefFile(PREF_FILE);
 
-  tmpname = getenv("HOME");
-  strcpy(name, tmpname);
-  strcat(name, PREF_FILE);
+  initHiScore();
 
-  if ( nullptr == (fp = fopen(name,"rb")) ) {
+  // Preferences are read-only on Saturn (from CD image).
+  if (!prefFile.Exists() || !prefFile.Open()) {
+    return;
+  }
+
+  if (!readInt32FromCd(prefFile, &version) || version != VERSION_NUM) {
+    prefFile.Close();
     initHiScore();
     return;
   }
-  version = getw(fp);
-  if ( version != VERSION_NUM ) {
-    initHiScore();
-    return;
-  }
+
   for ( i=0 ; i<STAGE_NUM ; i++ ) {
-    hiScore.stageScore[i] = getw(fp);
+    if (!readInt32FromCd(prefFile, &hiScore.stageScore[i])) {
+      prefFile.Close();
+      initHiScore();
+      return;
+    }
     for ( j=0 ; j<SCENE_NUM ; j++ ) {
-      hiScore.sceneScore[i][j] = getw(fp);
+      if (!readInt32FromCd(prefFile, &hiScore.sceneScore[i][j])) {
+        prefFile.Close();
+        initHiScore();
+        return;
+      }
     }
   }
   for ( i=0 ; i<ENDLESS_STAGE_NUM ; i++ ) {
-    hiScore.stageScore[i+STAGE_NUM] = getw(fp);
+    if (!readInt32FromCd(prefFile, &hiScore.stageScore[i+STAGE_NUM])) {
+      prefFile.Close();
+      initHiScore();
+      return;
+    }
   }
-  hiScore.stage = getw(fp);
-  fclose(fp);
+  if (!readInt32FromCd(prefFile, &hiScore.stage)) {
+    prefFile.Close();
+    initHiScore();
+    return;
+  }
+  prefFile.Close();
 }
 
 // Save preference.
 void savePreference() {
-  FILE *fp;
-  int i, j;
-  char *tmpname;
-  char name[128];
-
-  tmpname = getenv("HOME");
-  strcpy(name, tmpname);
-  strcat(name, PREF_FILE);
-
-  if ( nullptr == (fp = fopen(name,"wb")) ) return;
-  putw(VERSION_NUM, fp);
-  for ( i=0 ; i<STAGE_NUM ; i++ ) {
-    putw(hiScore.stageScore[i], fp);
-    for ( j=0 ; j<SCENE_NUM ; j++ ) {
-      putw(hiScore.sceneScore[i][j], fp);
-    }
-  }
-  for ( i=0 ; i<ENDLESS_STAGE_NUM ; i++ ) {
-    putw(hiScore.stageScore[i+STAGE_NUM], fp);
-  }
-  putw(hiScore.stage, fp);
-  fclose(fp);
+  // CD media is read-only on Saturn; keep in-memory highscores only.
 }
 
 void initGameState(int stg) {

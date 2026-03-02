@@ -26,21 +26,13 @@
 #define BULLETMLPARSER_BINARY_HPP_
 
 #include <cstdint>
+#include <srl_cd.hpp>
 
 // Manual size_t definition (stddef.h not available on Saturn)
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
 typedef unsigned int size_t;
 #endif
-
-// Forward declare FILE for file loading support
-struct __sFILE;
-typedef struct __sFILE FILE;
-extern "C" {
-    FILE* fopen(const char* filename, const char* mode);
-    size_t fread(void* ptr, size_t size, size_t nmemb, FILE* file);
-    int fclose(FILE* file);
-}
 
 // Platform-specific export declarations
 #ifndef DECLSPEC
@@ -827,20 +819,20 @@ private:
         if (!filename) {
             return false;
         }
-        
-        FILE* file = fopen(filename, "rb");
-        if (!file) {
+
+        SRL::Cd::File file(filename);
+        if (!file.Exists() || !file.Open()) {
             return false;
         }
-        
+
         // Read file into static buffer
-        size_t bytes_read = fread(file_buffer_, 1, sizeof(file_buffer_), file);
-        fclose(file);
-        
-        if (bytes_read == 0) {
+        int32_t bytes_read = file.Read((int32_t)sizeof(file_buffer_), file_buffer_);
+        file.Close();
+
+        if (bytes_read <= 0) {
             return false;
         }
-        
+
         buffer_size_ = (uint32_t)bytes_read;
         return true;
     }

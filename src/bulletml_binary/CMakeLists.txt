@@ -5,10 +5,12 @@ project(BulletMLBinary)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# BulletML Binary Library
-add_library(bulletml_binary STATIC
-    bulletmlparser-bin.cpp
-)
+# Access SaturnRingLib headers from subdirectory builds
+include_directories(/saturn/SaturnRingLib/saturnringlib)
+
+# BulletML Binary Library (header-only)
+add_library(bulletml_binary INTERFACE)
+target_include_directories(bulletml_binary INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # No external dependencies needed for Saturn port (header-only)
 

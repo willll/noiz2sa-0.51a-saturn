@@ -89,24 +89,6 @@ int vsnprintf(char* buf, size_t size, const char* fmt, va_list args) {
     return 0;
 }
 
-FILE* fopen(const char* filename, const char* mode) {
-    (void)filename;
-    (void)mode;
-    return nullptr;
-}
-
-int fclose(FILE* file) {
-    (void)file;
-    return 0;
-}
-
-FILE* freopen(const char* filename, const char* mode, FILE* file) {
-    (void)filename;
-    (void)mode;
-    (void)file;
-    return nullptr;
-}
-
 int fgetc(FILE* file) {
     (void)file;
     return EOF;
@@ -131,34 +113,6 @@ int fputs(const char* str, FILE* file) {
     return 0;
 }
 
-size_t fread(void* ptr, size_t size, size_t nmemb, FILE* file) {
-    (void)ptr;
-    (void)size;
-    (void)nmemb;
-    (void)file;
-    return 0;
-}
-
-size_t fwrite(const void* ptr, size_t size, size_t nmemb, FILE* file) {
-    (void)ptr;
-    (void)size;
-    (void)nmemb;
-    (void)file;
-    return 0;
-}
-
-int fseek(FILE* file, long offset, int whence) {
-    (void)file;
-    (void)offset;
-    (void)whence;
-    return -1;
-}
-
-long ftell(FILE* file) {
-    (void)file;
-    return -1;
-}
-
 int fgetpos(FILE* file, fpos_t* pos) {
     (void)file;
     (void)pos;
@@ -169,10 +123,6 @@ int fsetpos(FILE* file, const fpos_t* pos) {
     (void)file;
     (void)pos;
     return -1;
-}
-
-void rewind(FILE* file) {
-    (void)file;
 }
 
 int fscanf(FILE* file, const char* fmt, ...) {
@@ -221,11 +171,6 @@ int getchar(void) {
     return EOF;
 }
 
-int getw(FILE* file) {
-    (void)file;
-    return EOF;
-}
-
 int putc(int c, FILE* file) {
     (void)c;
     (void)file;
@@ -234,12 +179,6 @@ int putc(int c, FILE* file) {
 
 int putchar(int c) {
     (void)c;
-    return EOF;
-}
-
-int putw(int w, FILE* file) {
-    (void)w;
-    (void)file;
     return EOF;
 }
 
