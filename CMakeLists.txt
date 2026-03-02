@@ -158,7 +158,7 @@ add_compile_definitions(
 
 # TLSF Allocator
 if(SRL_MALLOC_METHOD STREQUAL "TLSF")
-    set(TLSF_SOURCE "${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/tlsf/tlsf.c")
+    set(TLSF_SOURCE "${SRL_MODULES_DIR}/tlsf/tlsf.c")
     if(EXISTS "${TLSF_SOURCE}")
         list(APPEND SOURCES_NOIZ2SA "${TLSF_SOURCE}")
         message(STATUS "Using TLSF memory allocator")
@@ -172,15 +172,15 @@ endif()
 set(as_flags )
 set(cxx_flags
     -O2 -g3 -m2 -c
-        -fpermissive
-        -Wno-conversion-null
+    -fpermissive
+    -Wno-conversion-null
     -Wno-strict-aliasing
     -fno-lto -Wshadow -Wall -Wswitch -Wpadded
-        -fno-common -Wextra -Wno-narrowing -fno-web
-        -fno-builtin -funit-at-a-time -Wwrite-strings
+    -fno-common -Wextra -Wno-narrowing -fno-web
+    -fno-builtin -funit-at-a-time -Wwrite-strings
     -mno-fsrra
-        -Wno-padded
-        -maccumulate-outgoing-args
+    -Wno-padded
+    -maccumulate-outgoing-args
         -fomit-frame-pointer
         -fno-rtti
         -fno-exceptions
