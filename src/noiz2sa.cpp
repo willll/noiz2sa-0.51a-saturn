@@ -14,6 +14,7 @@
 #include <srl_memory.hpp>  // for malloc/free, atoi, srand
 #include <srl_log.hpp>     // for logging
 #include <srl_string.hpp>  // for string functions
+#include <srl_system.hpp>  // for exit
 
 #include "noiz2sa.h"
 #include "screen.h"
@@ -47,7 +48,7 @@ void quitLast() {
   closeBarragemanager();
   closeSDL();
   SDL_Quit();
-  exit(1);
+  SRL::System::Exit(1);
 }
 
 int status;
@@ -252,7 +253,7 @@ static void parseArgs(int argc, char *argv[]) {
       accframe = 1;
     } else {
       usage(argv[0]);
-      exit(1);
+      SRL::System::Exit(1);
     }
   }
 }

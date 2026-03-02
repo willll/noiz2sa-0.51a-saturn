@@ -27,6 +27,7 @@ extern "C" {
 #include "barragemanager.h"
 #include "foe.h"
 #include <srl_log.hpp>
+#include <srl_system.hpp>
 
 #define BARRAGE_PATTERN_MAX 32
 #define SHARE_LOC "/usr/share/games/noiz2sa/"
@@ -53,7 +54,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
   if ( (dp = opendir(fullDirPath)) == nullptr ) {
     SRL::Logger::LogFatal("Can't open directory: %s", dirPath);
-    exit(1);
+    SRL::System::Exit(1);
   }
   while ((dir = readdir(dp)) != nullptr) {
     if ( strcmp(strrchr(dir->d_name, '.'), ".xml") != 0 ) continue; // Read .xml files.

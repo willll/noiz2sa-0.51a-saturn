@@ -14,6 +14,7 @@
 #include <srl_log.hpp>     // for logging
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_string.hpp>  // for string and memory functions
+#include <srl_system.hpp>  // for exit
 #include "SDL.h"
 #include "stdio.h"  // For stdio stubs
 
@@ -68,7 +69,7 @@ static void loadSprites() {
     if ( img == nullptr ) {
       SRL::Logger::LogFatal("Unable to load: %s", name);
       SDL_Quit();
-      exit(1);
+      SRL::System::Exit(1);
     }
     sprite[i] = SDL_ConvertSurface(img,
 				   video->format,
@@ -106,13 +107,13 @@ static void makeSmokeBuf() {
   lyrSize = sizeof(LayerBit)*pitch*LAYER_HEIGHT;
   if ( nullptr == (smokeBuf = (LayerBit**)malloc(sizeof(LayerBit*)*pitch*LAYER_HEIGHT)) ) {
     SRL::Logger::LogFatal("Couldn't malloc smokeBuf.");
-    exit(1);
+    SRL::System::Exit(1);
   }
   if ( nullptr == (pbuf  = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ||
        nullptr == (l1buf = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ||
        nullptr == (l2buf = (LayerBit*)malloc(lyrSize+sizeof(LayerBit))) ) {
     SRL::Logger::LogFatal("Couldn't malloc buffer.");
-    exit(1);
+    SRL::System::Exit(1);
   }
   pbuf[pitch*LAYER_HEIGHT] = 0;
   for ( y=0 ; y<LAYER_HEIGHT ; y++ ) {
@@ -135,7 +136,7 @@ void initSDL(int window) {
 
   if ( SDL_Init(SDL_INIT_VIDEO) < 0 ) {
     SRL::Logger::LogFatal("Unable to initialize SDL: %s", SDL_GetError());
-    exit(1);
+    SRL::System::Exit(1);
   }
   atexit(SDL_Quit);
   if ( SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0 ) {
@@ -150,7 +151,7 @@ void initSDL(int window) {
   if ( (video = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, videoBpp, videoFlags)) == nullptr ) {
     SRL::Logger::LogFatal("Unable to create SDL screen: %s", SDL_GetError());
     SDL_Quit();
-    exit(1);
+    SRL::System::Exit(1);
   }
   screenRect.x = screenRect.y = 0;
   screenRect.w = SCREEN_WIDTH; screenRect.h = SCREEN_HEIGHT;
@@ -165,7 +166,7 @@ void initSDL(int window) {
 		(SDL_SWSURFACE, PANEL_WIDTH, PANEL_HEIGHT, videoBpp,
 		 pfrm->Rmask, pfrm->Gmask, pfrm->Bmask, pfrm->Amask)) ) {
         SRL::Logger::LogFatal("Couldn't create surface: %s", SDL_GetError());
-      exit(1);
+      SRL::System::Exit(1);
   }
   layerRect.x = (SCREEN_WIDTH-LAYER_WIDTH)/2;
   layerRect.y = (SCREEN_HEIGHT-LAYER_HEIGHT)/2;
