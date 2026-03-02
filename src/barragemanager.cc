@@ -13,6 +13,7 @@ extern "C" {
 #include "SDL.h"
 #include <sys/types.h>
 #include <dirent.h>
+#include <string.h>
 #include "noiz2sa.h"
 #include "degutil.h"
 #include "vector.h"

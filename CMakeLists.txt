@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 # ============================================================================
 # Saturn Toolchain Configuration
@@ -50,6 +50,7 @@ else()
 endif()
 
 # Add subdirectories
+add_subdirectory(src/bulletml)
 add_subdirectory(src/bulletml_binary)
 
 set(SRL_ROOT "${SRL_INSTALL_ROOT}" CACHE PATH "Path to SaturnRingLib root" FORCE)
@@ -224,6 +225,7 @@ set(SOURCES_NOIZ2SA
   src/barragemanager.cc
   src/SDL/SDL.c
   src/SDL/stdio_wrapper.c
+    src/SDL/dirent_wrapper.c
   )
 
 # Add SGL workarea source (from SaturnRingLib's shared.mk SYSSOURCES)
@@ -255,6 +257,7 @@ target_include_directories(
     noiz2sa.elf PUBLIC
     # SaturnRingLib headers (MUST come first to override system headers)
     ${SRL_INSTALL_ROOT}/saturnringlib
+    src/SDL
     ${SRL_INSTALL_ROOT}/modules/sgl/INC
     ${SRL_INSTALL_ROOT}/modules/dummy
     ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
@@ -262,12 +265,18 @@ target_include_directories(
     # Project headers
     .
     src
-    src/SDL
+    src/bulletml
     ${BULLETML_INCLUDE_DIRS}
     )
 
 target_compile_options(noiz2sa.elf PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
                                                  $<$<COMPILE_LANGUAGE:C>:${c_flags}> )
+
+target_compile_definitions(noiz2sa.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:bool=int>
+    $<$<COMPILE_LANGUAGE:C>:true=1>
+    $<$<COMPILE_LANGUAGE:C>:false=0>
+)
 
 target_link_options(noiz2sa.elf PUBLIC
     "SHELL:-Xlinker -Map -Xlinker noiz2sa.map"
