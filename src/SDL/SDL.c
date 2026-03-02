@@ -3,10 +3,6 @@
 
 #include "SDL.h"
 
-// Minimal FILE stub for stderr
-FILE _stderr_stub = {0};
-FILE* stderr = &_stderr_stub;
-
 // Global stub surfaces that can be reused
 SDL_Surface global_screen = {0};
 SDL_PixelFormat global_format = {0};

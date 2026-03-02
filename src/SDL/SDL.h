@@ -4,62 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
-
-// Opaque FILE type
-struct _FILE { int _flags; };
-typedef struct _FILE FILE;
-
-// fpos_t type for file positioning
-typedef long fpos_t;
-
-// Declare stdio functions with C linkage
-extern "C" {
-FILE* stderr;
-FILE* stdout;
-FILE* stdin;
-
-int fprintf(FILE* file, const char* fmt, ...);
-int printf(const char* fmt, ...);
-int sprintf(char* buf, const char* fmt, ...);
-int snprintf(char* buf, size_t size, const char* fmt, ...);
-FILE* fopen(const char* filename, const char* mode);
-FILE* freopen(const char* filename, const char* mode, FILE* file);
-int fclose(FILE* file);
-int fgetc(FILE* file);
-int fputc(int c, FILE* file);
-char* fgets(char* str, int size, FILE* file);
-int fputs(const char* str, FILE* file);
-size_t fread(void* ptr, size_t size, size_t nmemb, FILE* file);
-size_t fwrite(const void* ptr, size_t size, size_t nmemb, FILE* file);
-int fseek(FILE* file, long offset, int whence);
-long ftell(FILE* file);
-int fgetpos(FILE* file, fpos_t* pos);
-int fsetpos(FILE* file, const fpos_t* pos);
-void rewind(FILE* file);
-int fscanf(FILE* file, const char* fmt, ...);
-int scanf(const char* fmt, ...);
-int sscanf(const char* str, const char* fmt, ...);
-int getc(FILE* file);
-int getchar(void);
-int putc(int c, FILE* file);
-int putchar(int c);
-int puts(const char* str);
-int getw(FILE* stream);
-int putw(int w, FILE* stream);
-int ungetc(int c, FILE* file);
-void setbuf(FILE* file, char* buf);
-int setvbuf(FILE* file, char* buf, int mode, size_t size);
-FILE* tmpfile(void);
-char* tmpnam(char* buf);
-int remove(const char* filename);
-int rename(const char* oldname, const char* newname);
-void perror(const char* str);
-}
-
-// EOF constant
-#ifndef EOF
-#define EOF (-1)
-#endif
+#include <stdio.h>
 
 // SDL type stubs for Saturn noiz2sa - Hybrid approach
 // These stubs allow compilation now, can be replaced with SRL incrementally later
