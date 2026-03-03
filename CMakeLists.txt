@@ -176,6 +176,7 @@ endif()
 
 set(as_flags )
 set(cxx_flags
+    -std=c++23
     -O2 -g3 -m2 -c
     -fpermissive
     -Wno-conversion-null
@@ -227,6 +228,7 @@ set(SOURCES_NOIZ2SA
   src/SDL/SDL.cpp
   src/SDL/stdio_wrapper.cpp
   src/SDL/dirent_wrapper.cpp
+  src/syscalls.c
   )
 
 # Add SGL workarea source (from SaturnRingLib's shared.mk SYSSOURCES)
@@ -266,7 +268,10 @@ target_include_directories(
     # Project headers
     .
     src
-    src/bulletml
+    src/bulletml_binary
+    )
+
+target_compile_definitions(noiz2sa.elf PUBLIC
     ${BULLETML_INCLUDE_DIRS}
     )
 
@@ -307,13 +312,10 @@ add_custom_command(TARGET noiz2sa.elf POST_BUILD
     COMMENT "Creating asset directories"
 )
 
-# Create required text files if they don't exist
-add_custom_command(TARGET noiz2sa.elf POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "NOT Abstracted by SEGA" > "${CMAKE_BINARY_DIR}/cd/data/ABS.TXT"
-    COMMAND ${CMAKE_COMMAND} -E echo "NOT Bibliographiced by SEGA" > "${CMAKE_BINARY_DIR}/cd/data/BIB.TXT"
-    COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/cd/data/CPY.TXT"
-    COMMENT "Creating required metadata files"
-)
+# Create required text files (done at CMake config time, not build time)
+file(WRITE "${CMAKE_BINARY_DIR}/cd/data/ABS.TXT" "NOT Abstracted by SEGA\n")
+file(WRITE "${CMAKE_BINARY_DIR}/cd/data/BIB.TXT" "NOT Bibliographiced by SEGA\n")
+file(WRITE "${CMAKE_BINARY_DIR}/cd/data/CPY.TXT" "")
 
 # Convert ELF to binary (equivalent to shared.mk convert_binary target)
 add_custom_command(TARGET noiz2sa.elf POST_BUILD
@@ -431,10 +433,6 @@ endif()
 # ISO Generation Target
 # ============================================================================
 set(ISO_GENERATION_SCRIPT "${CMAKE_BINARY_DIR}/generate_iso.sh")
-add_custom_command(TARGET noiz2sa.elf POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "Generating ISO with xorrisofs..."
-    COMMENT "Creating ISO image (cd.iso)"
-)
 
 # Generate ISO creation script
 file(GENERATE OUTPUT "${ISO_GENERATION_SCRIPT}"
@@ -462,7 +460,7 @@ echo \"Creating ISO image...\"\n
     -publisher-id=\"libburnia\" \\\n
     -application-id=\"xorrisofs\" \\\n
     \"-boot_image\" \"isolinux\" \"bin=\$IPFILE\" \\\n
-    -o \"\$BUILD_ISO\" \n
+    -o \"\$BUILD_ISO\" \\\n
     \"\$ASSETS_DIR\"\n
 \n
 if [ ! -f \"\$BUILD_ISO\" ]; then\n
@@ -472,11 +470,6 @@ fi\n
 \n
 echo \"ISO created successfully: \$BUILD_ISO\"\n
 "
-)
-
-add_custom_command(TARGET noiz2sa.elf POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "ISO generation configured (run manually or with custom build target)"
-    COMMENT "ISO generation script ready"
 )
 
 # ============================================================================
@@ -511,11 +504,6 @@ fi\n
 \n
 echo \"BIN/CUE created successfully\"\n
 "
-)
-
-add_custom_command(TARGET noiz2sa.elf POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "BIN/CUE generation configured (requires ISO first)"
-    COMMENT "BIN/CUE generation script ready"
 )
 
 # ============================================================================
@@ -637,15 +625,6 @@ echo \"Final CD image: \$BUILD_BIN (\$total_size bytes)\"\n
 "
 )
 
-add_custom_command(TARGET noiz2sa.elf POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "Audio track handling configured"
-    COMMENT "Audio conversion and appending script ready"
-)
-
-# ============================================================================
-# Custom Target for Complete CD Generation (ISO -> BIN/CUE -> Audio)
-# ============================================================================
-
 # Helper script to make all generation scripts executable
 add_custom_command(TARGET noiz2sa.elf POST_BUILD
     COMMAND chmod +x "${ISO_GENERATION_SCRIPT}" || true
@@ -655,87 +634,59 @@ add_custom_command(TARGET noiz2sa.elf POST_BUILD
 )
 
 # ============================================================================
-# Automatic CD Image Generation as POST_BUILD Steps (if tools available)
+# Manual CD Image Generation Targets (not run during default build)
 # ============================================================================
 
-# Generate ISO automatically if xorrisofs is available
+# Generate ISO manually if xorrisofs is available
 if(XORRISOFS_EXECUTABLE)
-    add_custom_command(TARGET noiz2sa.elf POST_BUILD
+    add_custom_target(cd-iso
         COMMAND bash "${ISO_GENERATION_SCRIPT}"
-        COMMENT "Generating ISO image (cd.iso)"
-        VERBATIM
+        COMMENT "Manually generating ISO image (cd.iso)"
+        USES_TERMINAL
     )
     set(CD_ISO_AVAILABLE TRUE)
-    set(ISO_BUILD_MSG "✓ ISO will be generated automatically")
+    set(ISO_BUILD_MSG "✓ ISO: cmake --build . --target cd-iso")
 else()
     set(CD_ISO_AVAILABLE FALSE)
     set(ISO_BUILD_MSG "✗ ISO generation requires xorrisofs (apt-get install xorriso)")
 endif()
 
-# Generate BIN/CUE automatically if iso2raw is available
-if(ISO2RAW_EXECUTABLE AND CD_ISO_AVAILABLE)
-    add_custom_command(TARGET noiz2sa.elf POST_BUILD
+# BIN/CUE manual target
+if(ISO2RAW_EXECUTABLE)
+    add_custom_target(cd-bin-cue
         COMMAND bash "${BIN_CUE_GENERATION_SCRIPT}"
-        COMMENT "Converting ISO to BIN/CUE format (cd.bin, cd.cue)"
-        VERBATIM
+        COMMENT "Manually converting ISO to BIN/CUE format"
+        USES_TERMINAL
     )
     set(CD_BIN_CUE_AVAILABLE TRUE)
-    set(BIN_CUE_BUILD_MSG "✓ BIN/CUE will be generated automatically")
-elseif(ISO2RAW_EXECUTABLE)
-    set(CD_BIN_CUE_AVAILABLE TRUE)
-    set(BIN_CUE_BUILD_MSG "⚠ BIN/CUE can be generated (requires cd-iso first)")
+    set(BIN_CUE_BUILD_MSG "✓ BIN/CUE: cmake --build . --target cd-bin-cue")
 else()
     set(CD_BIN_CUE_AVAILABLE FALSE)
     set(BIN_CUE_BUILD_MSG "✗ BIN/CUE requires iso2raw (build from: https://github.com/gianlucarenzi/iso2raw)")
 endif()
 
-# Add audio tracks automatically if sox is available
-if(SOX_EXECUTABLE AND CD_BIN_CUE_AVAILABLE AND CD_ISO_AVAILABLE)
-    add_custom_command(TARGET noiz2sa.elf POST_BUILD
+# Audio manual target
+if(SOX_EXECUTABLE AND CD_ISO_AVAILABLE)
+    add_custom_target(cd-audio
         COMMAND bash "${AUDIO_GENERATION_SCRIPT}"
-        COMMENT "Adding audio tracks to CD image"
-        VERBATIM
+        COMMENT "Manually adding audio tracks to CD image"
+        USES_TERMINAL
     )
     set(CD_AUDIO_AVAILABLE TRUE)
-    set(AUDIO_BUILD_MSG "✓ Audio tracks will be added automatically")
-elseif(SOX_EXECUTABLE)
-    set(CD_AUDIO_AVAILABLE TRUE)
-    set(AUDIO_BUILD_MSG "⚠ Audio tracks can be added (run after ISO/BIN/CUE generation)")
+    set(AUDIO_BUILD_MSG "✓ Audio: cmake --build . --target cd-audio")
 else()
     set(CD_AUDIO_AVAILABLE FALSE)
-    set(AUDIO_BUILD_MSG "✗ Audio requires sox (apt-get install sox libsox-fmt-all)")
+    set(AUDIO_BUILD_MSG "⚠ Audio requires sox (apt-get install sox libsoxfmt-all)")
 endif()
 
-# ============================================================================
-# Optional Custom Targets for Manual Control
-# ============================================================================
+# Combined target for ease of use
+if(CD_ISO_AVAILABLE)
+    add_custom_target(cd-all
+        DEPENDS cd-iso
+        COMMENT "Complete CD generation (cd.iso, cd.bin, cd.cue)"
+    )
+endif()
 
-# Manual ISO generation target (for re-generation without rebuilding everything)
-add_custom_target(cd-iso
-    COMMAND bash "${ISO_GENERATION_SCRIPT}"
-    COMMENT "Manually generating ISO image (cd.iso)"
-    USES_TERMINAL
-)
-
-# Manual BIN/CUE generation target
-add_custom_target(cd-bin-cue
-    COMMAND bash "${BIN_CUE_GENERATION_SCRIPT}"
-    COMMENT "Manually converting ISO to BIN/CUE format"
-    USES_TERMINAL
-)
-
-# Manual audio addition target
-add_custom_target(cd-audio
-    COMMAND bash "${AUDIO_GENERATION_SCRIPT}"
-    COMMENT "Manually adding audio tracks to CD image"
-    USES_TERMINAL
-)
-
-# Combined target for complete CD generation
-add_custom_target(cd-all
-    COMMAND ${CMAKE_COMMAND} -E echo "Complete CD generation (cd.iso, cd.bin, cd.cue with audio)"
-    COMMENT "Note: Complete CD already built during default build if tools available"
-)
 
 set(CD_ALL_AVAILABLE TRUE)
 

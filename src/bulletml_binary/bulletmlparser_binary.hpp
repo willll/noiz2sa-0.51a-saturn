@@ -838,8 +838,8 @@ private:
     }
 };
 
-// Static buffer allocation for BulletMLParserTinyXML
-uint8_t BulletMLParserTinyXML::file_buffer_[65536];
-uint32_t BulletMLParserTinyXML::buffer_size_ = 0;
+// Static buffer allocation for BulletMLParserTinyXML (inline to avoid multiple definition)
+inline uint8_t BulletMLParserTinyXML::file_buffer_[65536];
+inline uint32_t BulletMLParserTinyXML::buffer_size_ = 0;
 
 #endif // BULLETMLPARSER_BINARY_HPP_

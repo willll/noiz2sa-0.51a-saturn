@@ -10,6 +10,7 @@
  * @version $Revision: 1.1.1.1 $
  */
 #include "vector.h"
+#include <impl/vector2d.hpp>
 
 using SaturnMath::Types::Vector2D;
 using SaturnMath::Types::Fxp;
