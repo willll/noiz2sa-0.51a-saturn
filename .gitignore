@@ -43,3 +43,4 @@ build-full/**
 
 BuildDrop/**
 cd/data/0.bin
+cd/music/*.raw

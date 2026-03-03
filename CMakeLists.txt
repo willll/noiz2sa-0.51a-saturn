@@ -467,6 +467,13 @@ if(EXISTS "${ISO2RAW_EXECUTABLE}")
         COMMAND echo '    INDEX 01 00:00:00' >> "${BUILD_CUE}"
         COMMENT "Creating BIN/CUE files"
     )
+    
+    # Add audio tracks to BIN/CUE (following shared.mk pattern)
+    add_custom_target(add_audio_to_bin_cue
+        DEPENDS create_bin_cue
+        COMMAND bash "${CMAKE_SOURCE_DIR}/add_audio_tracks.sh" "${BUILD_BIN}" "${BUILD_CUE}" "${MUSIC_DIR}" "${CD_NAME}"
+        COMMENT "Adding audio tracks to BIN/CUE"
+    )
 else()
     message(STATUS "INFO: iso2raw not found at ${ISO2RAW_EXECUTABLE}")
     message(STATUS "INFO: BIN/CUE generation will use ISO only")
@@ -474,11 +481,15 @@ else()
         DEPENDS create_iso
         COMMENT "ISO created (BIN/CUE conversion not available)"
     )
+    add_custom_target(add_audio_to_bin_cue
+        DEPENDS create_bin_cue
+        COMMENT "No audio track support without iso2raw"
+    )
 endif()
 
 # Main build target - creates everything
 add_custom_target(build_bin_cue ALL
-    DEPENDS create_bin_cue
+    DEPENDS add_audio_to_bin_cue
     COMMENT "CD image generation complete"
 )
 
