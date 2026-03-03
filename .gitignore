@@ -46,3 +46,5 @@ SDL_mixer/SDL_mixer-1.2.7/*
 SDL_mixer/SDL_mixer-1.2.7.zip
 build-full/**
 
+BuildDrop/**
+cd/data/0.bin
