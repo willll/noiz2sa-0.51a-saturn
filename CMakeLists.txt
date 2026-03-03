@@ -240,9 +240,10 @@ else()
 endif()
 
 # Add SGL preloader source (C++ preloader for SGL initialization)
+# IMPORTANT: Preloader MUST be linked first (before all other object files)
 set(SGL_PRELOADER_SOURCE "${SRL_SGL_DIR}/SRC/preloader.cxx")
 if(EXISTS "${SGL_PRELOADER_SOURCE}")
-    list(APPEND SOURCES_NOIZ2SA "${SGL_PRELOADER_SOURCE}")
+    list(INSERT SOURCES_NOIZ2SA 0 "${SGL_PRELOADER_SOURCE}")
 else()
     message(WARNING "SGL preloader.cxx not found at: ${SGL_PRELOADER_SOURCE}")
 endif()
@@ -290,8 +291,17 @@ else()
     endif()
 endif()
 
-# Find xorrisofs for ISO creation
+# Find xorrisofs for ISO creation (required for Saturn CD generation)
 find_program(XORRISOFS_EXECUTABLE xorrisofs)
+
+if(NOT XORRISOFS_EXECUTABLE)
+    message(WARNING "xorrisofs not found in PATH")
+    message(WARNING "ISO generation will not be available")
+    message(WARNING "Install xorrisofs: apt-get install xorriso")
+endif()
+
+# Optional additional directory/files to include in ISO (matching shared.mk)
+set(ENTRYPOINT "" CACHE STRING "Optional additional directory or files for ISO generation")
 
 # Find iso2raw in SaturnRingLib tools (with fallback)
 if(WIN32)
@@ -445,13 +455,15 @@ if(XORRISOFS_EXECUTABLE)
             -generic-boot "${IPFILE}"
             -full-iso9660-filenames
             -o "${BUILD_ISO}"
-            "${ASSETS_DIR}"
+            "${ASSETS_DIR}" ${ENTRYPOINT}
         COMMENT "Building ISO image: ${BUILD_ISO}"
         VERBATIM
     )
 else()
     add_custom_target(create_iso
-        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --red "ERROR: xorrisofs not found - ISO generation not available"
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --red "ERROR: xorrisofs not found"
+        COMMAND ${CMAKE_COMMAND} -E message "  Please install xorrisofs: apt-get install xorriso"
+        COMMAND ${CMAKE_COMMAND} -E message "  Or run: /saturn/SaturnRingLib/setup_compiler.bat"
         COMMAND false
     )
 endif()
@@ -473,15 +485,20 @@ if(EXISTS "${ISO2RAW_EXECUTABLE}")
         COMMENT "Adding audio tracks to BIN/CUE"
     )
 else()
-    message(STATUS "INFO: iso2raw not found at ${ISO2RAW_EXECUTABLE}")
-    message(STATUS "INFO: BIN/CUE generation will use ISO only")
+    message(WARNING "iso2raw not found at ${ISO2RAW_EXECUTABLE}")
+    message(WARNING "BIN/CUE generation will not be available")
+    message(WARNING "Please run setup_compiler.bat to install iso2raw")
+    
     add_custom_target(create_bin_cue
         DEPENDS create_iso
-        COMMENT "ISO created (BIN/CUE conversion not available)"
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --red "ERROR: iso2raw not found"
+        COMMAND ${CMAKE_COMMAND} -E message "  Expected at: ${ISO2RAW_EXECUTABLE}"
+        COMMAND ${CMAKE_COMMAND} -E message "  Please run: /saturn/SaturnRingLib/setup_compiler.bat"
+        COMMAND false
     )
     add_custom_target(add_audio_to_bin_cue
         DEPENDS create_bin_cue
-        COMMENT "No audio track support without iso2raw"
+        COMMAND ${CMAKE_COMMAND} -E message "iso2raw required for audio track support"
     )
 endif()
 
@@ -538,11 +555,3 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/postbuild.cmake")
         COMMENT "Running post-build script"
     )
 endif()
-
-#target_link_libraries(noiz2sa.elf PUBLIC ${SEGASGL}/lib/libsgl.a )
-#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_scl.a )
-#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_mth.a )
-#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_spr.a )
-#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_cdc.a )
-#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_per.a )
-#target_link_libraries(noiz2sa.elf PUBLIC ${SEGALIB}/lib/sega_int.a )
