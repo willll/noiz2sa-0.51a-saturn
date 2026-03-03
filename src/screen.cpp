@@ -16,7 +16,6 @@
 #include <srl_string.hpp>  // for string and memory functions
 #include <srl_system.hpp>  // for exit
 #include "SDL.h"
-#include "stdio.h"  // For stdio stubs
 
 #include "noiz2sa.h"
 #include "screen.h"

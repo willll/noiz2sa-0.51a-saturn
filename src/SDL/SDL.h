@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "stdio.h"
 
 // SDL type stubs for Saturn noiz2sa - Hybrid approach
 // These stubs allow compilation now, can be replaced with SRL incrementally later

@@ -1,7 +1,6 @@
 // Minimal stdio implementation for Saturn
 // Provides only essential type definitions and exit() function
 
-#include "stdio.h"
 #include <string.h>
 
 // Exit function (stub for Saturn)
