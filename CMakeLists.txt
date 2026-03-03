@@ -462,16 +462,14 @@ if(EXISTS "${ISO2RAW_EXECUTABLE}")
         DEPENDS create_iso
         COMMAND ${CMAKE_COMMAND} -E echo "Converting ISO to BIN/CUE using iso2raw..."
         COMMAND "${ISO2RAW_EXECUTABLE}" "${BUILD_ISO}"
-        COMMAND echo 'FILE "${CD_NAME}.bin" BINARY' > "${BUILD_CUE}"
-        COMMAND echo '  TRACK 01 MODE1/2352' >> "${BUILD_CUE}"
-        COMMAND echo '    INDEX 01 00:00:00' >> "${BUILD_CUE}"
+        COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${BUILD_CUE}" "${CD_NAME}.bin"
         COMMENT "Creating BIN/CUE files"
     )
     
     # Add audio tracks to BIN/CUE (following shared.mk pattern)
     add_custom_target(add_audio_to_bin_cue
         DEPENDS create_bin_cue
-        COMMAND bash "${CMAKE_SOURCE_DIR}/add_audio_tracks.sh" "${BUILD_BIN}" "${BUILD_CUE}" "${MUSIC_DIR}" "${CD_NAME}"
+        COMMAND bash "${CMAKE_SOURCE_DIR}/tools/add_audio_tracks.sh" "${BUILD_BIN}" "${BUILD_CUE}" "${MUSIC_DIR}" "${CD_NAME}"
         COMMENT "Adding audio tracks to BIN/CUE"
     )
 else()

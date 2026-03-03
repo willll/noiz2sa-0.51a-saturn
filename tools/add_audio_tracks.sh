@@ -147,11 +147,11 @@ while IFS= read -r rawfile; do
     echo "Track $track: starts at sector $sectors"
     
     # Add TRACK entry to CUE
-    printf "  TRACK %02d AUDIO\n" $track >> "$BUILD_CUE"
+    printf "TRACK %02d AUDIO\n" $track >> "$BUILD_CUE"
     
     # 150 frames (2 seconds) pregap required for first audio track after data
     if [ $track -eq 2 ]; then
-        echo "    PREGAP 00:02:00" >> "$BUILD_CUE"
+        echo "  PREGAP 00:02:00" >> "$BUILD_CUE"
     fi
     
     # Calculate INDEX time in MSF format (MM:SS:FF)
@@ -169,7 +169,7 @@ while IFS= read -r rawfile; do
     fi
     
     msf=$(printf "%02d:%02d:%02d" $minutes $seconds $frames)
-    echo "    INDEX 01 $msf" >> "$BUILD_CUE"
+    echo "  INDEX 01 $msf" >> "$BUILD_CUE"
     echo "  INDEX calculation: sector $index_sectors = $msf"
     
     # Verify sector alignment

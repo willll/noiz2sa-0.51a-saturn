@@ -40,21 +40,44 @@ RandomGenerator* g_random = nullptr;
 
 // Initialize and load preference.
 static void initFirst() {
+  SRL::Logger::LogInfo("[INIT] First initialization starting");
+  
   loadPreference();
+  SRL::Logger::LogDebug("[INIT] Preferences loaded");
+  
   // Initialize random number generator with current time
   // Note: SaturnMath is #defined as SRL::Math in srl_base.hpp
-  g_random = new SRL::Math::Random<unsigned int>(SDL_GetTicks());
+  uint32_t seed = SDL_GetTicks();
+  g_random = new SRL::Math::Random<unsigned int>(seed);
+  SRL::Logger::LogDebug("[INIT] Random generator initialized with seed: %u", seed);
+  
   initBarragemanager();
+  SRL::Logger::LogDebug("[INIT] Barrage manager initialized");
+  
   initAttractManager();
+  SRL::Logger::LogInfo("[INIT] First initialization complete");
 }
 
 // Quit and save preference.
 void quitLast() {
-  if ( !noSound ) closeSound();
+  SRL::Logger::LogInfo("[QUIT] Shutdown sequence starting");
+  
+  if ( !noSound ) {
+    closeSound();
+    SRL::Logger::LogDebug("[QUIT] Sound closed");
+  }
+  
   savePreference();
+  SRL::Logger::LogDebug("[QUIT] Preferences saved");
+  
   closeBarragemanager();
+  SRL::Logger::LogDebug("[QUIT] Barrage manager closed");
+  
   delete g_random;
   g_random = nullptr;
+  SRL::Logger::LogInfo("[QUIT] Random generator cleaned up");
+  
+  SRL::Logger::LogInfo("[QUIT] Shutdown sequence complete - Exiting");
   SRL::System::Exit(1);
 }
 
@@ -73,21 +96,30 @@ void initTitleStage(int stg) {
 }
 
 void initTitle() {
+  SRL::Logger::LogInfo("[STATE] Entering TITLE screen");
+  
   int stg;
   status = TITLE;
 
   stg = initTitleAtr();
+  SRL::Logger::LogDebug("[TITLE] Title attributes initialized (stage: %d)", stg);
+  
   initShip();
   initShots();
   initFrags();
   initBonuses();
   initBackground();
+  SRL::Logger::LogDebug("[TITLE] Game objects initialized");
+  
   setStageBackground(1);
-
   initTitleStage(stg);
+  
+  SRL::Logger::LogInfo("[STATE] TITLE screen ready");
 }
 
 void initGame(int stg) {
+  SRL::Logger::LogInfo("[STATE] Entering IN_GAME (stage %d)", stg);
+  
   status = IN_GAME;
 
   initShip();
@@ -96,12 +128,16 @@ void initGame(int stg) {
   initFrags();
   initBonuses();
   initBackground();
+  SRL::Logger::LogDebug("[GAME] Stage %d: Game objects initialized", stg);
 
   initBarrages(stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
   initGameState(stg);
+  SRL::Logger::LogDebug("[GAME] Stage %d: Barrage initialized", stg);
+  
   if ( stg < STAGE_NUM ) {
     setStageBackground(stg%5+1);
     playMusic(stg%5+1);
+    SRL::Logger::LogDebug("[GAME] Stage %d: Background/Music set to %d", stg, stg%5+1);
   } else {
     if ( !insane ) {
       setStageBackground(0);
@@ -109,18 +145,29 @@ void initGame(int stg) {
     } else {
       setStageBackground(6);
       playMusic(6);
+      SRL::Logger::LogDebug("[GAME] Endless stage: INSANE mode");
     }
   }
+  
+  SRL::Logger::LogInfo("[STATE] IN_GAME (stage %d) ready", stg);
 }
 
 void initGameover() {
+  SRL::Logger::LogInfo("[STATE] Entering GAMEOVER");
+  
   status = GAMEOVER;
   initGameoverAtr();
+  
+  SRL::Logger::LogInfo("[STATE] GAMEOVER screen ready");
 }
 
 void initStageClear() {
+  SRL::Logger::LogInfo("[STATE] Entering STAGE_CLEAR");
+  
   status = STAGE_CLEAR;
   initStageClearAtr();
+  
+  SRL::Logger::LogInfo("[STATE] STAGE_CLEAR screen ready");
 }
 
 static void move() {
@@ -257,6 +304,8 @@ int tick = 0;
 static int pPrsd = 1;
 
 int main() {
+  SRL::Logger::LogInfo("[MAIN] Noiz2sa startup (v%d)", VERSION_NUM);
+  
   int done = 0;
   long prvTickCount = 0;
   int i;
@@ -264,13 +313,26 @@ int main() {
   long nowTick;
   int frame;
 
+  SRL::Logger::LogDebug("[MAIN] Initializing game config");
   initGameConfig();
 
+  SRL::Logger::LogDebug("[MAIN] Initializing degree utilities");
   initDegutil();
+  
+  SRL::Logger::LogDebug("[MAIN] Initializing SDL");
   initSDL();
-  if ( !noSound ) initSound();
+  
+  if ( !noSound ) {
+    SRL::Logger::LogDebug("[MAIN] Initializing sound");
+    initSound();
+  } else {
+    SRL::Logger::LogInfo("[MAIN] Sound disabled");
+  }
+  
   initFirst();
   initTitle();
+  
+  SRL::Logger::LogInfo("[MAIN] Main game loop starting");
 
   while ( !done ) {
     int startBtn = 0, backBtn = 0;
