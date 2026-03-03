@@ -5,13 +5,16 @@
  */
 
 /**
- * Vector data.
+ * Vector data (wrapped from SaturnMathPP Vector2D).
  *
  * @version $Revision: 1.1.1.1 $
  */
 #ifndef DEF_VECTOR
+#include <impl/vector2d.hpp>
+
 #define absN(a) ((a) < 0 ? - (a) : (a))
 
+/* Wrapper struct for Vector2D to maintain API compatibility */
 typedef struct {
   int x, y;
 } Vector;
