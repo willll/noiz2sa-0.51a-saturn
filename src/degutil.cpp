@@ -9,23 +9,37 @@
  *
  * @version $Revision: 1.1.1.1 $
  */
-#include <math.h>
+#include <impl/trigonometry.hpp>
 #include "degutil.h"
+
+using SaturnMath::Trigonometry;
+using SaturnMath::Types::Angle;
+using SaturnMath::Types::Fxp;
 
 static int tantbl[TAN_TABLE_SIZE+2];
 int sctbl[SC_TABLE_SIZE+SC_TABLE_SIZE/4];
 
 void initDegutil() {
   int i, d = 0;
-  double od = 6.28/DIV;
+  const Fxp tanScale = Fxp::Convert(TAN_TABLE_SIZE);
+  const Fxp sinScale = Fxp::Convert(256);
+
   for ( i=0 ; i<TAN_TABLE_SIZE ; i++ ) {
-    while ( (int)(sin(d*od)/cos(d*od)*TAN_TABLE_SIZE)<i ) d++;
+    while ( d < (DIV/8) ) {
+      const Angle angle = Angle::BuildRaw(static_cast<uint16_t>(d << 6));
+      const int tanScaled = (Trigonometry::Tan(angle) * tanScale).As<int32_t>();
+      if ( tanScaled >= i ) {
+        break;
+      }
+      d++;
+    }
     tantbl[i] = d;
   }
   tantbl[TAN_TABLE_SIZE] = tantbl[TAN_TABLE_SIZE+1] = 128;
 
   for ( i=0 ; i<SC_TABLE_SIZE+SC_TABLE_SIZE/4 ; i++ ) {
-    sctbl[i] = (int)(sin(i*(6.28/SC_TABLE_SIZE))*256);
+    const Angle angle = Angle::BuildRaw(static_cast<uint16_t>(i << 6));
+    sctbl[i] = (Trigonometry::Sin(angle) * sinScale).As<int32_t>();
   }
 }
 
