@@ -349,6 +349,425 @@ if(SRL_USE_SGL_SOUND_DRIVER)
 endif()
 
 # ============================================================================
+# ISO, BIN/CUE, and Audio Generation (from shared.mk build_bin_cue target)
+# ============================================================================
+
+# Set up build output paths
+set(BUILD_ISO "${CMAKE_BINARY_DIR}/cd.iso")
+set(BUILD_BIN "${CMAKE_BINARY_DIR}/cd.bin")
+set(BUILD_CUE "${CMAKE_BINARY_DIR}/cd.cue")
+
+# Music directory can be customized via CMake variable
+if(NOT DEFINED MUSIC_DIR)
+    # Try to find it relative to project or use default location
+    if(EXISTS "${CMAKE_SOURCE_DIR}/noiz2sa_share/music")
+        set(MUSIC_DIR "${CMAKE_SOURCE_DIR}/noiz2sa_share/music")
+    else()
+        set(MUSIC_DIR "${CMAKE_SOURCE_DIR}/noiz2sa_share/ogg")
+    endif()
+endif()
+
+set(MUSIC_TRACKLIST "${MUSIC_DIR}/tracklist")
+set(ASSETS_DIR "${CMAKE_BINARY_DIR}/cd/data")
+
+# Locate or generate IP.BIN (system boot sector)
+if(SRL_IPBIN)
+    set(IPFILE "${SRL_IPBIN}")
+else()
+    # Look for IP.BIN in standard Saturn locations
+    if(EXISTS "${CMAKE_SOURCE_DIR}/cd/data/IP.BIN")
+        set(IPFILE "${CMAKE_SOURCE_DIR}/cd/data/IP.BIN")
+    elseif(EXISTS "${SRL_INSTALL_ROOT}/resources/IP.BIN")
+        set(IPFILE "${SRL_INSTALL_ROOT}/resources/IP.BIN")
+    else()
+        # Use default SGL IP.BIN from SaturnRingLib
+        set(IPFILE "${SRL_SGL_DIR}/../../resources/IP.BIN")
+    endif()
+endif()
+
+if(NOT EXISTS "${IPFILE}")
+    message(WARNING "IP.BIN not found at: ${IPFILE}")
+    message(WARNING "ISO generation will fail without IP.BIN")
+endif()
+
+# Find xorrisofs for ISO creation
+find_program(XORRISOFS_EXECUTABLE xorrisofs)
+if(NOT XORRISOFS_EXECUTABLE)
+    message(WARNING "xorrisofs not found - ISO generation will not work")
+    message(STATUS "Install via: apt-get install xorriso")
+endif()
+
+# Find iso2raw for BIN/CUE conversion
+if(WIN32)
+    find_program(ISO2RAW_EXECUTABLE iso2raw.exe)
+    if(NOT ISO2RAW_EXECUTABLE)
+        # Try alternate Windows location
+        find_program(ISO2RAW_EXECUTABLE iso2raw.exe 
+                     PATHS "C:/Program Files/iso2raw" "C:/Program Files (x86)/iso2raw")
+    endif()
+else()
+    find_program(ISO2RAW_EXECUTABLE iso2raw)
+    if(NOT ISO2RAW_EXECUTABLE)
+        # Try common Unix locations
+        find_program(ISO2RAW_EXECUTABLE iso2raw
+                     PATHS /usr/local/bin /opt/iso2raw)
+    endif()
+endif()
+
+if(NOT ISO2RAW_EXECUTABLE)
+    message(WARNING "iso2raw not found - BIN/CUE conversion will not work")
+    message(STATUS "For Linux: build from source or use precompiled binary")
+    message(STATUS "For macOS: install from Homebrew or build from source")
+endif()
+
+# Find sox for audio conversion
+find_program(SOX_EXECUTABLE sox)
+if(NOT SOX_EXECUTABLE)
+    message(WARNING "sox not found - audio conversion will not work")
+    message(STATUS "Install via: apt-get install sox libsox-fmt-all")
+endif()
+
+# ============================================================================
+# ISO Generation Target
+# ============================================================================
+set(ISO_GENERATION_SCRIPT "${CMAKE_BINARY_DIR}/generate_iso.sh")
+add_custom_command(TARGET noiz2sa.elf POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Generating ISO with xorrisofs..."
+    COMMENT "Creating ISO image (cd.iso)"
+)
+
+# Generate ISO creation script
+file(GENERATE OUTPUT "${ISO_GENERATION_SCRIPT}"
+    CONTENT "#!/bin/bash\n
+set -e\n
+IPFILE=\"${IPFILE}\"\n
+ASSETS_DIR=\"${ASSETS_DIR}\"\n
+BUILD_ISO=\"${BUILD_ISO}\"\n
+XORRISOFS=\"${XORRISOFS_EXECUTABLE}\"\n
+\n
+if [ ! -f \"\$IPFILE\" ]; then\n
+    echo \"ERROR: IP.BIN not found at: \$IPFILE\"\n
+    exit 1\n
+fi\n
+\n
+if [ ! -d \"\$ASSETS_DIR\" ]; then\n
+    echo \"ERROR: Assets directory not found: \$ASSETS_DIR\"\n
+    exit 1\n
+fi\n
+\n
+echo \"Creating ISO image...\"\n
+\"\$XORRISOFS\" -r -J -C 0,32 \\\n
+    -sysid=\"SEGA SATURN\" \\\n
+    -A \"SEGA SATURN\" \\\n
+    -publisher-id=\"libburnia\" \\\n
+    -application-id=\"xorrisofs\" \\\n
+    \"-boot_image\" \"isolinux\" \"bin=\$IPFILE\" \\\n
+    -o \"\$BUILD_ISO\" \n
+    \"\$ASSETS_DIR\"\n
+\n
+if [ ! -f \"\$BUILD_ISO\" ]; then\n
+    echo \"ERROR: Failed to create ISO\"\n
+    exit 1\n
+fi\n
+\n
+echo \"ISO created successfully: \$BUILD_ISO\"\n
+"
+)
+
+add_custom_command(TARGET noiz2sa.elf POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "ISO generation configured (run manually or with custom build target)"
+    COMMENT "ISO generation script ready"
+)
+
+# ============================================================================
+# BIN/CUE Generation Target
+# ============================================================================
+set(BIN_CUE_GENERATION_SCRIPT "${CMAKE_BINARY_DIR}/generate_bin_cue.sh")
+file(GENERATE OUTPUT "${BIN_CUE_GENERATION_SCRIPT}"
+    CONTENT "#!/bin/bash\n
+set -e\n
+BUILD_ISO=\"${BUILD_ISO}\"\n
+BUILD_BIN=\"${BUILD_BIN}\"\n
+BUILD_CUE=\"${BUILD_CUE}\"\n
+ISO2RAW=\"${ISO2RAW_EXECUTABLE}\"\n
+\n
+if [ -z \"\$ISO2RAW\" ] || [ ! -f \"\$ISO2RAW\" ]; then\n
+    echo \"ERROR: iso2raw not found\"\n
+    exit 1\n
+fi\n
+\n
+if [ ! -f \"\$BUILD_ISO\" ]; then\n
+    echo \"ERROR: ISO file not found: \$BUILD_ISO\"\n
+    exit 1\n
+fi\n
+\n
+echo \"Converting ISO to BIN/CUE...\"\n
+\"\$ISO2RAW\" \"\$BUILD_ISO\" \"\$BUILD_BIN\"\n
+\n
+if [ ! -f \"\$BUILD_BIN\" ] || [ ! -f \"\$BUILD_CUE\" ]; then\n
+    echo \"ERROR: Failed to create BIN/CUE files\"\n
+    exit 1\n
+fi\n
+\n
+echo \"BIN/CUE created successfully\"\n
+"
+)
+
+add_custom_command(TARGET noiz2sa.elf POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "BIN/CUE generation configured (requires ISO first)"
+    COMMENT "BIN/CUE generation script ready"
+)
+
+# ============================================================================
+# Audio File Handling and Track Appending
+# ============================================================================
+set(AUDIO_GENERATION_SCRIPT "${CMAKE_BINARY_DIR}/add_audio_tracks.sh")
+file(GENERATE OUTPUT "${AUDIO_GENERATION_SCRIPT}"
+    CONTENT "#!/bin/bash\n
+# Audio file discovery, conversion, and appending to CD image\n
+set -e\n
+\n
+MUSIC_DIR=\"${MUSIC_DIR}\"\n
+MUSIC_TRACKLIST=\"${MUSIC_TRACKLIST}\"\n
+BUILD_BIN=\"${BUILD_BIN}\"\n
+BUILD_CUE=\"${BUILD_CUE}\"\n
+SOX=\"${SOX_EXECUTABLE}\"\n
+\n
+# Check if BIN/CUE files exist\n
+if [ ! -f \"\$BUILD_BIN\" ] || [ ! -f \"\$BUILD_CUE\" ]; then\n
+    echo \"ERROR: BIN/CUE files not found. Generate them first.\"\n
+    exit 1\n
+fi\n
+\n
+# Initialize audio file list\n
+track=2\n
+sectors=\$((\$(stat -c%s \"\$BUILD_BIN\") / 2352))\n
+total_size=\$(stat -c%s \"\$BUILD_BIN\")\n
+\n
+# Audio file discovery: use tracklist if available, otherwise auto-discover\n
+if [ -f \"\$MUSIC_TRACKLIST\" ]; then\n
+    echo \"Using audio tracks from tracklist: \$MUSIC_TRACKLIST\"\n
+    cp \"\$MUSIC_TRACKLIST\" .audio_files_temp\n
+else\n
+    echo \"Auto-discovering audio files in: \$MUSIC_DIR\"\n
+    find \"\$MUSIC_DIR\" -type f \\\\( -iname '*.mp3' -o -iname '*.wav' -o -iname '*.ogg' -o -iname '*.flac' -o -iname '*.aac' -o -iname '*.m4a' -o -iname '*.wma' \\\\) | sort > .audio_files_temp || true\n
+fi\n
+\n
+# Process each audio file\n
+if [ ! -f .audio_files_temp ] || [ ! -s .audio_files_temp ]; then\n
+    echo \"No audio files found\"\n
+    touch .audio_files_temp\n
+fi\n
+\n
+while IFS= read -r i; do\n
+    [ -z \"\$i\" ] && continue\n
+    # Remove quotes if present\n
+    i=\${i#\\\\\"}\n
+    i=\${i%\\\\\"}\n
+    [ ! -f \"\$i\" ] && continue\n
+    \n
+    rawfile=\"\$MUSIC_DIR/\$(basename \"\$i\" .\${i##*.}).raw\"\n
+    echo \"Converting audio track: \$i\"\n
+    echo \"  Output: \$rawfile\"\n
+    \n
+    # Convert to 44.1kHz, 16-bit signed PCM using sox\n
+    if [ -f \"\$rawfile\" ]; then\n
+        echo \"  (already converted)\"\n
+    else\n
+        \"\$SOX\" \"\$i\" -r 44100 -b 16 -e signed \"\$rawfile\"\n
+    fi\n
+    \n
+    # Sector-align the raw audio file to 2352 bytes (CD sector size)\n
+    current_size=\$(stat -c%s \"\$rawfile\")\n
+    remainder=\$((current_size % 2352))\n
+    if [ \$remainder -ne 0 ]; then\n
+        padding=\$((2352 - remainder))\n
+        echo \"  Padding with \$padding bytes to sector-align\"\n
+        dd if=/dev/zero bs=1 count=\$padding >> \"\$rawfile\" 2>/dev/null\n
+    fi\n
+    \n
+    echo \"Track \$track: starts at sector \$sectors\"\n
+    echo '  TRACK' \$(printf \"%02d\" \$track) 'AUDIO' >> \"\$BUILD_CUE\"\n
+    \n
+    # Add gap for audio tracks following data track (ECMA-130 spec)\n
+    if [ \$track -eq 2 ]; then\n
+        echo '    PREGAP   00:02:00' >> \"\$BUILD_CUE\"\n
+    fi\n
+    \n
+    # Calculate MSF (Minutes:Seconds:Frames) format for CUE sheet\n
+    index_sectors=\$sectors\n
+    minutes=\$((index_sectors / (60 * 75)))\n
+    remaining=\$((index_sectors % (60 * 75)))\n
+    seconds=\$((remaining / 75))\n
+    frames=\$((remaining % 75))\n
+    msf=\$(printf \"%02d:%02d:%02d\" \$minutes \$seconds \$frames)\n
+    \n
+    echo \"  INDEX calculation: sector \$index_sectors = \$msf\"\n
+    \n
+    if [ \$frames -ge 75 ]; then\n
+        echo \"  ERROR: Invalid frame count \$frames (must be 0-74)\"\n
+        echo \"  This indicates sector misalignment in the audio file\"\n
+        exit 1\n
+    fi\n
+    \n
+    echo '    INDEX 01' \$msf >> \"\$BUILD_CUE\"\n
+    \n
+    # Verify sector alignment and append to BIN\n
+    size=\$(stat -c%s \"\$rawfile\")\n
+    if [ \$((size % 2352)) -ne 0 ]; then\n
+        echo \"  ERROR: File \$rawfile is not sector-aligned (\$size bytes)\"\n
+        echo \"  File size must be a multiple of 2352 bytes\"\n
+        exit 1\n
+    fi\n
+    \n
+    sectors_in_file=\$((size / 2352))\n
+    echo \"  Adding \$rawfile: \$size bytes (\$sectors_in_file sectors)\"\n
+    cat \"\$rawfile\" >> \"\$BUILD_BIN\"\n
+    total_size=\$((total_size + size))\n
+    echo \"  New total: \$total_size bytes (\$((total_size / 2352)) sectors)\"\n
+    \n
+    track=\$((track + 1))\n
+    sectors=\$((sectors + sectors_in_file))\n
+done < .audio_files_temp\n
+\n
+rm -f .audio_files_temp\n
+\n
+echo \"Audio tracks added successfully\"\n
+echo \"Final CD image: \$BUILD_BIN (\$total_size bytes)\"\n
+"
+)
+
+add_custom_command(TARGET noiz2sa.elf POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Audio track handling configured"
+    COMMENT "Audio conversion and appending script ready"
+)
+
+# ============================================================================
+# Custom Target for Complete CD Generation (ISO -> BIN/CUE -> Audio)
+# ============================================================================
+
+# Helper script to make all generation scripts executable
+add_custom_command(TARGET noiz2sa.elf POST_BUILD
+    COMMAND chmod +x "${ISO_GENERATION_SCRIPT}" || true
+    COMMAND chmod +x "${BIN_CUE_GENERATION_SCRIPT}" || true
+    COMMAND chmod +x "${AUDIO_GENERATION_SCRIPT}" || true
+    COMMENT "Making CD generation scripts executable"
+)
+
+# Optional custom targets for CD image generation (not built by default)
+# Usage: cmake --build . --target cd-iso
+# Usage: cmake --build . --target cd-bin-cue
+# Usage: cmake --build . --target cd-audio
+
+if(XORRISOFS_EXECUTABLE)
+    add_custom_target(cd-iso DEPENDS noiz2sa.elf
+        COMMAND bash "${ISO_GENERATION_SCRIPT}"
+        COMMENT "Generating ISO image (cd.iso) from assets"
+        USES_TERMINAL
+    )
+    set(CD_ISO_AVAILABLE TRUE)
+else()
+    add_custom_target(cd-iso DEPENDS noiz2sa.elf
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --red "ERROR: xorrisofs not found. Install with: apt-get install xorriso"
+        COMMENT "ISO generation requires xorrisofs"
+    )
+    set(CD_ISO_AVAILABLE FALSE)
+endif()
+
+if(ISO2RAW_EXECUTABLE AND CD_ISO_AVAILABLE)
+    add_custom_target(cd-bin-cue DEPENDS cd-iso
+        COMMAND bash "${BIN_CUE_GENERATION_SCRIPT}"
+        COMMENT "Converting ISO to BIN/CUE format (cd.bin, cd.cue)"
+        USES_TERMINAL
+    )
+    set(CD_BIN_CUE_AVAILABLE TRUE)
+elseif(ISO2RAW_EXECUTABLE)
+    add_custom_target(cd-bin-cue DEPENDS noiz2sa.elf
+        COMMAND bash "${BIN_CUE_GENERATION_SCRIPT}"
+        COMMENT "Converting ISO to BIN/CUE format (requires cd-iso first)"
+        USES_TERMINAL
+    )
+    set(CD_BIN_CUE_AVAILABLE TRUE)
+else()
+    add_custom_target(cd-bin-cue DEPENDS noiz2sa.elf
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --red "ERROR: iso2raw not found"
+        COMMENT "BIN/CUE generation requires iso2raw"
+    )
+    set(CD_BIN_CUE_AVAILABLE FALSE)
+endif()
+
+if(SOX_EXECUTABLE AND CD_BIN_CUE_AVAILABLE)
+    add_custom_target(cd-audio DEPENDS cd-bin-cue
+        COMMAND bash "${AUDIO_GENERATION_SCRIPT}"
+        COMMENT "Adding audio tracks to CD image"
+        USES_TERMINAL
+    )
+    set(CD_AUDIO_AVAILABLE TRUE)
+elseif(SOX_EXECUTABLE)
+    add_custom_target(cd-audio DEPENDS noiz2sa.elf
+        COMMAND bash "${AUDIO_GENERATION_SCRIPT}"
+        COMMENT "Adding audio tracks (requires cd-bin-cue first)"
+        USES_TERMINAL
+    )
+    set(CD_AUDIO_AVAILABLE TRUE)
+else()
+    add_custom_target(cd-audio DEPENDS noiz2sa.elf
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --yellow "WARNING: sox not found - audio tracks will not be added"
+        COMMENT "Audio addition requires sox"
+    )
+    set(CD_AUDIO_AVAILABLE FALSE)
+endif()
+
+# Combined target for full CD generation
+if(CD_ISO_AVAILABLE AND CD_BIN_CUE_AVAILABLE AND CD_AUDIO_AVAILABLE)
+    add_custom_target(cd-all DEPENDS cd-audio
+        COMMENT "Complete CD image with audio (cd.bin + cd.cue)"
+    )
+    set(CD_ALL_AVAILABLE TRUE)
+else()
+    add_custom_target(cd-all DEPENDS noiz2sa.elf
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --yellow "WARNING: Some build tools are missing for complete CD generation"
+        COMMENT "Full CD generation not available"
+    )
+    set(CD_ALL_AVAILABLE FALSE)
+endif()
+
+message(STATUS "")
+message(STATUS "========== CD Image Generation ==========")
+if(CD_ISO_AVAILABLE)
+    message(STATUS "✓ ISO generation: cmake --build . --target cd-iso")
+else()
+    message(STATUS "✗ ISO generation: xorrisofs not found")
+endif()
+if(CD_BIN_CUE_AVAILABLE)
+    message(STATUS "✓ BIN/CUE conversion: cmake --build . --target cd-bin-cue")
+else()
+    message(STATUS "✗ BIN/CUE conversion: iso2raw not found")
+endif()
+if(CD_AUDIO_AVAILABLE)
+    message(STATUS "✓ Audio addition: cmake --build . --target cd-audio")
+else()
+    message(STATUS "✗ Audio addition: sox not found")
+endif()
+if(CD_ALL_AVAILABLE)
+    message(STATUS "✓ Complete build: cmake --build . --target cd-all")
+else()
+    message(STATUS "")
+    message(STATUS "To enable full CD generation, install missing tools:")
+    if(NOT CD_ISO_AVAILABLE)
+        message(STATUS "  - xorrisofs: apt-get install xorriso")
+    endif()
+    if(NOT CD_BIN_CUE_AVAILABLE)
+        message(STATUS "  - iso2raw: https://github.com/gianlucarenzi/iso2raw")
+    endif()
+    if(NOT CD_AUDIO_AVAILABLE)
+        message(STATUS "  - sox: apt-get install sox libsox-fmt-all")
+    endif()
+endif()
+message(STATUS "=========================================")
+message(STATUS "")
+
+# ============================================================================
 # SRL Configuration Summary (similar to shared.mk info output)
 # ============================================================================
 message(STATUS "===== SaturnRingLib Configuration =====")
