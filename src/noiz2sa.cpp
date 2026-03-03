@@ -55,7 +55,6 @@ void quitLast() {
   closeBarragemanager();
   delete g_random;
   g_random = nullptr;
-  closeSDL();
   SRL::System::Exit(1);
 }
 
@@ -242,9 +241,6 @@ static void initGameConfig() {
   // Sound: enabled by default (Saturn has good audio capabilities)
   noSound = 1;
   
-  // Display: always fullscreen (Saturn has no windowed mode)
-  windowMode = 0;
-  
   // Input: standard button configuration
   buttonReversed = 0;
   
@@ -271,7 +267,7 @@ int main() {
   initGameConfig();
 
   initDegutil();
-  initSDL(windowMode);
+  initSDL();
   if ( !noSound ) initSound();
   initFirst();
   initTitle();

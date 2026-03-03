@@ -26,7 +26,6 @@
 #include "attractmanager.h"
 #include "gamepad.h"
 
-int windowMode = 0;
 int brightness = DEFAULT_BRIGHTNESS;
 int joystickMode = 1;
 
@@ -67,7 +66,6 @@ static void loadSprites() {
     img = SDL_LoadBMP(name);
     if ( img == nullptr ) {
       SRL::Logger::LogFatal("Unable to load: %s", name);
-      SDL_Quit();
       SRL::System::Exit(1);
     }
     sprite[i] = SDL_ConvertSurface(img,
@@ -128,7 +126,7 @@ static void makeSmokeBuf() {
   }
 }
 
-void initSDL(int window) {
+void initSDL() {
   Uint8 videoBpp;
   Uint32 videoFlags;
   SDL_PixelFormat *pfrm;
@@ -137,7 +135,7 @@ void initSDL(int window) {
     SRL::Logger::LogFatal("Unable to initialize SDL: %s", SDL_GetError());
     SRL::System::Exit(1);
   }
-  atexit(SDL_Quit);
+
   if ( SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0 ) {
     SRL::Logger::LogWarning("Unable to initialize SDL_JOYSTICK");
     joystickMode = 0;
@@ -145,11 +143,10 @@ void initSDL(int window) {
 
   videoBpp = BPP;
   videoFlags = SDL_DOUBLEBUF | SDL_HWSURFACE | SDL_HWPALETTE;
-  if ( !window ) videoFlags |= SDL_FULLSCREEN;
+  videoFlags |= SDL_FULLSCREEN;
 
   if ( (video = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, videoBpp, videoFlags)) == nullptr ) {
     SRL::Logger::LogFatal("Unable to create SDL screen: %s", SDL_GetError());
-    SDL_Quit();
     SRL::System::Exit(1);
   }
   screenRect.x = screenRect.y = 0;
@@ -202,13 +199,7 @@ void initSDL(int window) {
     gamepad = SDL_GameControllerOpen(0);
   }
 
-  SDL_WM_SetCaption(CAPTION, nullptr);
-  SDL_ShowCursor(SDL_DISABLE);
   //SDL_WM_GrabInput(SDL_GRAB_ON);
-}
-
-void closeSDL() {
-  SDL_ShowCursor(SDL_ENABLE);
 }
 
 void blendScreen() {

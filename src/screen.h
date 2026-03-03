@@ -37,7 +37,6 @@
 
 #define DEFAULT_BRIGHTNESS 224
 
-extern int windowMode;
 extern LayerBit *l1buf, *l2buf;
 extern LayerBit *buf;
 extern LayerBit *lpbuf, *rpbuf;
@@ -47,7 +46,7 @@ extern int buttonReversed;
 extern int brightness;
 extern SDL_GameController *gamepad;
 
-void initSDL(int window);
+void initSDL();
 void closeSDL();
 void blendScreen();
 void flipScreen();

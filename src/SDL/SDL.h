@@ -107,7 +107,6 @@ typedef struct {
 // SDL initialization and system
 static inline int SDL_Init(uint32_t flags) { (void)flags; return 0; }
 static inline int SDL_InitSubSystem(uint32_t flags) { (void)flags; return 0; }
-static inline void SDL_Quit(void) {}
 static inline const char* SDL_GetError(void) { return "SDL stub"; }
 
 // SDL video functions
@@ -158,8 +157,6 @@ static inline int SDL_FillRect(SDL_Surface* dst, SDL_Rect* dstrect, uint32_t col
 }
 
 static inline int SDL_Flip(SDL_Surface* screen) { (void)screen; return 0; }
-static inline void SDL_WM_SetCaption(const char* title, const char* icon) { (void)title; (void)icon; }
-static inline int SDL_ShowCursor(int toggle) { (void)toggle; return 0; }
 
 // SDL event and input functions
 static inline int SDL_PollEvent(SDL_Event* event) { (void)event; return 0; }
