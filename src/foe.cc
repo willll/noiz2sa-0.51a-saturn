@@ -12,7 +12,6 @@
 #include "barragemanager.h"
 #include "foe.h"
 
-extern "C" {
 #include "SDL.h"
 #include <stdlib.h>
 
@@ -27,7 +26,6 @@ extern "C" {
 #include "soundmanager.h"
 #include "attractmanager.h"
 #include "brgmng_mtd.h"
-}
 
 #define FOE_MAX 1024
 #define FOE_TYPE_MAX 4

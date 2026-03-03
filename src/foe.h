@@ -16,9 +16,7 @@
 #include "foecommand.h"
 #include "barragemanager.h"
 
-extern "C" {
 #include "vector.h"
-}
 
 #define FOE 0
 #define BOSS_ACTIVE_BULLET 1
@@ -41,9 +39,7 @@ struct foe {
 
 typedef struct foe Foe;
 
-extern "C" {
 #include "foe_mtd.h"
-}
 
 extern int foeCnt, enNum[];
 

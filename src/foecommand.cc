@@ -12,11 +12,9 @@
 #include "bulletml_binary/bulletmlparser_binary.hpp"
 #include "foe.h"
 
-extern "C" {
 #include "noiz2sa.h"
 #include "degutil.h"
 #include "ship.h"
-}
 
 #define COMMAND_SCREEN_SPD_RATE 800
 #define COMMAND_SCREEN_VEL_RATE 800

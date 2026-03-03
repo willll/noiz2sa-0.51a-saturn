@@ -26,7 +26,5 @@ typedef struct {
   int frq;
 } Barrage;
 
-extern "C" {
 #include "brgmng_mtd.h"
-}
 #endif

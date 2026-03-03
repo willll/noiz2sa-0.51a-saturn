@@ -9,6 +9,7 @@
  *
  * @version $Revision: 1.2 $
  */
+
 void initBarragemanager();
 void closeBarragemanager();
 void initBarrages(int seed, float startLevel, float li);

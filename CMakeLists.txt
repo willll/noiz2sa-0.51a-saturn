@@ -185,17 +185,19 @@ set(cxx_flags
     -fno-builtin -funit-at-a-time -Wwrite-strings
     -mno-fsrra
     -Wno-padded
+    -Wno-unused-variable
+    -Wno-unused-parameter
     -maccumulate-outgoing-args
-        -fomit-frame-pointer
-        # Note: Keeping RTTI and exceptions enabled for bulletml compatibility
-        # -fno-rtti
-        # -fno-exceptions
+    -fomit-frame-pointer
+    -fno-rtti
+    -fno-exceptions
     -fno-unwind-tables
     -fno-asynchronous-unwind-tables
     -fno-threadsafe-statics
     -fno-use-cxa-atexit
-        -Wdeprecated-declarations   # FIXME!
-         )
+    -Wdeprecated-declarations   # FIXME!
+    -fno-permissive  # FIXME!
+    )
 
 # Apply custom compiler flags from SRL configuration
 if(NOT SRL_CUSTOM_CCFLAGS STREQUAL "")

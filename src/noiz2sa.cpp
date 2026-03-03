@@ -10,7 +10,6 @@
  * @version $Revision: 1.8 $
  */
 #include "SDL.h"
-#include "stdio.h"  // For stdio stubs
 #include <srl_memory.hpp>  // for malloc/free, atoi, srand
 #include <srl_log.hpp>     // for logging
 #include <srl_string.hpp>  // for string functions
@@ -228,41 +227,31 @@ static void draw() {
 
 static int accframe = 0;
 
-static void usage(char *argv0) {
-  SRL::Logger::LogWarning("Usage: %s [-nosound] [-window] [-reverse] [-brightness n] [-nowait] [-accframe]", argv0);
-}
-
-static void parseArgs(int argc, char *argv[]) {
-  int i;
-  for ( i=1 ; i<argc ; i++ ) {
-    if ( strcmp(argv[i], "-nosound") == 0 ) {
-      noSound = 1;
-    } else if ( strcmp(argv[i], "-window") == 0 ) {
-      windowMode = 1;
-    } else if ( strcmp(argv[i], "-reverse") == 0 ) {
-      buttonReversed = 1;
-    } else if ( (strcmp(argv[i], "-brightness") == 0) && argv[i+1] ) {
-      i++;
-      brightness = (int)atoi(argv[i]);
-      if ( brightness < 0 || brightness > 256 ) {
-	brightness = DEFAULT_BRIGHTNESS;
-      }
-    } else if ( strcmp(argv[i], "-nowait") == 0 ) {
-      nowait = 1;
-    } else if ( strcmp(argv[i], "-accframe") == 0 ) {
-      accframe = 1;
-    } else {
-      usage(argv[0]);
-      SRL::System::Exit(1);
-    }
-  }
+// Initialize game configuration with Saturn-optimal defaults.
+// Saturn doesn't support command-line arguments, so we set optimal settings directly.
+static void initGameConfig() {
+  // Sound: enabled by default (Saturn has good audio capabilities)
+  noSound = 0;
+  
+  // Display: always fullscreen (Saturn has no windowed mode)
+  windowMode = 0;
+  
+  // Input: standard button configuration
+  buttonReversed = 0;
+  
+  // Display brightness: default value
+  brightness = DEFAULT_BRIGHTNESS;
+  
+  // Timing: no wait, standard framerate
+  nowait = 0;
+  accframe = 0;
 }
 
 int interval = INTERVAL_BASE;
 int tick = 0;
 static int pPrsd = 1;
 
-int main(int argc, char *argv[]) {
+int main() {
   int done = 0;
   long prvTickCount = 0;
   int i;
@@ -270,7 +259,7 @@ int main(int argc, char *argv[]) {
   long nowTick;
   int frame;
 
-  parseArgs(argc, argv);
+  initGameConfig();
 
   initDegutil();
   initSDL(windowMode);
@@ -281,7 +270,7 @@ int main(int argc, char *argv[]) {
   while ( !done ) {
     int startBtn = 0, backBtn = 0;
     SDL_PollEvent(&event);
-    keys = SDL_GetKeyState(NULL);
+    keys = (Uint8*)SDL_GetKeyState(NULL);
     startBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_START);
     backBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_BACK);
     if ( keys[SDLK_ESCAPE] == SDL_PRESSED || event.type == SDL_QUIT || backBtn ) done = 1;

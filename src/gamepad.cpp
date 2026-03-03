@@ -183,7 +183,7 @@ const char *SDL_GameControllerName(SDL_GameController *gamecontroller) {
     if (!gamecontroller || !gamecontroller->joystick) {
         return nullptr;
     }
-    return SDL_JoystickName(gamecontroller->index);
+    return SDL_JoystickName(gamecontroller->joystick);
 }
 
 // Get name for joystick index
