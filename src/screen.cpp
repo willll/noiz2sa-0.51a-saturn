@@ -45,7 +45,7 @@ static int pitch, ppitch;
 #define SHARE_LOC "/usr/share/games/noiz2sa/"
 
 static SDL_Surface *sprite[SPRITE_NUM];
-static char *spriteFile[SPRITE_NUM] = {
+static const char *spriteFile[SPRITE_NUM] = {
   "title_n.bmp", "title_o.bmp", "title_i.bmp", "title_z.bmp", "title_2.bmp",
   "title_s.bmp", "title_a.bmp",
 };

@@ -73,7 +73,7 @@ struct _SDL_GameController;
 typedef struct _SDL_GameController SDL_GameController;
 
 
-Uint8 SDL_GameControllerAddMappingsFromFile(char *db_path, Uint8 freerw);
+Uint8 SDL_GameControllerAddMappingsFromFile(const char *db_path, Uint8 freerw);
 Uint8 SDL_GameControllerGetButton(SDL_GameController * gamecontroller, SDL_GameControllerButton button);
 Sint16 SDL_GameControllerGetAxis(SDL_GameController * gamecontroller, SDL_GameControllerAxis axis);
 

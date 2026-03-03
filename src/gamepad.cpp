@@ -43,7 +43,7 @@ SDL_bool SDL_IsGameController(int joystick_index) {
 }
 
 // Load controller mappings from file (no-op on Saturn)
-Uint8 SDL_GameControllerAddMappingsFromFile(char *db_path, Uint8 freerw) {
+Uint8 SDL_GameControllerAddMappingsFromFile(const char *db_path, Uint8 freerw) {
     (void)db_path;
     (void)freerw;
     // Saturn doesn't need external mapping files

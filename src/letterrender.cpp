@@ -67,7 +67,7 @@ void drawLetter(int idx, int lx, int ly, int ltSize, int d,
   drawLetterBuf(idx, lx, ly, ltSize, d, color1, color2, buf, 1);
 }
 
-void drawStringBuf(char *str, int lx, int ly, int ltSize, int d, 
+void drawStringBuf(const char *str, int lx, int ly, int ltSize, int d, 
 		LayerBit color1, LayerBit color2, LayerBit *buf, int panel) {
   int x = lx, y = ly;
   int i, c, idx;
@@ -109,7 +109,7 @@ void drawStringBuf(char *str, int lx, int ly, int ltSize, int d,
   }
 }
 
-void drawString(char *str, int lx, int ly, int ltSize, int d, 
+void drawString(const char *str, int lx, int ly, int ltSize, int d, 
 		LayerBit color1, LayerBit color2, LayerBit *buf) {
   drawStringBuf(str, lx, ly, ltSize, d, color1, color2, buf, 1);
 }

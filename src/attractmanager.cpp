@@ -186,7 +186,7 @@ void drawScore() {
 
 void drawRPanel() {
   int y;
-  char *str = "LEFT";
+  const char *str = "LEFT";
   clearRPanel();
   if ( left >= 0 ) {
     drawString(str, 34, 272, 24, 3, 16*1-12, 16*1-3, rpbuf);
@@ -326,12 +326,12 @@ void moveTitleMenu() {
 
 void drawTitleMenu() {
   int i;
-  char *stgChr = "STAGE";
-  char *endlessChr = "ENDLESS";
-  char *hardChr = "HARD";
-  char *extChr = "EXTREME";
-  char *insChr = "INSANE";
-  char *quitChr = "QUIT";
+  const char *stgChr = "STAGE";
+  const char *endlessChr = "ENDLESS";
+  const char *hardChr = "HARD";
+  const char *extChr = "EXTREME";
+  const char *insChr = "INSANE";
+  const char *quitChr = "QUIT";
   for ( i=0 ; i<STG_BOX_NUM ; i++ ) {
     if ( i == slcStg ) {
       int sz = STG_BOX_SIZE+6+sctbl[(titleCnt*16)&(DIV-1)]/24;
@@ -418,7 +418,7 @@ void moveGameover() {
 }
 
 void drawGameover() {
-  char *goChr = "GAME OVER";
+  const char *goChr = "GAME OVER";
   int y;
   if ( goCnt < 128 ) {
     y = LAYER_HEIGHT/3*goCnt/128;
@@ -450,7 +450,7 @@ void moveStageClear() {
 }
 
 void drawStageClear() {
-  char *scChr = "STAGE CLEAR";
+  const char *scChr = "STAGE CLEAR";
   int y;
   if ( scCnt < 128 ) {
     y = LAYER_HEIGHT - LAYER_HEIGHT/3*2*scCnt/128;
@@ -467,7 +467,7 @@ void movePause() {
 }
 
 void drawPause() {
-  char *psChr = "PAUSE";
+  const char *psChr = "PAUSE";
   if ( (psCnt&63) < 32 ) {
     drawStringBuf(psChr, 92, LAYER_HEIGHT/3, 20, 2, 16*2-10, 16*1-1, buf, 0);
   }

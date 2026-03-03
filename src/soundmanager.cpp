@@ -22,14 +22,14 @@ static int useAudio = 0;
 #define MUSIC_NUM 7
 #define SHARE_LOC "/usr/share/games/noiz2sa/"
 
-static char *musicFileName[MUSIC_NUM] = {
+static const char *musicFileName[MUSIC_NUM] = {
   "stg0.ogg", "stg1.ogg", "stg2.ogg", "stg3.ogg", "stg4.ogg", "stg5.ogg", "stg00.ogg",
 };
 static Mix_Music *music[MUSIC_NUM];
 
 #define CHUNK_NUM 7
 
-static char *chunkFileName[CHUNK_NUM] = {
+static const char *chunkFileName[CHUNK_NUM] = {
   "shot.wav", "hit.wav", "foedst.wav", "bossdst.wav", "shipdst.wav", "bonus.wav", "extend.wav",
 };
 static Mix_Chunk *chunk[CHUNK_NUM];
