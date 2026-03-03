@@ -162,15 +162,7 @@ add_compile_definitions(
 )
 
 # TLSF Allocator
-if(SRL_MALLOC_METHOD STREQUAL "TLSF")
-    set(TLSF_SOURCE "${SRL_MODULES_DIR}/tlsf/tlsf.c")
-    if(EXISTS "${TLSF_SOURCE}")
-        list(APPEND SOURCES_NOIZ2SA "${TLSF_SOURCE}")
-        message(STATUS "Using TLSF memory allocator")
-    else()
-        message(WARNING "TLSF requested but source not found: ${TLSF_SOURCE}")
-    endif()
-endif()
+# Note: TLSF source is added to SOURCES_SGL_SYSTEM list above conditionally
 
 # ============================================================================
 
@@ -231,21 +223,32 @@ set(SOURCES_NOIZ2SA
   src/syscalls.c
   )
 
-# Add SGL workarea source (from SaturnRingLib's shared.mk SYSSOURCES)
+# SGL Preloader - MUST be linked first (before all other object files)
+# Following shared.mk: PRELOADERSOURCES = $(SGLDIR)/SRC/preloader.cxx
+set(SGL_PRELOADER_SOURCE "${SRL_SGL_DIR}/SRC/preloader.cxx")
+if(NOT EXISTS "${SGL_PRELOADER_SOURCE}")
+    message(WARNING "SGL preloader.cxx not found at: ${SGL_PRELOADER_SOURCE}")
+endif()
+
+# System sources (following shared.mk SYSSOURCES pattern)
+# These are added after user sources to match linking order
+set(SOURCES_SGL_SYSTEM)
 set(SGL_WORKAREA_SOURCE "${SRL_SGL_DIR}/SRC/workarea.c")
 if(EXISTS "${SGL_WORKAREA_SOURCE}")
-    list(APPEND SOURCES_NOIZ2SA "${SGL_WORKAREA_SOURCE}")
+    list(APPEND SOURCES_SGL_SYSTEM "${SGL_WORKAREA_SOURCE}")
 else()
     message(WARNING "SGL workarea.c not found at: ${SGL_WORKAREA_SOURCE}")
 endif()
 
-# Add SGL preloader source (C++ preloader for SGL initialization)
-# IMPORTANT: Preloader MUST be linked first (before all other object files)
-set(SGL_PRELOADER_SOURCE "${SRL_SGL_DIR}/SRC/preloader.cxx")
-if(EXISTS "${SGL_PRELOADER_SOURCE}")
-    list(INSERT SOURCES_NOIZ2SA 0 "${SGL_PRELOADER_SOURCE}")
-else()
-    message(WARNING "SGL preloader.cxx not found at: ${SGL_PRELOADER_SOURCE}")
+# Add TLSF allocator source (conditional, following shared.mk)
+if(SRL_MALLOC_METHOD STREQUAL "TLSF")
+    set(TLSF_SOURCE "${SRL_MODULES_DIR}/tlsf/tlsf.c")
+    if(EXISTS "${TLSF_SOURCE}")
+        list(APPEND SOURCES_SGL_SYSTEM "${TLSF_SOURCE}")
+        message(STATUS "Using TLSF memory allocator")
+    else()
+        message(WARNING "TLSF requested but source not found: ${TLSF_SOURCE}")
+    endif()
 endif()
 
 set(CD_FILES
@@ -319,7 +322,17 @@ find_program(SOX_EXECUTABLE sox)
 add_compile_definitions( MODEL_S
                          _SH )
 
-add_executable( ${CD_NAME}.elf ${SOURCES_NOIZ2SA} )
+# Build executable with direct source ordering for strict link order control
+# Following shared.mk: PRELOADERSOURCES → OBJECTS → SYSOBJECTS → LIBS
+add_executable(${CD_NAME}.elf
+    "${SGL_PRELOADER_SOURCE}"
+    ${SOURCES_NOIZ2SA}
+    ${SOURCES_SGL_SYSTEM}
+)
+
+# Link libraries
+target_link_libraries(${CD_NAME}.elf PUBLIC bulletml_binary)
+srl_link_target(${CD_NAME}.elf)
 
 # Clean BuildDrop before linking
 add_custom_command(TARGET ${CD_NAME}.elf PRE_LINK
