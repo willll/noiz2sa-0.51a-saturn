@@ -654,116 +654,114 @@ add_custom_command(TARGET noiz2sa.elf POST_BUILD
     COMMENT "Making CD generation scripts executable"
 )
 
-# Optional custom targets for CD image generation (not built by default)
-# Usage: cmake --build . --target cd-iso
-# Usage: cmake --build . --target cd-bin-cue
-# Usage: cmake --build . --target cd-audio
+# ============================================================================
+# Automatic CD Image Generation as POST_BUILD Steps (if tools available)
+# ============================================================================
 
+# Generate ISO automatically if xorrisofs is available
 if(XORRISOFS_EXECUTABLE)
-    add_custom_target(cd-iso DEPENDS noiz2sa.elf
+    add_custom_command(TARGET noiz2sa.elf POST_BUILD
         COMMAND bash "${ISO_GENERATION_SCRIPT}"
-        COMMENT "Generating ISO image (cd.iso) from assets"
-        USES_TERMINAL
+        COMMENT "Generating ISO image (cd.iso)"
+        VERBATIM
     )
     set(CD_ISO_AVAILABLE TRUE)
+    set(ISO_BUILD_MSG "✓ ISO will be generated automatically")
 else()
-    add_custom_target(cd-iso DEPENDS noiz2sa.elf
-        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --red "ERROR: xorrisofs not found. Install with: apt-get install xorriso"
-        COMMENT "ISO generation requires xorrisofs"
-    )
     set(CD_ISO_AVAILABLE FALSE)
+    set(ISO_BUILD_MSG "✗ ISO generation requires xorrisofs (apt-get install xorriso)")
 endif()
 
+# Generate BIN/CUE automatically if iso2raw is available
 if(ISO2RAW_EXECUTABLE AND CD_ISO_AVAILABLE)
-    add_custom_target(cd-bin-cue DEPENDS cd-iso
+    add_custom_command(TARGET noiz2sa.elf POST_BUILD
         COMMAND bash "${BIN_CUE_GENERATION_SCRIPT}"
         COMMENT "Converting ISO to BIN/CUE format (cd.bin, cd.cue)"
-        USES_TERMINAL
+        VERBATIM
     )
     set(CD_BIN_CUE_AVAILABLE TRUE)
+    set(BIN_CUE_BUILD_MSG "✓ BIN/CUE will be generated automatically")
 elseif(ISO2RAW_EXECUTABLE)
-    add_custom_target(cd-bin-cue DEPENDS noiz2sa.elf
-        COMMAND bash "${BIN_CUE_GENERATION_SCRIPT}"
-        COMMENT "Converting ISO to BIN/CUE format (requires cd-iso first)"
-        USES_TERMINAL
-    )
     set(CD_BIN_CUE_AVAILABLE TRUE)
+    set(BIN_CUE_BUILD_MSG "⚠ BIN/CUE can be generated (requires cd-iso first)")
 else()
-    add_custom_target(cd-bin-cue DEPENDS noiz2sa.elf
-        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --red "ERROR: iso2raw not found"
-        COMMENT "BIN/CUE generation requires iso2raw"
-    )
     set(CD_BIN_CUE_AVAILABLE FALSE)
+    set(BIN_CUE_BUILD_MSG "✗ BIN/CUE requires iso2raw (build from: https://github.com/gianlucarenzi/iso2raw)")
 endif()
 
-if(SOX_EXECUTABLE AND CD_BIN_CUE_AVAILABLE)
-    add_custom_target(cd-audio DEPENDS cd-bin-cue
+# Add audio tracks automatically if sox is available
+if(SOX_EXECUTABLE AND CD_BIN_CUE_AVAILABLE AND CD_ISO_AVAILABLE)
+    add_custom_command(TARGET noiz2sa.elf POST_BUILD
         COMMAND bash "${AUDIO_GENERATION_SCRIPT}"
         COMMENT "Adding audio tracks to CD image"
-        USES_TERMINAL
+        VERBATIM
     )
     set(CD_AUDIO_AVAILABLE TRUE)
+    set(AUDIO_BUILD_MSG "✓ Audio tracks will be added automatically")
 elseif(SOX_EXECUTABLE)
-    add_custom_target(cd-audio DEPENDS noiz2sa.elf
-        COMMAND bash "${AUDIO_GENERATION_SCRIPT}"
-        COMMENT "Adding audio tracks (requires cd-bin-cue first)"
-        USES_TERMINAL
-    )
     set(CD_AUDIO_AVAILABLE TRUE)
+    set(AUDIO_BUILD_MSG "⚠ Audio tracks can be added (run after ISO/BIN/CUE generation)")
 else()
-    add_custom_target(cd-audio DEPENDS noiz2sa.elf
-        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --yellow "WARNING: sox not found - audio tracks will not be added"
-        COMMENT "Audio addition requires sox"
-    )
     set(CD_AUDIO_AVAILABLE FALSE)
+    set(AUDIO_BUILD_MSG "✗ Audio requires sox (apt-get install sox libsox-fmt-all)")
 endif()
 
-# Combined target for full CD generation
-if(CD_ISO_AVAILABLE AND CD_BIN_CUE_AVAILABLE AND CD_AUDIO_AVAILABLE)
-    add_custom_target(cd-all DEPENDS cd-audio
-        COMMENT "Complete CD image with audio (cd.bin + cd.cue)"
-    )
-    set(CD_ALL_AVAILABLE TRUE)
-else()
-    add_custom_target(cd-all DEPENDS noiz2sa.elf
-        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --yellow "WARNING: Some build tools are missing for complete CD generation"
-        COMMENT "Full CD generation not available"
-    )
-    set(CD_ALL_AVAILABLE FALSE)
-endif()
+# ============================================================================
+# Optional Custom Targets for Manual Control
+# ============================================================================
+
+# Manual ISO generation target (for re-generation without rebuilding everything)
+add_custom_target(cd-iso
+    COMMAND bash "${ISO_GENERATION_SCRIPT}"
+    COMMENT "Manually generating ISO image (cd.iso)"
+    USES_TERMINAL
+)
+
+# Manual BIN/CUE generation target
+add_custom_target(cd-bin-cue
+    COMMAND bash "${BIN_CUE_GENERATION_SCRIPT}"
+    COMMENT "Manually converting ISO to BIN/CUE format"
+    USES_TERMINAL
+)
+
+# Manual audio addition target
+add_custom_target(cd-audio
+    COMMAND bash "${AUDIO_GENERATION_SCRIPT}"
+    COMMENT "Manually adding audio tracks to CD image"
+    USES_TERMINAL
+)
+
+# Combined target for complete CD generation
+add_custom_target(cd-all
+    COMMAND ${CMAKE_COMMAND} -E echo "Complete CD generation (cd.iso, cd.bin, cd.cue with audio)"
+    COMMENT "Note: Complete CD already built during default build if tools available"
+)
+
+set(CD_ALL_AVAILABLE TRUE)
 
 message(STATUS "")
 message(STATUS "========== CD Image Generation ==========")
-if(CD_ISO_AVAILABLE)
-    message(STATUS "✓ ISO generation: cmake --build . --target cd-iso")
-else()
-    message(STATUS "✗ ISO generation: xorrisofs not found")
-endif()
-if(CD_BIN_CUE_AVAILABLE)
-    message(STATUS "✓ BIN/CUE conversion: cmake --build . --target cd-bin-cue")
-else()
-    message(STATUS "✗ BIN/CUE conversion: iso2raw not found")
-endif()
-if(CD_AUDIO_AVAILABLE)
-    message(STATUS "✓ Audio addition: cmake --build . --target cd-audio")
-else()
-    message(STATUS "✗ Audio addition: sox not found")
-endif()
-if(CD_ALL_AVAILABLE)
-    message(STATUS "✓ Complete build: cmake --build . --target cd-all")
-else()
+message(STATUS "${ISO_BUILD_MSG}")
+message(STATUS "${BIN_CUE_BUILD_MSG}")
+message(STATUS "${AUDIO_BUILD_MSG}")
+if(NOT CD_ISO_AVAILABLE OR NOT CD_BIN_CUE_AVAILABLE OR NOT CD_AUDIO_AVAILABLE)
     message(STATUS "")
-    message(STATUS "To enable full CD generation, install missing tools:")
+    message(STATUS "To enable full automatic CD generation, install:")
     if(NOT CD_ISO_AVAILABLE)
         message(STATUS "  - xorrisofs: apt-get install xorriso")
     endif()
-    if(NOT CD_BIN_CUE_AVAILABLE)
+    if(NOT CD_BIN_CUE_AVAILABLE AND NOT ISO2RAW_EXECUTABLE)
         message(STATUS "  - iso2raw: https://github.com/gianlucarenzi/iso2raw")
     endif()
-    if(NOT CD_AUDIO_AVAILABLE)
+    if(NOT CD_AUDIO_AVAILABLE AND NOT SOX_EXECUTABLE)
         message(STATUS "  - sox: apt-get install sox libsox-fmt-all")
     endif()
 endif()
+message(STATUS "")
+message(STATUS "Manual targets (for re-generation without rebuild):")
+message(STATUS "  cmake --build . --target cd-iso")
+message(STATUS "  cmake --build . --target cd-bin-cue")
+message(STATUS "  cmake --build . --target cd-audio")
 message(STATUS "=========================================")
 message(STATUS "")
 

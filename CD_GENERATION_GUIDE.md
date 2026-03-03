@@ -1,21 +1,37 @@
 # CD Image Generation Guide
 
-This guide explains how to generate Sega Saturn CD images from the noiz2sa project using the CMake build system.
+This guide explains how Saturn CD images are automatically generated from the noiz2sa project using the CMake build system.
 
 ## Overview
 
-The CMakeLists.txt has been updated with automatic support for generating complete Saturn CD images, including:
-- **ISO** generation from game assets and IP.BIN
-- **BIN/CUE** conversion for emulator compatibility
-- **Audio track** integration into the CD image
+The CMakeLists.txt is configured to **automatically generate CD images during the default build** when the required tools are available:
+- **ISO** generation from game assets and IP.BIN (requires `xorrisofs`)
+- **BIN/CUE** conversion for emulator compatibility (requires `iso2raw`)
+- **Audio track** integration into the CD image (requires `sox`)
 - **CUE sheet** generation with proper sector alignment
+
+## Quick Start
+
+Simply build the project normally - CD image generation happens automatically:
+
+```bash
+cd /saturn/noiz2sa-0.51a-saturn
+cmake -B build
+cmake --build build    # This builds ELF, ISO, and audio automatically!
+```
+
+**Output files created:**
+- `build/noiz2sa.elf` - Compiled game executable
+- `build/cd.iso` - ISO 9660 image (if xorrisofs available)
+- `build/cd.bin` & `build/cd.cue` - BIN/CUE format (if iso2raw available)
+- `build/cd.bin` - Updated with audio tracks (if sox available)
 
 ## Build Targets
 
-The following CMake targets are available after running `cmake -B build`:
+After the default build completes, you can manually regenerate individual components without rebuilding the executable using these targets:
 
-### `cd-iso` - Generate ISO Image
-Creates an ISO 9660 image suitable for burning or emulation.
+### `cd-iso` - Regenerate ISO Image
+Re-generates ISO without rebuilding the executable.
 
 ```bash
 cmake --build build --target cd-iso
@@ -28,8 +44,8 @@ cmake --build build --target cd-iso
 
 **Output:** `build/cd.iso`
 
-### `cd-bin-cue` - Convert ISO to BIN/CUE Format
-Converts the ISO image into BIN (binary data) and CUE (track/index sheet) format compatible with most emulators.
+### `cd-bin-cue` - Manually Convert ISO to BIN/CUE Format
+Re-generates BIN/CUE format without rebuilding.
 
 ```bash
 cmake --build build --target cd-bin-cue
@@ -45,8 +61,8 @@ cmake --build build --target cd-bin-cue
 - `build/cd.bin` (CD image data)
 - `build/cd.cue` (Cue sheet with track information)
 
-### `cd-audio` - Add Audio Tracks
-Discovers and converts audio files, then appends them to the CD image with proper CUE sheet entries.
+### `cd-audio` - Manually Add Audio Tracks
+Re-processes and adds audio tracks without full rebuild.
 
 ```bash
 cmake --build build --target cd-audio
@@ -62,59 +78,76 @@ cmake --build build --target cd-audio
 - Or a `tracklist` file listing audio files to include
 - Supported formats: MP3, WAV, OGG, FLAC, AAC, M4A, WMA
 
-### `cd-all` - Complete CD Generation
-Builds the complete CD image pipeline: ISO → BIN/CUE → Audio
-
-```bash
-cmake --build build --target cd-all
-```
-
-This target runs all three previous targets in sequence.
-
 ## Build Process
 
-### Step 1: Build the ELF Executable
+### Automatic CD Generation (Default)
+
+Simply build the project - CD images are generated automatically if tools are available:
+
 ```bash
 cd /saturn/noiz2sa-0.51a-saturn
 cmake -B build
 cmake --build build
 ```
 
-This creates:
+This automatically creates:
 - `build/noiz2sa.elf` - Compiled game executable
 - `build/cd/data/0.bin` - Game binary (extracted from ELF)
 - `build/cd/data/ABS.TXT`, `BIB.TXT`, `CPY.TXT` - Required metadata files
+- `build/cd.iso` - ISO image (if xorrisofs available)
+- `build/cd.bin` & `build/cd.cue` - BIN/CUE format (if iso2raw available later)
+- Audio tracks in `build/cd.bin` (if sox available)
 
-### Step 2: Generate ISO (if xorrisofs is available)
+### What Happens During Build
+
+1. **Compilation (noiz2sa.elf)**
+   - C++ source compiled to ELF executable
+   - Standard Saturn toolchain configuration
+
+2. **Asset Setup (POST_BUILD, always)**
+   - Create `build/cd/` directory structure
+   - Extract game binary: `0.bin` from ELF via objcopy
+   - Create metadata files: `ABS.TXT`, `BIB.TXT`, `CPY.TXT`
+
+3. **ISO Generation (POST_BUILD, if xorrisofs available)**
+   - Runs `generate_iso.sh` automatically
+   - Creates `build/cd.iso` with all assets
+
+4. **BIN/CUE Conversion (POST_BUILD, if iso2raw available)**
+   - Runs `generate_bin_cue.sh` automatically
+   - Creates `build/cd.bin` and `build/cd.cue`
+   - Converts ISO to emulator-compatible format
+
+5. **Audio Integration (POST_BUILD, if sox available)**
+   - Runs `add_audio_tracks.sh` automatically
+   - Appends audio tracks to `build/cd.bin`
+   - Updates `build/cd.cue` with track indices
+
+### Manual Regeneration
+
+If you modify audio files or assets but don't want to rebuild the executable:
+
 ```bash
+# Re-generate ISO without rebuild
 cmake --build build --target cd-iso
-```
 
-Creates `build/cd.iso` with:
-- IP.BIN (system boot sector)
-- Game binary and assets
-- Proper ISO 9660 filesystem
-
-### Step 3: Convert to BIN/CUE (if iso2raw is available)
-```bash
+# Re-generate BIN/CUE without rebuild
 cmake --build build --target cd-bin-cue
-```
 
-Creates:
-- `build/cd.bin` - Complete CD image data
-- `build/cd.cue` - Cue sheet with track 1 (data)
-
-### Step 4: Add Audio Tracks (if sox is available)
-```bash
+# Re-add audio tracks without rebuild
 cmake --build build --target cd-audio
 ```
 
-Processes audio files:
-- Auto-discovers music in `noiz2sa_share/music/` or reads `tracklist` file
-- Converts to 44.1kHz 16-bit PCM WAV
-- Sector-aligns to 2352 bytes (CD sector size)
-- Appends tracks to BIN file
-- Updates CUE sheet with track indices in MM:SS:FF format
+### Step-by-Step Build (Legacy)
+
+If you want to see each step, you can run the generated scripts manually:
+
+```bash
+cd build
+bash generate_iso.sh         # Creates cd.iso
+bash generate_bin_cue.sh     # Creates cd.bin and cd.cue
+bash add_audio_tracks.sh     # Appends audio and updates cue
+```
 
 ## Audio File Setup
 
