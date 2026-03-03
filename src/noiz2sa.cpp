@@ -10,10 +10,13 @@
  * @version $Revision: 1.8 $
  */
 #include "SDL.h"
-#include <srl_memory.hpp>  // for malloc/free, atoi, srand
+#include <srl_memory.hpp>  // for malloc/free, atoi
 #include <srl_log.hpp>     // for logging
 #include <srl_string.hpp>  // for string functions
 #include <srl_system.hpp>  // for exit
+
+// Include Random class (must be AFTER SRL headers to avoid macro conflicts)
+#include <impl/random.hpp>
 
 #include "noiz2sa.h"
 #include "screen.h"
@@ -32,10 +35,15 @@
 
 static int noSound = 0;
 
+// Global random number generator (using SRL::Math namespace which is aliased to SaturnMath)
+RandomGenerator* g_random = nullptr;
+
 // Initialize and load preference.
 static void initFirst() {
   loadPreference();
-  srand(SDL_GetTicks());
+  // Initialize random number generator with current time
+  // Note: SaturnMath is #defined as SRL::Math in srl_base.hpp
+  g_random = new SRL::Math::Random<unsigned int>(SDL_GetTicks());
   initBarragemanager();
   initAttractManager();
 }
@@ -45,8 +53,9 @@ void quitLast() {
   if ( !noSound ) closeSound();
   savePreference();
   closeBarragemanager();
+  delete g_random;
+  g_random = nullptr;
   closeSDL();
-  SDL_Quit();
   SRL::System::Exit(1);
 }
 
@@ -231,7 +240,7 @@ static int accframe = 0;
 // Saturn doesn't support command-line arguments, so we set optimal settings directly.
 static void initGameConfig() {
   // Sound: enabled by default (Saturn has good audio capabilities)
-  noSound = 0;
+  noSound = 1;
   
   // Display: always fullscreen (Saturn has no windowed mode)
   windowMode = 0;

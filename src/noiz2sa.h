@@ -9,9 +9,24 @@
  *
  * @version $Revision: 1.4 $
  */
-#define randN(N) (rand()%(N))
-#define randNS(N) (rand()%(N<<1)-N)
-#define randNS2(N) ((rand()%(N)-(N>>1)) + (rand()%(N)-(N>>1)))
+#ifndef NOIZ2SA_H_
+#define NOIZ2SA_H_
+
+#include <stdint.h>
+
+// Forward declarations
+namespace SRL { namespace Math { template<typename T> class Random; } }
+
+// Type alias for random generator (avoids macro conflicts)
+typedef SRL::Math::Random<unsigned int> RandomGenerator;
+
+// Global random number generator (initialized in initFirst)
+extern RandomGenerator* g_random;
+
+// Random number generation macros
+#define randN(N) (g_random->GetNumber(0, (N)-1))
+#define randNS(N) (g_random->GetNumber(-(N), (N)-1))
+#define randNS2(N) ((g_random->GetNumber(0, (N)-1) - ((N)>>1)) + (g_random->GetNumber(0, (N)-1) - ((N)>>1)))
 #define absN(a) ((a) < 0 ? - (a) : (a))
 
 #define INTERVAL_BASE 16
@@ -37,3 +52,5 @@ void initTitle();
 void initGame(int stg);
 void initGameover();
 void initStageClear();
+
+#endif // NOIZ2SA_H_
