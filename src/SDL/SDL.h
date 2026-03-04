@@ -25,10 +25,9 @@ typedef struct {
     uint16_t w, h;
 } SDL_Rect;
 
-// SDL Color
-typedef struct {
-    uint8_t r, g, b, unused;
-} SDL_Color;
+// SDL Color - now using SRL HighColor
+// Kept as typedef for compatibility but redirects to SRL::Types::HighColor
+#include <srl_color.hpp>
 
 // SDL PixelFormat
 typedef struct SDL_PixelFormat {
@@ -140,8 +139,8 @@ static inline SDL_Surface* SDL_ConvertSurface(SDL_Surface* src, SDL_PixelFormat*
     (void)fmt; (void)flags; return src;
 }
 
-static inline int SDL_SetColors(SDL_Surface* surface, SDL_Color* colors, int firstcolor, int ncolors) {
-    (void)surface; (void)colors; (void)firstcolor; (void)ncolors; return 1;
+static inline int SDL_SetColors(SDL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
+    (void)surface; (void)colors; (void)firstcolor; (void)ncolors; return 0;
 }
 
 static inline int SDL_SetColorKey(SDL_Surface* surface, uint32_t flag, uint32_t key) {

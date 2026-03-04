@@ -9,8 +9,9 @@
  *
  * @version $Revision: 1.1.1.1 $
  */
+#include <srl_color.hpp>
 #include "SDL.h"
 
-extern SDL_Color color[256];
+extern SRL::Types::HighColor color[256];
 extern Uint8 colorDfs[256];
 extern Uint8 colorAlp[256][256];
