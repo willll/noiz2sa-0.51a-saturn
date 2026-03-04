@@ -48,7 +48,6 @@ static const char *spriteFile[SPRITE_NUM] = {
   "TITLES.TGA", "TITLEA.TGA",
 };
 
-Uint8 *keys;
 //SDL_Joystick *stick = nullptr;
 //SDL_GameController *gamepad = nullptr;
 Digital *gamepad = nullptr;;
