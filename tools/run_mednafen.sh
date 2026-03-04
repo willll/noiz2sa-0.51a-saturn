@@ -37,4 +37,4 @@ echo ""
 
 # Run mednafen - will auto-detect system from CUE format
 # Note: Settings like -ss.bios_jp should be configured in mednafen.cfg
-exec mednafen "$CUE_FILE"
+exec mednafen -sound 0 -ss.cart debug -force_module ss "$CUE_FILE"
