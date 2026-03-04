@@ -15,6 +15,7 @@
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_string.hpp>  // for string and memory functions
 #include <srl_system.hpp>  // for exit
+#include <srl_bitmap.hpp>  // for TGA loading
 #include "SDL.h"
 
 #include "noiz2sa.h"
@@ -38,14 +39,14 @@ static SDL_Rect screenRect, layerRect, layerClearRect;
 static SDL_Rect lpanelRect, rpanelRect, panelClearRect;
 static int pitch, ppitch;
 
-// Handle BMP images.
+// Handle TGA images in ISO 8:3 format
 #define SPRITE_NUM 7
-#define SHARE_LOC "/usr/share/games/noiz2sa/"
+#define TGA_IMG_PATH "IMAGES/"
 
 static SDL_Surface *sprite[SPRITE_NUM];
 static const char *spriteFile[SPRITE_NUM] = {
-  "title_n.bmp", "title_o.bmp", "title_i.bmp", "title_z.bmp", "title_2.bmp",
-  "title_s.bmp", "title_a.bmp",
+  "TITLEN.TGA", "TITLEO.TGA", "TITLEI.TGA", "TITLEZ.TGA", "TITLE2.TGA",
+  "TITLES.TGA", "TITLEA.TGA",
 };
 
 Uint8 *keys;
@@ -54,26 +55,70 @@ Uint8 *keys;
 Digital *gamepad = nullptr;;
 
 static void loadSprites() {
-  SDL_Surface *img;
   int i;
-  char name[56];
-  color[0].r = 100; color[0].g = 0; color[0].b = 0;
+  char name[256];
+  SRL::Bitmap::TGA *tga;
+  SDL_Surface *img;
+  
+  color[0].Red = 100 >> 3; color[0].Green = 0; color[0].Blue = 0;
   SDL_SetColors(video, color, 0, 1);
+  
   for ( i=0 ; i<SPRITE_NUM ; i++ ) {
-    strcpy(name, SHARE_LOC);
-    strcat(name, "images/");
+    // Try loading from ISO cd/data/images path first
+    strcpy(name, TGA_IMG_PATH);
     strcat(name, spriteFile[i]);
-    img = SDL_LoadBMP(name);
-    if ( img == nullptr ) {
-      SRL::Logger::LogFatal("Unable to load: %s", name);
+    
+    // Load TGA file using SRL bitmap loader  
+    tga = new SRL::Bitmap::TGA(name);
+    
+    // Get bitmap info to check if loaded successfully
+    SRL::Bitmap::BitmapInfo info = tga->GetInfo();
+    
+    if ( info.Width == 0 || info.Height == 0 || tga->GetData() == nullptr ) {
+      // Fallback to original path if available
+      strcpy(name, TGA_IMG_PATH);
+      strcat(name, spriteFile[i]);
+      delete tga;
+      tga = new SRL::Bitmap::TGA(name);
+      info = tga->GetInfo();
+    }
+    
+    if ( info.Width == 0 || tga->GetData() == nullptr ) {
+      SRL::Logger::LogFatal("Unable to load TGA sprite: %s", spriteFile[i]);
       SRL::System::Exit(1);
     }
+    
+    // Allocate SDL surface for TGA data
+    // Treat as 8bpp indexed color matching the original BMP loading
+    img = SDL_CreateRGBSurface(SDL_SWSURFACE, info.Width, info.Height, 8,
+                                0, 0, 0, 0);
+    
+    if ( img == nullptr ) {
+      SRL::Logger::LogFatal("Failed to create SDL surface from TGA: %s", spriteFile[i]);
+      delete tga;
+      SRL::System::Exit(1);
+    }
+    
+    // Copy TGA image data to SDL surface
+    if ( img->pixels != nullptr && tga->GetData() != nullptr ) {
+      memcpy(img->pixels, tga->GetData(), info.Width * info.Height);
+    }
+    
+    delete tga;
+    
     sprite[i] = SDL_ConvertSurface(img,
 				   video->format,
 				   SDL_HWSURFACE | SDL_SRCCOLORKEY);
+    
+    if ( sprite[i] == nullptr ) {
+      SRL::Logger::LogFatal("Failed to convert sprite to video format: %s", spriteFile[i]);
+      SRL::System::Exit(1);
+    }
+    
     SDL_SetColorKey(sprite[i], SDL_SRCCOLORKEY | SDL_RLEACCEL, 0);
   }
-  color[0].r = color[0].g = color[0].b = 255;
+  
+  color[0].Red = color[0].Green = color[0].Blue = 31;
   SDL_SetColors(video, color, 0, 1);
 }
 
@@ -87,9 +132,9 @@ void drawSprite(int n, int x, int y) {
 static void initPalette() {
   int i;
   for ( i=0 ; i<256 ; i++ ) {
-    color[i].r = color[i].r*brightness/256;
-    color[i].g = color[i].g*brightness/256;
-    color[i].b = color[i].b*brightness/256;
+    color[i].Red = color[i].Red*brightness/256;
+    color[i].Green = color[i].Green*brightness/256;
+    color[i].Blue = color[i].Blue*brightness/256;
   }
   SDL_SetColors(video, color, 0, 256);
   SDL_SetColors(layer, color, 0, 256);
