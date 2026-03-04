@@ -158,14 +158,10 @@ static inline int SDL_FillRect(SDL_Surface* dst, SDL_Rect* dstrect, uint32_t col
 static inline int SDL_Flip(SDL_Surface* screen) { (void)screen; return 0; }
 
 // SDL event and input functions
-static inline int SDL_PollEvent(SDL_Event* event) { (void)event; return 0; }
-static inline const uint8_t* SDL_GetKeyState(int* numkeys) { if(numkeys) *numkeys=0; return nullptr; }
 static inline uint32_t SDL_GetTicks(void) { return 0; }
 static inline void SDL_Delay(uint32_t ms) { (void)ms; }
 
 // SDL joystick/controller functions
-typedef struct _SDL_Joystick SDL_Joystick;
-typedef struct _SDL_GameController SDL_GameController;
 typedef int SDL_bool;
 
 #define SDL_FALSE 0
@@ -191,6 +187,5 @@ static inline void SDL_QuitSubSystem(uint32_t flags) { (void)flags; }
 
 // SDL_GameControllerOpen is defined in gamepad.cpp, declared in gamepad.h
 // Declare it here for files that include SDL.h before gamepad.h
-SDL_GameController* SDL_GameControllerOpen(int joystick_index);
 
 #endif // SDL_WRAPPER_H
