@@ -148,7 +148,7 @@ void initGame(int stg)
 
   initBarrages(stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
   initGameState(stg);
-  SRL::Logger::LogDebug("[GAME] Stage %d: Barrage initialized", stg);
+  SRL::Logger::LogDebug("[GAME] Stage %d: Barrage initialized (enemies=%d, speed=%.2f, density=%.2f)", stg, (int)stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
 
   if (stg < STAGE_NUM)
   {
@@ -167,11 +167,11 @@ void initGame(int stg)
     {
       setStageBackground(6);
       playMusic(6);
-      SRL::Logger::LogDebug("[GAME] Endless stage: INSANE mode");
+      SRL::Logger::LogInfo("[GAME] Endless stage: INSANE mode activated");
     }
   }
 
-  SRL::Logger::LogInfo("[STATE] IN_GAME (stage %d) ready", stg);
+  SRL::Logger::LogInfo("[STATE] IN_GAME (stage %d) ready - Starting gameplay", stg);
 }
 
 void initGameover()
@@ -181,7 +181,7 @@ void initGameover()
   status = GAMEOVER;
   initGameoverAtr();
 
-  SRL::Logger::LogInfo("[STATE] GAMEOVER screen ready");
+  SRL::Logger::LogInfo("[STATE] GAMEOVER screen ready - Game Over!");
 }
 
 void initStageClear()
@@ -191,7 +191,7 @@ void initStageClear()
   status = STAGE_CLEAR;
   initStageClearAtr();
 
-  SRL::Logger::LogInfo("[STATE] STAGE_CLEAR screen ready");
+  SRL::Logger::LogInfo("[STATE] STAGE_CLEAR screen ready - Stage Completed!");
 }
 
 static void move()
@@ -375,6 +375,7 @@ int main()
 
   while (!done)
   {
+    // Handle pause/unpause input
     if (gamepad && gamepad->IsConnected() && gamepad->WasPressed(SRL::Input::Digital::Button::START))
     {
       if (!pPrsd)
@@ -382,10 +383,12 @@ int main()
         if (status == IN_GAME)
         {
           status = PAUSE;
+          SRL::Logger::LogDebug("[INPUT] START pressed - Game paused (frame: %d)", tick);
         }
         else if (status == PAUSE)
         {
           status = IN_GAME;
+          SRL::Logger::LogDebug("[INPUT] START pressed - Game resumed (frame: %d)", tick);
         }
       }
       pPrsd = 1;
@@ -395,8 +398,10 @@ int main()
       pPrsd = 0;
     }
 
+    // Calculate frames to process based on time elapsed
     nowTick = SDL_GetTicks();
     frame = (int)(nowTick - prvTickCount) / interval;
+    
     if (frame <= 0)
     {
       frame = 1;
@@ -412,6 +417,7 @@ int main()
     }
     else if (frame > 5)
     {
+      SRL::Logger::LogWarning("[TIMING] Frame skip detected: %d frames (tick: %ld)", frame, nowTick);
       frame = 5;
       prvTickCount = nowTick;
     }
@@ -419,14 +425,23 @@ int main()
     {
       prvTickCount += frame * interval;
     }
+    
+    // Process game logic for calculated frames
     for (i = 0; i < frame; i++)
     {
       move();
       tick++;
     }
+    
     smokeScreen();
     draw();
     flipScreen();
+    
+    // Periodic logging for frame rate monitoring
+    if ((tick % 300) == 0)  // Every ~5 seconds at 60Hz
+    {
+      SRL::Logger::LogDebug("[FRAME] Game tick: %d, Status: %d, Time: %ums", tick, status, SDL_GetTicks());
+    }
   }
   quitLast();
 }
