@@ -28,6 +28,11 @@
 #ifndef GAMEPAD_H
 #define GAMEPAD_H
 
+#include <srl_input.hpp>
+
+using namespace SRL::Input;
+
+extern Digital *gamepad;
 
 /**
  *  The list of buttons available from a controller
@@ -68,14 +73,10 @@ typedef enum
     SDL_CONTROLLER_AXIS_MAX
 } SDL_GameControllerAxis;
 
+bool initGamepad();
 
-struct _SDL_GameController;
-typedef struct _SDL_GameController SDL_GameController;
-
-
-Uint8 SDL_GameControllerAddMappingsFromFile(const char *db_path, Uint8 freerw);
-Uint8 SDL_GameControllerGetButton(SDL_GameController * gamecontroller, SDL_GameControllerButton button);
-Sint16 SDL_GameControllerGetAxis(SDL_GameController * gamecontroller, SDL_GameControllerAxis axis);
+Uint8 SDL_GameControllerGetButton(SRL::Input::Digital * gamecontroller, SDL_GameControllerButton button);
+Sint16 SDL_GameControllerGetAxis(SRL::Input::Digital * gamecontroller, SDL_GameControllerAxis axis);
 
 
 #endif // GAMEPAD_H
