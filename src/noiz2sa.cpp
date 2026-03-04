@@ -10,10 +10,9 @@
  * @version $Revision: 1.8 $
  */
 #include "SDL.h"
-#include <srl_memory.hpp>  // for malloc/free, atoi
-#include <srl_log.hpp>     // for logging
-#include <srl_string.hpp>  // for string functions
-#include <srl_system.hpp>  // for exit
+#include <srl.hpp> // for malloc/free, atoi
+#include <srl_log.hpp>    // for logging
+#include <srl_system.hpp> // for exit
 
 // Include Random class (must be AFTER SRL headers to avoid macro conflicts)
 #include <impl/random.hpp>
@@ -36,90 +35,107 @@
 static int noSound = 0;
 
 // Global random number generator (using SRL::Math namespace which is aliased to SaturnMath)
-RandomGenerator* g_random = nullptr;
+RandomGenerator *g_random = nullptr;
 
 // Initialize and load preference.
-static void initFirst() {
+static void initFirst()
+{
   SRL::Logger::LogInfo("[INIT] First initialization starting");
-  
+
   loadPreference();
   SRL::Logger::LogDebug("[INIT] Preferences loaded");
-  
+
   // Initialize random number generator with current time
   // Note: SaturnMath is #defined as SRL::Math in srl_base.hpp
   uint32_t seed = SDL_GetTicks();
   g_random = new SRL::Math::Random<unsigned int>(seed);
   SRL::Logger::LogDebug("[INIT] Random generator initialized with seed: %u", seed);
-  
+
   initBarragemanager();
   SRL::Logger::LogDebug("[INIT] Barrage manager initialized");
-  
+
   initAttractManager();
   SRL::Logger::LogInfo("[INIT] First initialization complete");
 }
 
 // Quit and save preference.
-void quitLast() {
+void quitLast()
+{
   SRL::Logger::LogInfo("[QUIT] Shutdown sequence starting");
-  
-  if ( !noSound ) {
+
+  if (!noSound)
+  {
     closeSound();
     SRL::Logger::LogDebug("[QUIT] Sound closed");
   }
-  
+
   savePreference();
   SRL::Logger::LogDebug("[QUIT] Preferences saved");
-  
+
   closeBarragemanager();
   SRL::Logger::LogDebug("[QUIT] Barrage manager closed");
-  
+
   delete g_random;
   g_random = nullptr;
   SRL::Logger::LogInfo("[QUIT] Random generator cleaned up");
-  
+
   SRL::Logger::LogInfo("[QUIT] Shutdown sequence complete - Exiting");
   SRL::System::Exit(1);
 }
 
 int status;
 
-static float stagePrm[STAGE_NUM+ENDLESS_STAGE_NUM+1][3] = {
-  {13, 0.5f, 0.12f}, {2, 1.8f, 0.15f}, {3, 3.2f, 0.1f}, {90, 6.0f, 0.3f}, {5, 5.0f, 0.6f},
-  {6, 10.0f, 0.6f}, {7, 5.0f, 2.2f}, {98, 12.0f, 1.5f}, {9, 10.0f, 2.0f}, {79, 21.0f, 1.5f},
-  {-3, 5.0f, 0.7f}, {-1, 10.0f, 1.2f}, {-4, 15.0f, 1.8f}, {-2, 16.0f, 1.8f},
-  {0, -1.0f, 0.0f},
+static float stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1][3] = {
+    {13, 0.5f, 0.12f},
+    {2, 1.8f, 0.15f},
+    {3, 3.2f, 0.1f},
+    {90, 6.0f, 0.3f},
+    {5, 5.0f, 0.6f},
+    {6, 10.0f, 0.6f},
+    {7, 5.0f, 2.2f},
+    {98, 12.0f, 1.5f},
+    {9, 10.0f, 2.0f},
+    {79, 21.0f, 1.5f},
+    {-3, 5.0f, 0.7f},
+    {-1, 10.0f, 1.2f},
+    {-4, 15.0f, 1.8f},
+    {-2, 16.0f, 1.8f},
+    {0, -1.0f, 0.0f},
 };
 
-void initTitleStage(int stg) {
+void initTitleStage(int stg)
+{
   initFoes();
   initBarrages(stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
 }
 
-void initTitle() {
+void initTitle()
+{
   SRL::Logger::LogInfo("[STATE] Entering TITLE screen");
-  
+
   int stg;
   status = TITLE;
 
   stg = initTitleAtr();
   SRL::Logger::LogDebug("[TITLE] Title attributes initialized (stage: %d)", stg);
-  
+
   initShip();
   initShots();
   initFrags();
   initBonuses();
   initBackground();
   SRL::Logger::LogDebug("[TITLE] Game objects initialized");
-  
+
   setStageBackground(1);
   initTitleStage(stg);
-  
+
   SRL::Logger::LogInfo("[STATE] TITLE screen ready");
 }
 
-void initGame(int stg) {
+void initGame(int stg)
+{
   SRL::Logger::LogInfo("[STATE] Entering IN_GAME (stage %d)", stg);
-  
+
   status = IN_GAME;
 
   initShip();
@@ -133,45 +149,55 @@ void initGame(int stg) {
   initBarrages(stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
   initGameState(stg);
   SRL::Logger::LogDebug("[GAME] Stage %d: Barrage initialized", stg);
-  
-  if ( stg < STAGE_NUM ) {
-    setStageBackground(stg%5+1);
-    playMusic(stg%5+1);
-    SRL::Logger::LogDebug("[GAME] Stage %d: Background/Music set to %d", stg, stg%5+1);
-  } else {
-    if ( !insane ) {
+
+  if (stg < STAGE_NUM)
+  {
+    setStageBackground(stg % 5 + 1);
+    playMusic(stg % 5 + 1);
+    SRL::Logger::LogDebug("[GAME] Stage %d: Background/Music set to %d", stg, stg % 5 + 1);
+  }
+  else
+  {
+    if (!insane)
+    {
       setStageBackground(0);
       playMusic(0);
-    } else {
+    }
+    else
+    {
       setStageBackground(6);
       playMusic(6);
       SRL::Logger::LogDebug("[GAME] Endless stage: INSANE mode");
     }
   }
-  
+
   SRL::Logger::LogInfo("[STATE] IN_GAME (stage %d) ready", stg);
 }
 
-void initGameover() {
+void initGameover()
+{
   SRL::Logger::LogInfo("[STATE] Entering GAMEOVER");
-  
+
   status = GAMEOVER;
   initGameoverAtr();
-  
+
   SRL::Logger::LogInfo("[STATE] GAMEOVER screen ready");
 }
 
-void initStageClear() {
+void initStageClear()
+{
   SRL::Logger::LogInfo("[STATE] Entering STAGE_CLEAR");
-  
+
   status = STAGE_CLEAR;
   initStageClearAtr();
-  
+
   SRL::Logger::LogInfo("[STATE] STAGE_CLEAR screen ready");
 }
 
-static void move() {
-  switch ( status ) {
+static void move()
+{
+  switch (status)
+  {
   case TITLE:
     moveTitleMenu();
     moveBackground();
@@ -209,8 +235,10 @@ static void move() {
   }
 }
 
-static void draw() {
-  switch ( status ) {
+static void draw()
+{
+  switch (status)
+  {
   case TITLE:
     // Draw background.
     drawBackground();
@@ -279,21 +307,21 @@ static void draw() {
   }
 }
 
-
 static int accframe = 0;
 
 // Initialize game configuration with Saturn-optimal defaults.
 // Saturn doesn't support command-line arguments, so we set optimal settings directly.
-static void initGameConfig() {
+static void initGameConfig()
+{
   // Sound: enabled by default (Saturn has good audio capabilities)
   noSound = 1;
-  
+
   // Input: standard button configuration
   buttonReversed = 0;
-  
+
   // Display brightness: default value
   brightness = DEFAULT_BRIGHTNESS;
-  
+
   // Timing: no wait, standard framerate
   nowait = 0;
   accframe = 0;
@@ -303,9 +331,10 @@ int interval = INTERVAL_BASE;
 int tick = 0;
 static int pPrsd = 1;
 
-int main() {
+int main()
+{
   SRL::Logger::LogInfo("[MAIN] Noiz2sa startup (v%d)", VERSION_NUM);
-  
+
   int done = 0;
   long prvTickCount = 0;
   int i;
@@ -313,64 +342,89 @@ int main() {
   long nowTick;
   int frame;
 
+  // Initialize the SRL core (graphics/video setup?)
+  // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
+  SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
+
   SRL::Logger::LogDebug("[MAIN] Initializing game config");
   initGameConfig();
 
   SRL::Logger::LogDebug("[MAIN] Initializing degree utilities");
   initDegutil();
-  
+
   SRL::Logger::LogDebug("[MAIN] Initializing SDL");
   initSDL();
-  
-  if ( !noSound ) {
+
+  if (!noSound)
+  {
     SRL::Logger::LogDebug("[MAIN] Initializing sound");
     initSound();
-  } else {
+  }
+  else
+  {
     SRL::Logger::LogInfo("[MAIN] Sound disabled");
   }
-  
+
   initFirst();
   initTitle();
-  
+
   SRL::Logger::LogInfo("[MAIN] Main game loop starting");
 
-  while ( !done ) {
+  while (!done)
+  {
     int startBtn = 0, backBtn = 0;
     SDL_PollEvent(&event);
-    keys = (Uint8*)SDL_GetKeyState(NULL);
-    startBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_START);
-    backBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_BACK);
-    if ( keys[SDLK_ESCAPE] == SDL_PRESSED || event.type == SDL_QUIT || backBtn ) done = 1;
-    if ( keys[SDLK_p] == SDL_PRESSED || startBtn ) {
-      if ( !pPrsd ) {
-	if ( status == IN_GAME ) {
-	  status = PAUSE;
-	} else if ( status == PAUSE ) {
-	  status = IN_GAME;
-	}
+    keys = (Uint8 *)SDL_GetKeyState(NULL);
+    //startBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_START);
+    //backBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_BACK);
+    if (keys[SDLK_ESCAPE] == SDL_PRESSED || event.type == SDL_QUIT || backBtn)
+      done = 1;
+    if (keys[SDLK_p] == SDL_PRESSED || startBtn)
+    {
+      if (!pPrsd)
+      {
+        if (status == IN_GAME)
+        {
+          status = PAUSE;
+        }
+        else if (status == PAUSE)
+        {
+          status = IN_GAME;
+        }
       }
       pPrsd = 1;
-    } else {
+    }
+    else
+    {
       pPrsd = 0;
     }
 
     nowTick = SDL_GetTicks();
-    frame = (int)(nowTick-prvTickCount) / interval;
-    if ( frame <= 0 ) {
+    frame = (int)(nowTick - prvTickCount) / interval;
+    if (frame <= 0)
+    {
       frame = 1;
-      SDL_Delay(prvTickCount+interval-nowTick);
-      if ( accframe ) {
-	prvTickCount = SDL_GetTicks();
-      } else {
-	prvTickCount += interval;
+      SDL_Delay(prvTickCount + interval - nowTick);
+      if (accframe)
+      {
+        prvTickCount = SDL_GetTicks();
       }
-    } else if ( frame > 5 ) {
+      else
+      {
+        prvTickCount += interval;
+      }
+    }
+    else if (frame > 5)
+    {
       frame = 5;
       prvTickCount = nowTick;
-    } else {
-      prvTickCount += frame*interval;
     }
-    for ( i=0 ; i<frame ; i++ ) {
+    else
+    {
+      prvTickCount += frame * interval;
+    }
+    for (i = 0; i < frame; i++)
+    {
       move();
       tick++;
     }

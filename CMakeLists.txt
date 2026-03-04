@@ -74,8 +74,8 @@ set(SRL_MAX_TEXTURES "100" CACHE STRING "Maximum textures")
 
 # Debug configuration
 option(DEBUG "Enable debug mode" OFF)
-set(SRL_LOG_LEVEL "" CACHE STRING "Log level (0-4, empty = disabled)")
-set(SRL_LOG_OUTPUT "" CACHE STRING "Log output method")
+set(SRL_LOG_LEVEL "TRACE" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
+set(SRL_LOG_OUTPUT "EMULATOR" CACHE STRING "Log output method")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "80" CACHE STRING "Maximum debug log length")
 
@@ -167,29 +167,29 @@ add_compile_definitions(
 # ============================================================================
 
 set(as_flags )
+set(c_flags
+    -W
+    -m2
+    -c
+    -O2
+    -Wno-strict-aliasing
+    -std=c2x
+)
+
 set(cxx_flags
     -std=c++23
-    -O2 -g3 -m2 -c
-    -fpermissive
-    -Wno-conversion-null
+    -W
+    -m2
+    -c
+    -O2
     -Wno-strict-aliasing
-    -fno-lto -Wshadow -Wall -Wswitch -Wpadded
-    -fno-common -Wextra -Wno-narrowing -fno-web
-    -fno-builtin -funit-at-a-time -Wwrite-strings
-    -mno-fsrra
-    -Wno-padded
-    -Wno-unused-variable
-    -Wno-unused-parameter
-    -maccumulate-outgoing-args
-    -fomit-frame-pointer
-    -fno-rtti
+    -fpermissive
     -fno-exceptions
+    -fno-rtti
     -fno-unwind-tables
     -fno-asynchronous-unwind-tables
     -fno-threadsafe-statics
     -fno-use-cxa-atexit
-    -Wdeprecated-declarations   # FIXME!
-    -fno-permissive  # FIXME!
     )
 
 # Apply custom compiler flags from SRL configuration
@@ -220,14 +220,13 @@ set(SOURCES_NOIZ2SA
   src/SDL/SDL.cpp
   src/SDL/stdio_wrapper.cpp
   src/SDL/dirent_wrapper.cpp
-  src/syscalls.c
   )
 
 # SGL Preloader - MUST be linked first (before all other object files)
 # Following shared.mk: PRELOADERSOURCES = $(SGLDIR)/SRC/preloader.cxx
 set(SGL_PRELOADER_SOURCE "${SRL_SGL_DIR}/SRC/preloader.cxx")
 if(NOT EXISTS "${SGL_PRELOADER_SOURCE}")
-    message(WARNING "SGL preloader.cxx not found at: ${SGL_PRELOADER_SOURCE}")
+    message(FATAL_ERROR "SGL preloader.cxx not found at: ${SGL_PRELOADER_SOURCE}")
 endif()
 
 # System sources (following shared.mk SYSSOURCES pattern)
@@ -237,7 +236,7 @@ set(SGL_WORKAREA_SOURCE "${SRL_SGL_DIR}/SRC/workarea.c")
 if(EXISTS "${SGL_WORKAREA_SOURCE}")
     list(APPEND SOURCES_SGL_SYSTEM "${SGL_WORKAREA_SOURCE}")
 else()
-    message(WARNING "SGL workarea.c not found at: ${SGL_WORKAREA_SOURCE}")
+    message(FATAL_ERROR "SGL workarea.c not found at: ${SGL_WORKAREA_SOURCE}")
 endif()
 
 # Add TLSF allocator source (conditional, following shared.mk)
@@ -334,11 +333,10 @@ add_executable(${CD_NAME}.elf
 target_link_libraries(${CD_NAME}.elf PUBLIC bulletml_binary)
 srl_link_target(${CD_NAME}.elf)
 
-# Clean BuildDrop before linking
+# Clean BuildDrop before linking (redundant with clean-all, but ensures directory exists)
 add_custom_command(TARGET ${CD_NAME}.elf PRE_LINK
-    COMMAND ${CMAKE_COMMAND} -E rm -rf "${BUILD_DROP}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILD_DROP}"
-    COMMENT "Cleaning BuildDrop directory"
+    COMMENT "Ensuring BuildDrop directory exists"
 )
 
 # Set output directory to BUILD_DROP and map file path
@@ -375,13 +373,17 @@ target_compile_definitions(${CD_NAME}.elf PUBLIC
 )
 
 target_link_options(${CD_NAME}.elf PUBLIC
+    "SHELL:-m2"
+    "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
     "SHELL:-Xlinker -Map -Xlinker ${BUILD_MAP}"
-    "SHELL:-Xlinker --strip-debug"
-    "SHELL:-Xlinker -fno-lto"
-    "SHELL:-m2 -nostartfiles"
-    "SHELL:-T${SRL_SGL_DIR}/sgl.linker"
-    "SHELL:-lc -lgcc -lm"
+    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
 )
+
+# Match shared.mk GCC 14 behavior
+if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+    target_link_options(${CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+endif()
 
 # Apply custom linker flags from SRL configuration
 if(NOT SRL_CUSTOM_LDFLAGS STREQUAL "")
@@ -394,6 +396,15 @@ srl_link_target(${CD_NAME}.elf)
 # ============================================================================
 # Post-Build Steps: Asset Directories, Binary Conversion, Sound Driver
 # ============================================================================
+
+# Custom target for deep clean of build artifacts
+add_custom_target(clean-all
+    COMMAND ${CMAKE_COMMAND} -E echo "Cleaning all build artifacts..."
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_BINARY_DIR}/CMakeFiles/${CD_NAME}.elf.dir"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${BUILD_DROP}"
+    COMMENT "Deep cleaning build artifacts and output directory"
+    VERBATIM
+)
 
 # Create BUILD_DROP and asset directories at configure time
 file(MAKE_DIRECTORY "${BUILD_DROP}")

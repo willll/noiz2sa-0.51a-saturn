@@ -9,9 +9,13 @@
  *
  * @version $Revision: 1.3 $
  */
+
+#include <srl.hpp>  
 #include "SDL.h"
 #include "vector.h"
 #include "gamepad.h"
+
+using namespace SRL::Input;
 
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
@@ -44,7 +48,7 @@ extern Uint8 *keys;
 extern SDL_Joystick *stick;
 extern int buttonReversed;
 extern int brightness;
-extern SDL_GameController *gamepad;
+extern Digital *gamepad;
 
 void initSDL();
 void closeSDL();
