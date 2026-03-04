@@ -103,9 +103,6 @@ void initSound() {
     Mix_QuerySpec(&audio_rate, &audio_format, &audio_channels);
   }
 
-  // Initialize CDDA for music playback
-  SRL::Sound::Cdda::Initialize();
-
   useAudio = 1;
   loadSounds();
 }

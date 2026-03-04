@@ -1,10 +1,10 @@
 # Noiz2sa Music Tracklist for CDDA playback
 # Format: filename (relative to cd directory)
 # Track numbering: Track 1 = data (0.bin), Tracks 2-8 = audio tracks below
-01 STG00.OGG
-02 STG0.OGG
-03 STG1.OGG
-04 STG2.OGG
-05 STG3.OGG
-06 STG4.OGG
-07 STG5.OGG
+stg0.ogg
+stg1.ogg
+stg2.ogg
+stg3.ogg
+stg4.ogg
+stg5.ogg
+stg00.ogg
