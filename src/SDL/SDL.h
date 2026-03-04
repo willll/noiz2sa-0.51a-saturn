@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <limits.h>
 
 // SDL type stubs for Saturn noiz2sa - Hybrid approach
 // These stubs allow compilation now, can be replaced with SRL incrementally later
@@ -18,6 +19,7 @@ typedef int32_t Sint32;
 // Forward declarations
 struct SDL_Surface;
 struct SDL_PixelFormat;
+struct SDL_Joystick;
 
 // SDL Rect type (defined early to avoid forward declaration issues)
 typedef struct {
@@ -28,6 +30,9 @@ typedef struct {
 // SDL Color - now using SRL HighColor
 // Kept as typedef for compatibility but redirects to SRL::Types::HighColor
 #include <srl_color.hpp>
+
+// Saturn hardware timer support - included after SRL to avoid conflicts
+#include <sega_tim.h>
 
 // SDL PixelFormat
 typedef struct SDL_PixelFormat {
@@ -103,8 +108,28 @@ typedef struct {
 #define SDLK_KP6 275
 #define SDLK_KP4 276
 
+// SDL timing - Track elapsed time since SDL_Init for SDL_GetTicks()
+// Uses Saturn's Free-Running Timer (FRT) hardware for accurate microsecond timing
+static volatile uint32_t sdl_previouscount = 0;
+static volatile uint16_t sdl_previousmillis = 0;
+static volatile int sdl_initialized = 0;
+
 // SDL initialization and system
-static inline int SDL_Init(uint32_t flags) { (void)flags; return 0; }
+static inline int SDL_Init(uint32_t flags) { 
+    (void)flags;
+    
+    // Initialize the FRT with clock divider of 8
+    // This gives us microsecond-level precision
+    TIM_FRT_INIT(TIM_CKS_8);
+    TIM_FRT_SET_16(0);
+    
+    // Reset timing accumulators
+    sdl_previouscount = 0;
+    sdl_previousmillis = 0;
+    sdl_initialized = 1;
+    
+    return 0; 
+}
 static inline int SDL_InitSubSystem(uint32_t flags) { (void)flags; return 0; }
 static inline const char* SDL_GetError(void) { return "SDL stub"; }
 
@@ -157,9 +182,64 @@ static inline int SDL_FillRect(SDL_Surface* dst, SDL_Rect* dstrect, uint32_t col
 
 static inline int SDL_Flip(SDL_Surface* screen) { (void)screen; return 0; }
 
-// SDL event and input functions
-static inline uint32_t SDL_GetTicks(void) { return 0; }
-static inline void SDL_Delay(uint32_t ms) { (void)ms; }
+// SDL event and input functions - Saturn implementation
+// Hardware timer-based timing using the FRT (Free-Running Timer)
+
+static inline uint32_t SDL_GetTicks(void) {
+    // Return the number of milliseconds since SDL_Init() was called
+    // Uses Saturn's FRT hardware timer for accurate microsecond timing
+    // Based on SDL_Saturn implementation by BERO
+    
+    if (!sdl_initialized) {
+        return 0;
+    }
+    
+    // Read the current FRT counter value and convert to microseconds
+    uint32_t tmp = TIM_FRT_CNT_TO_MCR(TIM_FRT_GET_16()) + sdl_previousmillis;
+    
+    // Convert microseconds to milliseconds
+    uint32_t tmp2 = tmp / 1000;
+    
+    // Accumulate whole milliseconds
+    sdl_previouscount += tmp2;
+    
+    // Reset the counter to prevent overflow
+    TIM_FRT_SET_16(0);
+    
+    // Keep the remaining microseconds for next call
+    sdl_previousmillis = (tmp - (tmp2 * 1000));
+    
+    return sdl_previouscount;
+}
+
+static inline void SDL_Delay(uint32_t ms) {
+    // Delay for the specified number of milliseconds
+    // Uses Saturn's FRT hardware timer for accurate timing
+    // Based on SDL_Saturn implementation by BERO
+    
+    if (ms == 0) return;
+    
+    // Initialize FRT with clock divider of 8
+    TIM_FRT_INIT(TIM_CKS_8);
+    
+    // Convert milliseconds to FRT counter value (microseconds -> counter)
+    uint32_t count = TIM_FRT_MCR_TO_CNT(ms * 1000);
+    
+    // Handle counter values larger than 16-bit max
+    uint16_t trucount = count / USHRT_MAX;
+    uint16_t remaining = count - (trucount * USHRT_MAX);
+    
+    // Wait for full 16-bit cycles
+    while (trucount) {
+        TIM_FRT_SET_16(0);
+        TIM_FRT_DELAY_16(USHRT_MAX);
+        --trucount;
+    }
+    
+    // Wait for remaining count
+    TIM_FRT_SET_16(0);
+    while (remaining > TIM_FRT_GET_16());
+}
 
 // SDL joystick/controller functions
 typedef int SDL_bool;
