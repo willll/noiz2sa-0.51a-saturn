@@ -235,7 +235,7 @@ void initSDL() {
   //if (joystickMode == 1) {
     //stick = SDL_JoystickOpen(0);
     //SDL_GameControllerAddMappingsFromFile(SHARE_LOC "gamecontrollerdb.txt", 1);
-    gamepad = new Digital(0);
+    
   //}
 
   //SDL_WM_GrabInput(SDL_GRAB_ON);
@@ -566,35 +566,23 @@ int drawNumCenter(int n, int x ,int y, int s, int c1, int c2) {
 #define JOYSTICK_AXIS 16384
 
 int getPadState() {
- // int x = 0, y = 0, dpup = 0, dpdown = 0, dpleft = 0, dpright = 0;
   int pad = 0;
-  // if ( stick != nullptr ) {
-  //   x = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_LEFTX);
-  //   if (x == 0) {
-  //     x = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_RIGHTX);
-  //   }
-  //   y = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_LEFTY);
-  //   if (y == 0) {
-  //     y = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_RIGHTY);
-  //   }
-
-  //   dpup = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_DPAD_UP);
-  //   dpdown = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
-  //   dpleft = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-  //   dpright = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-  // }
-  // if ( keys[SDLK_RIGHT] == SDL_PRESSED || keys[SDLK_KP6] == SDL_PRESSED || x > JOYSTICK_AXIS || dpright ) {
-  //   pad |= PAD_RIGHT;
-  // }
-  // if ( keys[SDLK_LEFT] == SDL_PRESSED || keys[SDLK_KP4] == SDL_PRESSED || x < -JOYSTICK_AXIS || dpleft ) {
-  //   pad |= PAD_LEFT;
-  // }
-  // if ( keys[SDLK_DOWN] == SDL_PRESSED || keys[SDLK_KP2] == SDL_PRESSED || y > JOYSTICK_AXIS || dpdown ) {
-  //   pad |= PAD_DOWN;
-  // }
-  // if ( keys[SDLK_UP] == SDL_PRESSED ||  keys[SDLK_KP8] == SDL_PRESSED || y < -JOYSTICK_AXIS || dpup ) {
-  //   pad |= PAD_UP;
-  // }
+  
+  if (gamepad && gamepad->IsConnected()) {
+    if (gamepad->IsHeld(SRL::Input::Digital::Button::Right)) {
+      pad |= PAD_RIGHT;
+    }
+    if (gamepad->IsHeld(SRL::Input::Digital::Button::Left)) {
+      pad |= PAD_LEFT;
+    }
+    if (gamepad->IsHeld(SRL::Input::Digital::Button::Down)) {
+      pad |= PAD_DOWN;
+    }
+    if (gamepad->IsHeld(SRL::Input::Digital::Button::Up)) {
+      pad |= PAD_UP;
+    }
+  }
+  
   return pad;
 }
 
@@ -602,29 +590,27 @@ int buttonReversed = 0;
 
 int getButtonState() {
   int btn = 0;
-  // int fireBtn1 = 0, fireBtn2 = 0, slowBtn1 = 0, slowBtn2 = 0, slowBtn3 = 0, slowBtn4 = 0;
-  // if ( stick != nullptr ) {
-  //   fireBtn1 = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_A);
-  //   fireBtn2 = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_B);
+  int fireBtn1 = 0, fireBtn2 = 0, slowBtn1 = 0, slowBtn2 = 0;
+  if ( gamepad->IsConnected() ) {
+    fireBtn1 = gamepad->IsHeld(Digital::Button::A);
+    fireBtn2 = gamepad->IsHeld(Digital::Button::B);
 
-  //   slowBtn1 = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-  //   slowBtn2 = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
-  //   slowBtn3 = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT);
-  //   slowBtn4 = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_TRIGGERLEFT);
-  // }
-  // if ( keys[SDLK_z] == SDL_PRESSED || fireBtn1 || fireBtn2 ) {
-  //   if ( !buttonReversed ) {
-  //     btn |= PAD_BUTTON1;
-  //   } else {
-  //     btn |= PAD_BUTTON2;
-  //   }
-  // }
-  // if ( keys[SDLK_x] == SDL_PRESSED || slowBtn1 || slowBtn2 || slowBtn3 > JOYSTICK_AXIS || slowBtn4 > JOYSTICK_AXIS ) {
-  //   if ( !buttonReversed ) {
-  //     btn |= PAD_BUTTON2;
-  //   } else {
-  //     btn |= PAD_BUTTON1;
-  //   }
-  // }
+    slowBtn1 = gamepad->IsHeld(Digital::Button::R);
+    slowBtn2 = gamepad->IsHeld(Digital::Button::L);
+  }
+  if ( fireBtn1 || fireBtn2 ) {
+    if ( !buttonReversed ) {
+      btn |= PAD_BUTTON1;
+    } else {
+      btn |= PAD_BUTTON2;
+    }
+  }
+  if ( slowBtn1 || slowBtn2 ) {
+    if ( !buttonReversed ) {
+      btn |= PAD_BUTTON2;
+    } else {
+      btn |= PAD_BUTTON1;
+    }
+  }
   return btn;
 }
