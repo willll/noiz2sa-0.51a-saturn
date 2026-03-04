@@ -41,7 +41,6 @@ static int pitch, ppitch;
 
 // Handle TGA images in ISO 8:3 format
 #define SPRITE_NUM 7
-#define TGA_IMG_PATH "IMAGES/"
 
 static SDL_Surface *sprite[SPRITE_NUM];
 static const char *spriteFile[SPRITE_NUM] = {
@@ -63,25 +62,18 @@ static void loadSprites() {
   color[0].Red = 100 >> 3; color[0].Green = 0; color[0].Blue = 0;
   SDL_SetColors(video, color, 0, 1);
   
+  // Navigate to IMAGES directory on CD first
+  SRL::Cd::ChangeDir("IMAGES");
+  
   for ( i=0 ; i<SPRITE_NUM ; i++ ) {
-    // Try loading from ISO cd/data/images path first
-    strcpy(name, TGA_IMG_PATH);
-    strcat(name, spriteFile[i]);
+    // Load TGA file directly from IMAGES directory (already changed via ChangeDir above)
+    strcpy(name, spriteFile[i]);
     
     // Load TGA file using SRL bitmap loader  
     tga = new SRL::Bitmap::TGA(name);
     
     // Get bitmap info to check if loaded successfully
     SRL::Bitmap::BitmapInfo info = tga->GetInfo();
-    
-    if ( info.Width == 0 || info.Height == 0 || tga->GetData() == nullptr ) {
-      // Fallback to original path if available
-      strcpy(name, TGA_IMG_PATH);
-      strcat(name, spriteFile[i]);
-      delete tga;
-      tga = new SRL::Bitmap::TGA(name);
-      info = tga->GetInfo();
-    }
     
     if ( info.Width == 0 || tga->GetData() == nullptr ) {
       SRL::Logger::LogFatal("Unable to load TGA sprite: %s", spriteFile[i]);
