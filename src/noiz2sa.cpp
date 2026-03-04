@@ -368,18 +368,14 @@ int main()
   initFirst();
   initTitle();
 
+  initGamepad();
+  SRL::Logger::LogDebug("[MAIN] Gamepad initialized");
+
   SRL::Logger::LogInfo("[MAIN] Main game loop starting");
 
   while (!done)
   {
-    int startBtn = 0, backBtn = 0;
-    SDL_PollEvent(&event);
-    keys = (Uint8 *)SDL_GetKeyState(NULL);
-    //startBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_START);
-    //backBtn = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_BACK);
-    if (keys[SDLK_ESCAPE] == SDL_PRESSED || event.type == SDL_QUIT || backBtn)
-      done = 1;
-    if (keys[SDLK_p] == SDL_PRESSED || startBtn)
+    if (gamepad && gamepad->IsConnected() && gamepad->WasPressed(SRL::Input::Digital::Button::START))
     {
       if (!pPrsd)
       {
