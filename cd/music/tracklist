@@ -1,7 +1,10 @@
-/saturn/noiz2sa-0.51a-saturn/cd/music/stg00.ogg
-/saturn/noiz2sa-0.51a-saturn/cd/music/stg0.ogg
-/saturn/noiz2sa-0.51a-saturn/cd/music/stg1.ogg
-/saturn/noiz2sa-0.51a-saturn/cd/music/stg2.ogg
-/saturn/noiz2sa-0.51a-saturn/cd/music/stg3.ogg
-/saturn/noiz2sa-0.51a-saturn/cd/music/stg4.ogg
-/saturn/noiz2sa-0.51a-saturn/cd/music/stg5.ogg
+# Noiz2sa Music Tracklist for CDDA playback
+# Format: filename (relative to cd directory)
+# Track numbering: Track 1 = data (0.bin), Tracks 2-8 = audio tracks below
+01 STG00.OGG
+02 STG0.OGG
+03 STG1.OGG
+04 STG2.OGG
+05 STG3.OGG
+06 STG4.OGG
+07 STG5.OGG

@@ -5,7 +5,7 @@
  */
 
 /**
- * BGM/SE manager(using SDL_mixer).
+ * BGM/SE manager(using SDL_mixer for SFX and CDDA for music).
  *
  * @version $Revision: 1.4 $
  */
@@ -13,6 +13,8 @@
 #include <srl_memory.hpp>  // for malloc/free
 #include <srl_log.hpp>     // for logging
 #include <srl_string.hpp>  // for string functions
+#include <srl_cd.hpp>      // for CD file access
+#include <srl_sound.hpp>   // for CDDA support
 
 #include "SDL_mixer.h"
 #include "soundmanager.h"
@@ -20,17 +22,24 @@
 static int useAudio = 0;
 
 #define MUSIC_NUM 7
-#define SHARE_LOC "/usr/share/games/noiz2sa/"
 
-static const char *musicFileName[MUSIC_NUM] = {
-  "stg0.ogg", "stg1.ogg", "stg2.ogg", "stg3.ogg", "stg4.ogg", "stg5.ogg", "stg00.ogg",
+// Music track mapping
+// Track numbering: Track 1 = data, Tracks 2+ = audio tracks from tracklist
+// stg0.ogg = Track 2, stg1.ogg = Track 3, ..., stg00.ogg = Track 8
+const uint8_t musicTrackMap[MUSIC_NUM] = {
+  2,  // stg0 -> Track 2
+  3,  // stg1 -> Track 3
+  4,  // stg2 -> Track 4
+  5,  // stg3 -> Track 5
+  6,  // stg4 -> Track 6
+  7,  // stg5 -> Track 7
+  8   // stg00 -> Track 8
 };
-static Mix_Music *music[MUSIC_NUM];
 
 #define CHUNK_NUM 7
 
 static const char *chunkFileName[CHUNK_NUM] = {
-  "shot.wav", "hit.wav", "foedst.wav", "bossdst.wav", "shipdst.wav", "bonus.wav", "extend.wav",
+  "SHOT.WAV", "HIT.WAV", "FOEDES.WAV", "BOSDES.WAV", "SHIPDS.WAV", "BONUS.WAV", "EXTEND.WAV",
 };
 static Mix_Chunk *chunk[CHUNK_NUM];
 static int chunkFlag[CHUNK_NUM];
@@ -38,14 +47,9 @@ static int chunkFlag[CHUNK_NUM];
 void closeSound() {
   int i;
   if ( !useAudio ) return;
-  if ( Mix_PlayingMusic() ) {
-    Mix_HaltMusic();
-  }
-  for ( i=0 ; i<MUSIC_NUM ; i++ ) {
-    if ( music[i] ) {
-      Mix_FreeMusic(music[i]);
-    }
-  }
+  // Stop CDDA playback
+  SRL::Sound::Cdda::StopPause();
+  // Clean up sound effects
   for ( i=0 ; i<CHUNK_NUM ; i++ ) {
     if ( chunk[i] ) {
       Mix_FreeChunk(chunk[i]);
@@ -61,20 +65,11 @@ static void loadSounds() {
   int i;
   char name[56];
 
-  for ( i=0 ; i<MUSIC_NUM ; i++ ) {
-    strcpy(name, SHARE_LOC);
-    strcat(name, "sounds/");
-    strcat(name, musicFileName[i]);
-    if ( nullptr == (music[i] = Mix_LoadMUS(name)) ) {
-      SRL::Logger::LogWarning("Couldn't load: %s", name);
-      useAudio = 0;
-      return;
-    }
-  }
+  // Change to SOUNDS directory on CD
+  SRL::Cd::ChangeDir("SOUNDS");
+
   for ( i=0 ; i<CHUNK_NUM ; i++ ) {
-    strcpy(name, SHARE_LOC);
-    strcat(name, "sounds/");
-    strcat(name, chunkFileName[i]);
+    strcpy(name, chunkFileName[i]);
     if ( nullptr == (chunk[i] = Mix_LoadWAV(name)) ) {
       SRL::Logger::LogWarning("Couldn't load: %s", name);
       useAudio = 0;
@@ -108,6 +103,9 @@ void initSound() {
     Mix_QuerySpec(&audio_rate, &audio_format, &audio_channels);
   }
 
+  // Initialize CDDA for music playback
+  SRL::Sound::Cdda::Initialize();
+
   useAudio = 1;
   loadSounds();
 }
@@ -116,19 +114,20 @@ void initSound() {
 
 void playMusic(int idx) {
   if ( !useAudio ) return;
-  Mix_PlayMusic(music[idx], -1);
+  if (idx >= 0 && idx < MUSIC_NUM) {
+    SRL::Sound::Cdda::PlaySingle(musicTrackMap[idx], true);
+  }
 }
 
 void fadeMusic() {
   if ( !useAudio ) return;
-  Mix_FadeOutMusic(1280);
+  // CDDA doesn't support fade, so just stop
+  SRL::Sound::Cdda::StopPause();
 }
 
 void stopMusic() {
   if ( !useAudio ) return;
-  if ( Mix_PlayingMusic() ) {
-    Mix_HaltMusic();
-  }
+  SRL::Sound::Cdda::StopPause();
 }
 
 void playChunk(int idx) {
