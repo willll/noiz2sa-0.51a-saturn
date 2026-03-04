@@ -47,14 +47,6 @@ int SDL_GameControllerInit(void) {
     return 0;
 }
 
-// Check if joystick is a game controller
-SDL_bool SDL_IsGameController(int joystick_index) {
-    // On Saturn, assume all joysticks are game controllers
-    if (joystick_index < 0 || joystick_index >= SDL_NumJoysticks()) {
-        return SDL_FALSE;
-    }
-    return SDL_TRUE;
-}
 
 // Get button state using SRL Digital input
 Uint8 SDL_GameControllerGetButton(SRL::Input::Digital *gamecontroller, SDL_GameControllerButton button) {
@@ -91,14 +83,6 @@ Uint8 SDL_GameControllerGetButton(SRL::Input::Digital *gamecontroller, SDL_GameC
         default:
             return 0;
     }
-}
-
-// Get axis state - Saturn doesn't have analog sticks, return 0
-Sint16 SDL_GameControllerGetAxis(SRL::Input::Digital *gamecontroller, SDL_GameControllerAxis axis) {
-    // Saturn digital pad has no analog axes
-    (void)gamecontroller;
-    (void)axis;
-    return 0;
 }
 
 
