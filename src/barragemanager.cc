@@ -60,10 +60,10 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
       continue;
     }
     
-    // Check if it's an .xml file
+    // Check if it's a .blb file
     const char* ext = strrchr((const char*)fname, '.');
-    if (ext == nullptr || strcmp(ext, ".xml") != 0) {
-      continue; // Skip non-.xml files
+    if (ext == nullptr || strcmp(ext, ".BLB") != 0) {
+      continue; // Skip non-.blb files
     }
     
     // Build the file path
