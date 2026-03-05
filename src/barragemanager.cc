@@ -36,20 +36,24 @@ static int barragePatternNum[BARRAGE_TYPE_NUM];
 static Barrage *barrage[BARRAGE_MAX];
 
 static const char *BARRAGE_DIR_NAME[] = {
-  "zako", "middle", "boss"
+  "ZAKO", "MIDDLE", "BOSS"
 };
 
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   int i = 0;
   char fileName[256];
 
+  SRL::Logger::LogDebug("[BARRAGE] Reading BulletML files from directory: %s", dirPath);
+
   // Change to the specified directory on CD
   int32_t fileCount = SRL::Cd::ChangeDir(dirPath);
   
   if (fileCount < 0) {
-    SRL::Logger::LogFatal("Can't open directory: %s (error code: %d)", dirPath, fileCount);
+    SRL::Logger::LogFatal("[BARRAGE] Can't open directory: %s (error code: %d)", dirPath, fileCount);
     SRL::System::Exit(1);
   }
+  
+  SRL::Logger::LogDebug("[BARRAGE] Found %d files in directory", fileCount);
 
   // Iterate through files in the directory using GFS API
   for (int32_t j = 0; j < fileCount && i < BARRAGE_PATTERN_MAX; j++) {
@@ -57,12 +61,16 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     int8_t* fname = GFS_IdToName(j);
     
     if (fname == nullptr) {
+      SRL::Logger::LogTrace("[BARRAGE] File ID %d returned null name", j);
       continue;
     }
+    
+    SRL::Logger::LogTrace("[BARRAGE] Processing file: %s", (const char*)fname);
     
     // Check if it's a .blb file
     const char* ext = strrchr((const char*)fname, '.');
     if (ext == nullptr || strcmp(ext, ".BLB") != 0) {
+      SRL::Logger::LogTrace("[BARRAGE] Skipping non-.blb file: %s", (const char*)fname);
       continue; // Skip non-.blb files
     }
     
@@ -71,33 +79,45 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     strcat(fileName, "/");
     strcat(fileName, (const char*)fname);
     
+    SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s", fileName);
     brg[i].bulletml = new BulletMLParserTinyXML(fileName);
     brg[i].bulletml->build();
     i++;
-    SRL::Logger::LogInfo(fileName);
+    SRL::Logger::LogInfo("[BARRAGE] Loaded: %s", fileName);
   }
   
+  SRL::Logger::LogDebug("[BARRAGE] Successfully loaded %d BulletML patterns from %s", i, dirPath);
   return i;
 }
 
 static unsigned int rnd;
 
 void initBarragemanager() {
+  SRL::Logger::LogDebug("[BARRAGE] Initializing barrage manager");
+  
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
+    SRL::Logger::LogDebug("[BARRAGE] Loading barrage type %d: %s", i, BARRAGE_DIR_NAME[i]);
     barragePatternNum[i] = readBulletMLFiles(BARRAGE_DIR_NAME[i], barragePattern[i]);
+    SRL::Logger::LogInfo("[BARRAGE] Type %d: Loaded %d patterns", i, barragePatternNum[i]);
     SRL::Logger::LogInfo("--------");
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
       barragePattern[i][j].type = i;
     }
   }
+  
+  SRL::Logger::LogDebug("[BARRAGE] Barrage manager initialization complete");
 }
 
 void closeBarragemanager() {
+  SRL::Logger::LogDebug("[BARRAGE] Closing barrage manager");
+  
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
       delete barragePattern[i][j].bulletml;
     }
   }
+  
+  SRL::Logger::LogDebug("[BARRAGE] Barrage manager closed");
 }
 
 int scene;
@@ -107,6 +127,8 @@ static float level, levelInc;
 
 void initBarrages(int seed, float startLevel, float li) {
   int n1, n2, rn;
+
+  SRL::Logger::LogDebug("[BARRAGE] Initializing barrage sequences: seed=%d, startLevel=%.2f, levelInc=%.2f", seed, startLevel, li);
 
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
@@ -119,6 +141,7 @@ void initBarrages(int seed, float startLevel, float li) {
     rnd = seed;
     endless = 0;
     insane = 0;
+    SRL::Logger::LogDebug("[BARRAGE] Seeded mode: seed=%d (endless=false, insane=false)", seed);
   } else {
     rnd = (unsigned int)SDL_GetTicks();
     endless = 1;
@@ -126,6 +149,7 @@ void initBarrages(int seed, float startLevel, float li) {
     else insane = 0;
     if ( seed == -3 ) processSpeedDownBulletsNum = EASY_SPEED_DOWN_BULLETS_NUM;
     else if ( seed == -4 ) processSpeedDownBulletsNum = HARD_SPEED_DOWN_BULLETS_NUM;
+    SRL::Logger::LogDebug("[BARRAGE] Random mode: insane=%d, speedDownBullets=%d", insane, processSpeedDownBulletsNum);
   }
   // Shuffle.
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
@@ -147,6 +171,8 @@ void initBarrages(int seed, float startLevel, float li) {
   sceneCnt = 0;
   level = startLevel;
   levelInc = li;
+  
+  SRL::Logger::LogDebug("[BARRAGE] Barrage sequences initialized: scene=%d, sceneCnt=%d, level=%.2f", scene, sceneCnt, level);
 }
 
 /**
@@ -179,6 +205,8 @@ static int quickAppType;
 void setBarrages(float level, int bm, int midMode) {
   int bpn = 0, bn, i;
   int barrageMax, addFrqLoop = 0;
+
+  SRL::Logger::LogDebug("[BARRAGE] Setting barrage pattern: level=%.2f, bossMode=%d, midMode=%d", level, bm, midMode);
 
   barrageNum = 0;
   barrageMax = nextRandInt(&rnd)%3+4;
@@ -237,6 +265,7 @@ void setBarrages(float level, int bm, int midMode) {
   pay = (nextRandInt(&rnd)%(SCAN_HEIGHT_8/6) + (SCAN_HEIGHT_8/10));
 
   scene++;
+  SRL::Logger::LogDebug("[BARRAGE] Barrage pattern set for scene %d: %d patterns, position=(%d,%d)", scene, barrageNum, pax, pay);
 }
 
 #define SCENE_TERM 1000
@@ -259,6 +288,8 @@ void addBullets() {
   // Scene time control.
   sceneCnt--;
   if ( sceneCnt < 0 ) {
+    SRL::Logger::LogDebug("[BARRAGE] Scene transition: current scene=%d, level=%.2f", scene, level);
+    
     if ( !insane ) clearFoes();
     if ( scene >= 0 && !endless ) setClearScore();
     if ( scene%10 == 8 ) {
@@ -311,6 +342,8 @@ void addBullets() {
 }
 
 void bossDestroied() {
+  SRL::Logger::LogDebug("[BARRAGE] Boss defeated at scene %d, level=%.2f", scene, level);
+  
   if ( !endless ) {
     setClearScore();
     addLeftBonus();
@@ -327,13 +360,17 @@ void addBossBullet() {
   Foe *bl;
   bossBullet = nullptr;
 
+  SRL::Logger::LogDebug("[BARRAGE] Adding boss bullet patterns, count=%d", barrageNum);
+
   for ( int i=0 ; i<barrageNum ; i++ ) {
     if ( barrage[i]->type != 2 ) continue;
     if ( bossBullet == nullptr ) {
+      SRL::Logger::LogDebug("[BARRAGE] Creating primary boss with pattern index %d, rank=%.2f", i, barrage[i]->rank);
       bl = addFoe(SCAN_WIDTH_8/2, SCAN_HEIGHT_8/5, barrage[i]->rank, 512, 0,
 		  BOSS_TYPE, BOSS_SHIELD, barrage[i]->bulletml);
       bossBullet = bl;
     } else {
+      SRL::Logger::LogDebug("[BARRAGE] Adding additional boss pattern index %d, rank=%.2f", i, barrage[i]->rank);
       bl = addFoeBossActiveBullet(SCAN_WIDTH_8/2, SCAN_HEIGHT_8/5, barrage[i]->rank, 512, 0,
 				  barrage[i]->bulletml);
     }
