@@ -55,6 +55,7 @@ static void initFirst()
   SRL::Logger::LogDebug("[INIT] Barrage manager initialized");
 
   initAttractManager();
+  SRL::Logger::LogDebug("[INIT] Attract manager initialized");
   SRL::Logger::LogInfo("[INIT] First initialization complete");
 }
 
@@ -196,6 +197,25 @@ void initStageClear()
 
 static void move()
 {
+  // Periodic debug logging to track game state execution
+  // Log every 180 frames (~3 seconds at 60Hz) to avoid spam
+  static int move_frame_counter = 0;
+  move_frame_counter++;
+  
+  if ((move_frame_counter % 180) == 0)
+  {
+    const char* state_name = "UNKNOWN";
+    switch (status)
+    {
+      case TITLE: state_name = "TITLE"; break;
+      case IN_GAME: state_name = "IN_GAME"; break;
+      case GAMEOVER: state_name = "GAMEOVER"; break;
+      case STAGE_CLEAR: state_name = "STAGE_CLEAR"; break;
+      case PAUSE: state_name = "PAUSE"; break;
+    }
+    SRL::Logger::LogDebug("[MOVE] Processing state: %s (frame: %d)", state_name, move_frame_counter);
+  }
+  
   switch (status)
   {
   case TITLE:
@@ -237,6 +257,25 @@ static void move()
 
 static void draw()
 {
+  // Periodic debug logging to track rendering execution
+  // Log every 180 frames (~3 seconds at 60Hz) to avoid spam
+  static int draw_frame_counter = 0;
+  draw_frame_counter++;
+  
+  if ((draw_frame_counter % 180) == 0)
+  {
+    const char* state_name = "UNKNOWN";
+    switch (status)
+    {
+      case TITLE: state_name = "TITLE"; break;
+      case IN_GAME: state_name = "IN_GAME"; break;
+      case GAMEOVER: state_name = "GAMEOVER"; break;
+      case STAGE_CLEAR: state_name = "STAGE_CLEAR"; break;
+      case PAUSE: state_name = "PAUSE"; break;
+    }
+    SRL::Logger::LogDebug("[DRAW] Rendering state: %s (frame: %d)", state_name, draw_frame_counter);
+  }
+  
   switch (status)
   {
   case TITLE:
@@ -437,6 +476,9 @@ int main()
     draw();
     flipScreen();
     
+    // Refresh screen
+    SRL::Core::Synchronize();
+
     // Periodic logging for frame rate monitoring
     if ((tick % 300) == 0)  // Every ~5 seconds at 60Hz
     {
