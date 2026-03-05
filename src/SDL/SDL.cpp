@@ -4,10 +4,10 @@
 #include "SDL.h"
 
 // Global stub surfaces that can be reused
-SDL_Surface global_screen = {0};
-SDL_PixelFormat global_format = {0};
+//SDL_Surface global_screen = {0};
+//SDL_PixelFormat global_format = {0};
 
 // SDL stub initialization
-void __attribute__((constructor)) sdl_stub_init() {
-    global_screen.format = &global_format;
-}
+// void __attribute__((constructor)) sdl_stub_init() {
+//     global_screen.format = &global_format;
+// }
