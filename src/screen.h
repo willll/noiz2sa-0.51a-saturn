@@ -17,15 +17,15 @@
 
 using namespace SRL::Input;
 
-#define SCREEN_WIDTH 640
-#define SCREEN_HEIGHT 480
+#define SCREEN_WIDTH 320
+#define SCREEN_HEIGHT 240
 #define LAYER_WIDTH 320
-#define LAYER_HEIGHT 480
+#define LAYER_HEIGHT 240
 #define PANEL_WIDTH 160
-#define PANEL_HEIGHT 480
+#define PANEL_HEIGHT 240
 
 #define SCAN_WIDTH 320
-#define SCAN_HEIGHT 480
+#define SCAN_HEIGHT 240
 #define SCAN_WIDTH_8 (SCAN_WIDTH<<8)
 #define SCAN_HEIGHT_8 (SCAN_HEIGHT<<8)
 
@@ -65,7 +65,7 @@ void drawBoxPanel(int x, int y, int width, int height,
 int drawNum(int n, int x ,int y, int s, int c1, int c2);
 int drawNumRight(int n, int x ,int y, int s, int c1, int c2);
 int drawNumCenter(int n, int x ,int y, int s, int c1, int c2);
-void drawSprite(int n, int x, int y);
+void drawSprite(const int n, const int x, const int y);
 
 int getPadState();
 int getButtonState();
