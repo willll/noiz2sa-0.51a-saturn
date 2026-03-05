@@ -65,7 +65,7 @@ void drawBoxPanel(int x, int y, int width, int height,
 int drawNum(int n, int x ,int y, int s, int c1, int c2);
 int drawNumRight(int n, int x ,int y, int s, int c1, int c2);
 int drawNumCenter(int n, int x ,int y, int s, int c1, int c2);
-void drawSprite(const int n, const int x, const int y);
+void drawSprite(const uint8_t n, const int16_t x, const int16_t y);
 
 int getPadState();
 int getButtonState();
