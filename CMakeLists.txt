@@ -208,6 +208,7 @@ set(SOURCES_NOIZ2SA
   src/bonus.cpp
   src/frag.cpp
   src/clrtbl.cpp
+  src/palette.cpp
   src/letterrender.cpp
   src/gamepad.cpp
   src/rand.cpp
@@ -218,8 +219,6 @@ set(SOURCES_NOIZ2SA
   src/foecommand.cc
   src/barragemanager.cc
   src/SDL/SDL.cpp
-  src/SDL/stdio_wrapper.cpp
-  src/SDL/dirent_wrapper.cpp
   )
 
 # SGL Preloader - MUST be linked first (before all other object files)
