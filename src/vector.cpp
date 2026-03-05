@@ -16,7 +16,7 @@ using SaturnMath::Types::Vector2D;
 using SaturnMath::Types::Fxp;
 
 /* Helper: convert int to Fxp */
-static inline Fxp intToFxp(int val) {
+static inline Fxp intToFxp(const int16_t val) {
   return Fxp::Convert(val);
 }
 
@@ -33,7 +33,7 @@ static inline Vector vec2DToVec(const Vector2D &v) {
 float vctInnerProduct(Vector *v1, Vector *v2) {
   Vector2D v1_f = vecToVec2D(v1);
   Vector2D v2_f = vecToVec2D(v2);
-  return v1_f.Dot(v2_f).template As<float>();
+  return v1_f.Dot(v2_f).As<float>();
 }
 
 Vector vctGetElement(Vector *v1, Vector *v2) {
