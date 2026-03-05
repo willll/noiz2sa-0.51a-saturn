@@ -10,7 +10,8 @@
  * @version $Revision: 1.1.1.1 $
  */
 #define DIV 1024
-#define TAN_TABLE_SIZE 1024
+const int16_t TAN_TABLE_SIZE = 1024;
+const int16_t SIN_TABLE_SIZE = 256;
 #define SC_TABLE_SIZE 1024
 
 extern int sctbl[];

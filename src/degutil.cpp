@@ -22,7 +22,7 @@ int sctbl[SC_TABLE_SIZE+SC_TABLE_SIZE/4];
 void initDegutil() {
   int i, d = 0;
   const Fxp tanScale = Fxp::Convert(TAN_TABLE_SIZE);
-  const Fxp sinScale = Fxp::Convert(256);
+  const Fxp sinScale = Fxp::Convert(SIN_TABLE_SIZE);
 
   for ( i=0 ; i<TAN_TABLE_SIZE ; i++ ) {
     while ( d < (DIV/8) ) {
