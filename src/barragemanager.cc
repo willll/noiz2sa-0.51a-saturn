@@ -9,12 +9,6 @@
  *
  * @version $Revision: 1.4 $
  */
-extern "C" {
-#include <sys/types.h>
-#include <dirent.h>
-#include <string.h>
-}
-
 #include "SDL.h"
 #include "noiz2sa.h"
 #include "degutil.h"
@@ -29,9 +23,11 @@ extern "C" {
 #include "foe.h"
 #include <srl_log.hpp>
 #include <srl_system.hpp>
+#include <srl_cd.hpp>
+#include <srl_string.hpp>
+#include <sega_gfs.h>
 
 #define BARRAGE_PATTERN_MAX 32
-#define SHARE_LOC "/usr/share/games/noiz2sa/"
 
 static Barrage barragePattern[BARRAGE_TYPE_NUM][BARRAGE_PATTERN_MAX];
 static Barrage *barrageQueue[BARRAGE_TYPE_NUM][BARRAGE_PATTERN_MAX];
@@ -44,29 +40,43 @@ static const char *BARRAGE_DIR_NAME[] = {
 };
 
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
-  DIR *dp;
-  struct dirent *dir;
   int i = 0;
   char fileName[256];
-  char fullDirPath [128];
 
-  strcpy(fullDirPath, SHARE_LOC);
-  strcat(fullDirPath, dirPath);
-
-  if ( (dp = opendir(fullDirPath)) == nullptr ) {
-    SRL::Logger::LogFatal("Can't open directory: %s", dirPath);
+  // Change to the specified directory on CD
+  int32_t fileCount = SRL::Cd::ChangeDir(dirPath);
+  
+  if (fileCount < 0) {
+    SRL::Logger::LogFatal("Can't open directory: %s (error code: %d)", dirPath, fileCount);
     SRL::System::Exit(1);
   }
-  while ((dir = readdir(dp)) != nullptr) {
-    if ( strcmp(strrchr(dir->d_name, '.'), ".xml") != 0 ) continue; // Read .xml files.
-    strcpy(fileName, fullDirPath);
+
+  // Iterate through files in the directory using GFS API
+  for (int32_t j = 0; j < fileCount && i < BARRAGE_PATTERN_MAX; j++) {
+    // Get the filename from the file ID using GFS
+    int8_t* fname = GFS_IdToName(j);
+    
+    if (fname == nullptr) {
+      continue;
+    }
+    
+    // Check if it's an .xml file
+    const char* ext = strrchr((const char*)fname, '.');
+    if (ext == nullptr || strcmp(ext, ".xml") != 0) {
+      continue; // Skip non-.xml files
+    }
+    
+    // Build the file path
+    strcpy(fileName, dirPath);
     strcat(fileName, "/");
-    strcat(fileName, dir->d_name);
+    strcat(fileName, (const char*)fname);
+    
     brg[i].bulletml = new BulletMLParserTinyXML(fileName);
-    brg[i].bulletml->build(); i++;
+    brg[i].bulletml->build();
+    i++;
     SRL::Logger::LogInfo(fileName);
   }
-  closedir(dp);
+  
   return i;
 }
 
