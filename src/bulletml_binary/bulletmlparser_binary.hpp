@@ -859,8 +859,15 @@ private:
         
         SRL::Logger::LogTrace("[BulletML] File opened: %s, size: %d bytes", filename, file.Size.Bytes);
 
-        // Read file into static buffer
-        int32_t bytes_read = file.Read((int32_t)sizeof(file_buffer_), file_buffer_);
+        // Read file into static buffer, limiting to actual file size
+        int32_t bytes_to_read = (int32_t)file.Size.Bytes;
+        if (bytes_to_read > (int32_t)sizeof(file_buffer_)) {
+            SRL::Logger::LogFatal("[BulletML] File too large: %s (%d bytes, buffer is %d)", filename, bytes_to_read, (int32_t)sizeof(file_buffer_));
+            file.Close();
+            return false;
+        }
+
+        int32_t bytes_read = file.Read(bytes_to_read, file_buffer_);
         file.Close();
 
         if (bytes_read <= 0) {
@@ -868,7 +875,7 @@ private:
             return false;
         }
 
-        SRL::Logger::LogTrace("[BulletML] Successfully read %d bytes from %s", bytes_read, filename);
+        SRL::Logger::LogTrace("[BulletML] Successfully read %d bytes from %s (expected %d)", bytes_read, filename, bytes_to_read);
         buffer_size_ = (uint32_t)bytes_read;
         return true;
     }
