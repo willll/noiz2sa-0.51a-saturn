@@ -78,6 +78,13 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   
   listFile.Close();
   
+  if (bufferSize <= 0) {
+    SRL::Logger::LogFatal("[BARRAGE] Failed to read LIST file or file is empty (bytes read: %d)", bufferSize);
+    return 0;
+  }
+  
+  SRL::Logger::LogDebug("[BARRAGE] Read %d bytes from LIST file", bufferSize);
+  
   // Change back to root directory for loading individual files
   SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory for file loading");
   SRL::Cd::ChangeDir((char *)nullptr);
@@ -85,8 +92,13 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   while (bytesRead < bufferSize && i < BARRAGE_PATTERN_MAX) {
     int lineLen = 0;
     
-    // Extract one line
+    // Extract one line (ensure we stay within buffer bounds)
     while (bytesRead < bufferSize && buffer[bytesRead] != '\n' && buffer[bytesRead] != '\r' && lineLen < 31) {
+      // Additional safety: check for valid printable characters or stop at garbage data
+      if (buffer[bytesRead] < 0x20 || buffer[bytesRead] > 0x7E) {
+        SRL::Logger::LogTrace("[BARRAGE] Encountered non-printable character 0x%02X at offset %d, stopping line extraction", buffer[bytesRead], bytesRead);
+        break;
+      }
       line[lineLen++] = buffer[bytesRead++];
     }
     line[lineLen] = '\0';
