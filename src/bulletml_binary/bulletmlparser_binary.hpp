@@ -10,11 +10,15 @@
  *   
  *   // From file:
  *   BulletMLParserBinary parser("pattern.blb");
- *   parser.build();
+ *   if (parser.build()) {
+ *       // Use parser
+ *   }
  *   
  *   // From memory:
  *   BulletMLParserBinary parser(data_ptr, data_size);
- *   parser.build();
+ *   if (parser.build()) {
+ *       // Use parser
+ *   }
  * 
  * Binary Format:
  *   - Magic: "BLB\x00" (4 bytes)
@@ -27,6 +31,7 @@
 
 #include <cstdint>
 #include <srl_cd.hpp>
+#include <srl_log.hpp>
 
 // Manual size_t definition (stddef.h not available on Saturn)
 #ifndef __SIZE_T_DEFINED
@@ -331,8 +336,9 @@ public:
     }
     
     /// Build the parser (calls parse internally)
-    DECLSPEC void build() {
-        parse();
+    /// Returns true on success, false on failure
+    DECLSPEC bool build() {
+        return parse();
     }
     
     /// Get the root node
@@ -366,10 +372,11 @@ public:
     DECLSPEC const char* getName() const { return name_; }
 
     /// Parse the binary file (called by build())
-    DECLSPEC virtual void parse() {
+    /// Returns true on success, false on failure
+    DECLSPEC virtual bool parse() {
         if (!data_ || data_size_ == 0) {
-            setError("No data to parse");
-            return;
+            SRL::Logger::LogFatal("[BulletML] No data to parse for '%s'", name_);
+            return false;
         }
         
         offset_ = 0;
@@ -381,20 +388,20 @@ public:
         
         // Verify header
         if (!verifyHeader()) {
-            setError("Header verification failed");
-            return;
+            SRL::Logger::LogFatal("[BulletML] Header verification failed for '%s'", name_);
+            return false;
         }
         
         // Load string table
         if (!loadStringTable()) {
-            setError("Failed to load string table");
-            return;
+            SRL::Logger::LogFatal("[BulletML] Failed to load string table for '%s'", name_);
+            return false;
         }
         
         // Load reference maps
         if (!loadReferenceMaps()) {
-            setError("Failed to load reference maps");
-            return;
+            SRL::Logger::LogFatal("[BulletML] Failed to load reference maps for '%s'", name_);
+            return false;
         }
         
         // Parse tree
@@ -402,8 +409,8 @@ public:
         bulletml_ = parseNode();
         
         if (!bulletml_) {
-            setError("Failed to parse tree");
-            return;
+            SRL::Logger::LogFatal("[BulletML] Failed to parse tree for '%s'", name_);
+            return false;
         }
         
         // Build reference maps
@@ -453,9 +460,11 @@ public:
                 }
             }
         }
+        
+        return true;
     }
     
-    /// Get last error message
+    /// Get last error message (deprecated, use SRL logging instead)
     DECLSPEC const char* getErrorMessage() const { return error_message_; }
 
 private:
@@ -470,25 +479,17 @@ private:
     inline void setHorizontal() {
         is_horizontal_ = true;
     }
-    
-    inline void setError(const char* msg) {
-        uint32_t i = 0;
-        for (; i < sizeof(error_message_) - 1 && msg[i] != '\0'; ++i) {
-            error_message_[i] = msg[i];
-        }
-        error_message_[i] = '\0';
-    }
 
     // Helper macros for bounds checking
     #define CHECK_BOUNDS(size) \
         if (offset_ + (size) > data_size_) { \
-            setError("Unexpected end of file"); \
+            SRL::Logger::LogFatal("[BulletML] Unexpected end of file in '%s' at offset %u (need %u bytes, have %u)", name_, offset_, (size), data_size_); \
             return false; \
         }
 
     #define CHECK_BOUNDS_PTR(size) \
         if (offset_ + (size) > data_size_) { \
-            setError("Unexpected end of file"); \
+            SRL::Logger::LogFatal("[BulletML] Unexpected end of file in '%s' at offset %u (need %u bytes, have %u)", name_, offset_, (size), data_size_); \
             return nullptr; \
         }
 
@@ -574,19 +575,19 @@ inline const char* readStringAt(uint32_t index) {
 
         // Verify magic number
         if (header_.magic[0] != 'B' || header_.magic[1] != 'L' || header_.magic[2] != 'B' || header_.magic[3] != '\0') {
-            setError("Invalid magic number");
+            SRL::Logger::LogFatal("[BulletML] Invalid magic number in '%s'", name_);
             return false;
         }
         
         // Check version
         if (header_.version != 1) {
-            setError("Unsupported version");
+            SRL::Logger::LogFatal("[BulletML] Unsupported version %u in '%s'", header_.version, name_);
             return false;
         }
         
         // Verify file size
         if (header_.file_size != data_size_) {
-            setError("File size mismatch");
+            SRL::Logger::LogFatal("[BulletML] File size mismatch in '%s': header says %u, actual is %u", name_, header_.file_size, data_size_);
             return false;
         }
         
@@ -784,32 +785,51 @@ protected:
     bool is_horizontal_;
 };
 
-/// BulletMLParserTinyXML - File loading wrapper for Saturn
+/// BulletMLParserBLB - File loading wrapper for Saturn
 /// Loads binary BulletML files (.blb format) from storage
-class BulletMLParserTinyXML : public BulletMLParserBinary {
+class BulletMLParserBLB : public BulletMLParserBinary {
 public:
-    /// Constructor that loads a binary BulletML file
-    explicit BulletMLParserTinyXML(const char* filename)
+    /// Constructor that stores filename for later loading
+    explicit BulletMLParserBLB(const char* filename)
         : BulletMLParserBinary(filename, nullptr, 0) {
-        if (filename && loadFromFile(filename)) {
-            // Data loaded successfully, update base class pointers
-            data_ = file_buffer_;
-            data_size_ = buffer_size_;
-            owns_data_ = false;
-        } else {
-            // Loading failed, set error
-            error_message_[0] = 'F';
-            error_message_[1] = 'a';
-            error_message_[2] = 'i';
-            error_message_[3] = 'l';
-            error_message_[4] = '\0';
+        // Store filename for loading in parse()
+        uint32_t i = 0;
+        if (filename) {
+            for (; i < BULLETML_MAX_FILENAME - 1 && filename[i] != '\0'; ++i) {
+                filename_[i] = filename[i];
+            }
         }
+        filename_[i] = '\0';
     }
     
     /// Virtual destructor
-    virtual ~BulletMLParserTinyXML() {}
+    virtual ~BulletMLParserBLB() {}
+    
+    /// Override parse to load file first
+    /// Returns true on success, false on failure
+    virtual bool parse() override {
+        // Load file data
+        if (filename_[0] == '\0') {
+            SRL::Logger::LogFatal("[BulletML] No filename specified");
+            return false;
+        }
+        
+        if (!loadFromFile(filename_)) {
+            SRL::Logger::LogFatal("[BulletML] Failed to load file: %s", filename_);
+            return false;
+        }
+        
+        // Data loaded successfully, update base class pointers
+        data_ = file_buffer_;
+        data_size_ = buffer_size_;
+        owns_data_ = false;
+        
+        // Call base class parse
+        return BulletMLParserBinary::parse();
+    }
     
 private:
+    char filename_[BULLETML_MAX_FILENAME];
     /// Static buffer for file data (64KB max per file)
     static uint8_t file_buffer_[65536];
     static uint32_t buffer_size_;
@@ -838,8 +858,8 @@ private:
     }
 };
 
-// Static buffer allocation for BulletMLParserTinyXML (inline to avoid multiple definition)
-inline uint8_t BulletMLParserTinyXML::file_buffer_[65536];
-inline uint32_t BulletMLParserTinyXML::buffer_size_ = 0;
+// Static buffer allocation for BulletMLParserBLB (inline to avoid multiple definition)
+inline uint8_t BulletMLParserBLB::file_buffer_[65536];
+inline uint32_t BulletMLParserBLB::buffer_size_ = 0;
 
 #endif // BULLETMLPARSER_BINARY_HPP_
