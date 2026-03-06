@@ -304,10 +304,8 @@ class BulletMLParserBinary {
 public:
     /// Constructor from memory buffer (filename for identification)
     DECLSPEC explicit BulletMLParserBinary(const char* filename, const uint8_t* data, uint32_t size)
-        : data_(data), data_size_(size), offset_(0), owns_data_(false),
-          current_node_id_(0), string_table_count_(0),
-          bullet_refs_count_(0), action_refs_count_(0), fire_refs_count_(0),
-          node_map_count_(0), bulletml_(nullptr), 
+                : data_(data), data_size_(size), offset_(0), owns_data_(false),
+                    bulletml_(nullptr), 
           bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
           topActions_count_(0), is_horizontal_(false)
     {
@@ -317,10 +315,8 @@ public:
     
     /// Constructor from memory buffer (unnamed)
     DECLSPEC explicit BulletMLParserBinary(const uint8_t* data, uint32_t size)
-        : data_(data), data_size_(size), offset_(0), owns_data_(false),
-          current_node_id_(0), string_table_count_(0),
-          bullet_refs_count_(0), action_refs_count_(0), fire_refs_count_(0),
-          node_map_count_(0), bulletml_(nullptr),
+                : data_(data), data_size_(size), offset_(0), owns_data_(false),
+                    bulletml_(nullptr),
           bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
           topActions_count_(0), is_horizontal_(false)
     {
@@ -332,6 +328,12 @@ public:
         if (bulletml_) {
             delete bulletml_;
             bulletml_ = nullptr;
+        }
+        if (owns_data_ && data_) {
+            delete[] data_;
+            data_ = nullptr;
+            data_size_ = 0;
+            owns_data_ = false;
         }
     }
     
@@ -383,6 +385,10 @@ public:
         
         offset_ = 0;
         current_node_id_ = 0;
+        string_table_count_ = 0;
+        bullet_refs_count_ = 0;
+        action_refs_count_ = 0;
+        fire_refs_count_ = 0;
         // Initialize node map (static array)
         for (uint32_t i = 0; i < BULLETML_MAX_NODES; ++i) {
             node_map_[i] = nullptr;
@@ -759,27 +765,25 @@ protected:
     
     BulletMLBinaryHeader header_;
     
-    // String table: static buffer with string offsets
-    char string_table_buffer_[BULLETML_MAX_STRING_TABLE_SIZE];
-    uint32_t string_table_offsets_[BULLETML_MAX_STRINGS];
-    uint32_t string_table_count_;
+    // Parse scratch storage (shared): only needed while parsing, not at runtime.
+    static uint32_t string_table_offsets_[BULLETML_MAX_STRINGS];
+    static uint32_t string_table_count_;
     
     // Reference maps: label -> node_id
-    BulletMLRefEntry bullet_refs_[BULLETML_MAX_REFS];
-    uint32_t bullet_refs_count_;
-    BulletMLRefEntry action_refs_[BULLETML_MAX_REFS];
-    uint32_t action_refs_count_;
-    BulletMLRefEntry fire_refs_[BULLETML_MAX_REFS];
-    uint32_t fire_refs_count_;
+    static BulletMLRefEntry bullet_refs_[BULLETML_MAX_REFS];
+    static uint32_t bullet_refs_count_;
+    static BulletMLRefEntry action_refs_[BULLETML_MAX_REFS];
+    static uint32_t action_refs_count_;
+    static BulletMLRefEntry fire_refs_[BULLETML_MAX_REFS];
+    static uint32_t fire_refs_count_;
     
     char error_message_[256];
     
     // Node ID counter for tracking nodes during parsing
-    uint32_t current_node_id_;
+    static uint32_t current_node_id_;
     
-    // Map of node_id to BulletMLNode* for resolving references
-    BulletMLNode* node_map_[BULLETML_MAX_NODES];
-    uint32_t node_map_count_;
+    // Map of node_id to BulletMLNode* for resolving references (parse scratch)
+    static BulletMLNode* node_map_[BULLETML_MAX_NODES];
     
     // Parsed tree and reference maps (replaces BulletMLParser base members)
     BulletMLNode* bulletml_;
@@ -803,7 +807,6 @@ public:
     /// Constructor that stores filename for later loading
     explicit BulletMLParserBLB(const char* filename)
         : BulletMLParserBinary(filename, nullptr, 0) {
-        SRL::Logger::LogTrace("[BulletML] BulletMLParserBLB constructor called for: %s", filename ? filename : "(null)");
         // Store filename for loading in parse()
         uint32_t i = 0;
         if (filename) {
@@ -812,7 +815,6 @@ public:
             }
         }
         filename_[i] = '\0';
-        SRL::Logger::LogTrace("[BulletML] BulletMLParserBLB constructor completed, filename_=%s", filename_);
     }
     
     /// Virtual destructor
@@ -827,32 +829,19 @@ public:
             return false;
         }
         
-        SRL::Logger::LogTrace("[BulletML] BLB parse() called for: %s", filename_);
-        
         if (!loadFromFile(filename_)) {
             SRL::Logger::LogFatal("[BulletML] Failed to load file: %s", filename_);
             return false;
         }
         
-        SRL::Logger::LogTrace("[BulletML] File loaded, calling base class parse() for: %s", filename_);
-        
-        // Data loaded successfully, update base class pointers
-        data_ = file_buffer_;
-        data_size_ = buffer_size_;
-        owns_data_ = false;
-        
-        // Call base class parse
-        SRL::Logger::LogTrace("[BulletML] About to call BulletMLParserBinary::parse()");
-        bool result = BulletMLParserBinary::parse();
-        SRL::Logger::LogTrace("[BulletML] BulletMLParserBinary::parse() returned %d", result ? 1 : 0);
-        return result;
+        // Data loaded and allocated by loadFromFile(), call base class parse
+        return BulletMLParserBinary::parse();
     }
     
 private:
     char filename_[BULLETML_MAX_FILENAME];
-    /// Static buffer for file data (64KB max per file)
-    static uint8_t file_buffer_[65536];
-    static uint32_t buffer_size_;
+    /// Static temp buffer for file loading (reused across instances)
+    static uint8_t temp_load_buffer_[65536];
     
     /// Load binary file from storage
     bool loadFromFile(const char* filename) {
@@ -879,15 +868,16 @@ private:
         
         SRL::Logger::LogTrace("[BulletML] File opened: %s, size: %d bytes", filename, file.Size.Bytes);
 
-        // Read file into static buffer, limiting to actual file size
+        // Read file into temporary static buffer, limiting to actual file size
         int32_t bytes_to_read = (int32_t)file.Size.Bytes;
-        if (bytes_to_read > (int32_t)sizeof(file_buffer_)) {
-            SRL::Logger::LogFatal("[BulletML] File too large: %s (%d bytes, buffer is %d)", filename, bytes_to_read, (int32_t)sizeof(file_buffer_));
+        if (bytes_to_read > (int32_t)sizeof(temp_load_buffer_)) {
+            SRL::Logger::LogFatal("[BulletML] File too large: %s (%d bytes, buffer is %d)", 
+                                  filename, bytes_to_read, (int32_t)sizeof(temp_load_buffer_));
             file.Close();
             return false;
         }
 
-        int32_t bytes_read = file.Read(bytes_to_read, file_buffer_);
+        int32_t bytes_read = file.Read(bytes_to_read, temp_load_buffer_);
         file.Close();
 
         if (bytes_read <= 0) {
@@ -895,14 +885,49 @@ private:
             return false;
         }
 
-        SRL::Logger::LogTrace("[BulletML] Successfully read %d bytes from %s (expected %d)", bytes_read, filename, bytes_to_read);
-        buffer_size_ = (uint32_t)bytes_read;
+        SRL::Logger::LogTrace("[BulletML] Successfully read %d bytes from %s (expected %d)", 
+                              bytes_read, filename, bytes_to_read);
+
+        // If parse() is called again on the same parser, free previous owned data first.
+        if (owns_data_ && data_) {
+            delete[] data_;
+            data_ = nullptr;
+            data_size_ = 0;
+            owns_data_ = false;
+        }
+        
+        // Allocate exact size needed and copy data (so temp buffer can be reused)
+        uint8_t* allocated_buffer = new uint8_t[bytes_read];
+        if (!allocated_buffer) {
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate %d bytes for %s", bytes_read, filename);
+            return false;
+        }
+        
+        memcpy(allocated_buffer, temp_load_buffer_, bytes_read);
+        SRL::Logger::LogTrace("[BulletML] Allocated and copied %d bytes for %s", bytes_read, filename);
+        
+        // Update data pointers (base class will own and delete this memory)
+        data_ = allocated_buffer;
+        data_size_ = (uint32_t)bytes_read;
+        owns_data_ = true;
+        
         return true;
     }
 };
 
-// Static buffer allocation for BulletMLParserBLB (inline to avoid multiple definition)
-inline uint8_t BulletMLParserBLB::file_buffer_[65536];
-inline uint32_t BulletMLParserBLB::buffer_size_ = 0;
+// Shared parse scratch storage (reduces per-instance RAM usage significantly).
+inline uint32_t BulletMLParserBinary::string_table_offsets_[BULLETML_MAX_STRINGS];
+inline uint32_t BulletMLParserBinary::string_table_count_ = 0;
+inline BulletMLRefEntry BulletMLParserBinary::bullet_refs_[BULLETML_MAX_REFS];
+inline uint32_t BulletMLParserBinary::bullet_refs_count_ = 0;
+inline BulletMLRefEntry BulletMLParserBinary::action_refs_[BULLETML_MAX_REFS];
+inline uint32_t BulletMLParserBinary::action_refs_count_ = 0;
+inline BulletMLRefEntry BulletMLParserBinary::fire_refs_[BULLETML_MAX_REFS];
+inline uint32_t BulletMLParserBinary::fire_refs_count_ = 0;
+inline uint32_t BulletMLParserBinary::current_node_id_ = 0;
+inline BulletMLNode* BulletMLParserBinary::node_map_[BULLETML_MAX_NODES];
+
+// Static temp buffer for file loading (shared across all instances for loading only)
+inline uint8_t BulletMLParserBLB::temp_load_buffer_[65536];
 
 #endif // BULLETMLPARSER_BINARY_HPP_
