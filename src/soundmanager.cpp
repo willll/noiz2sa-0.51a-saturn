@@ -66,6 +66,7 @@ static void loadSounds() {
   char name[56];
 
   // Change to SOUNDS directory on CD
+  SRL::Cd::ChangeDir((char *)nullptr);
   SRL::Cd::ChangeDir("SOUNDS");
 
   for ( i=0 ; i<CHUNK_NUM ; i++ ) {

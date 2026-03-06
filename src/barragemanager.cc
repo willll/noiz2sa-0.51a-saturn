@@ -46,6 +46,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   SRL::Logger::LogDebug("[BARRAGE] Reading BulletML files from directory: %s", dirPath);
 
   // Change to the specified directory on CD
+  SRL::Cd::ChangeDir((char *)nullptr);
   int32_t fileCount = SRL::Cd::ChangeDir(dirPath);
   
   if (fileCount < 0) {

@@ -77,6 +77,7 @@ static void loadSprites()
 
   // Navigate to IMAGES directory on CD first
   SRL::Logger::LogDebug("[SPRITE] Changing to IMAGES directory on CD");
+  SRL::Cd::ChangeDir((char *)nullptr);
   SRL::Cd::ChangeDir("IMAGES");
   SRL::Logger::LogDebug("[SPRITE] Successfully navigated to IMAGES directory");
 
