@@ -25,7 +25,6 @@
 #include <srl_system.hpp>
 #include <srl_cd.hpp>
 #include <srl_string.hpp>
-#include <sega_gfs.h>
 
 #define BARRAGE_PATTERN_MAX 32
 
@@ -42,47 +41,81 @@ static const char *BARRAGE_DIR_NAME[] = {
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   int i = 0;
   char fileName[256];
+  const char * listPath = "LIST.TXT";
+  char line[32];
 
   SRL::Logger::LogDebug("[BARRAGE] Reading BulletML files from directory: %s", dirPath);
 
   // Change to the specified directory on CD
   SRL::Cd::ChangeDir((char *)nullptr);
-  int32_t fileCount = SRL::Cd::ChangeDir(dirPath);
+  int32_t code = SRL::Cd::ChangeDir(dirPath);
   
-  if (fileCount < 0) {
-    SRL::Logger::LogFatal("[BARRAGE] Can't open directory: %s (error code: %d)", dirPath, fileCount);
+  if (code < 0) {
+    SRL::Logger::LogFatal("[BARRAGE] Can't open directory: %s (error code: %d)", dirPath, code);
     SRL::System::Exit(1);
   }
   
-  SRL::Logger::LogDebug("[BARRAGE] Found %d files in directory", fileCount);
+  SRL::Logger::LogDebug("[BARRAGE] Opening list file: %s", listPath);
+  SRL::Cd::File listFile(listPath);
+  
+  if (!listFile.Open()) {
+    SRL::Logger::LogFatal("[BARRAGE] Failed to open LIST file: %s", listPath);
+    SRL::System::Exit(1);
+  }
+  
+  if (!listFile.IsOpen()) {
+    SRL::Logger::LogFatal("[BARRAGE] file: %s is not opened", listPath);
+    SRL::System::Exit(1);
+  }
+  
+  SRL::Logger::LogDebug("[BARRAGE] LIST file size: %d bytes", listFile.Size.Bytes);
 
-  // Iterate through files in the directory using GFS API
-  for (int32_t j = 0; j < fileCount && i < BARRAGE_PATTERN_MAX; j++) {
-    // Get the filename from the file ID using GFS
-    int8_t* fname = GFS_IdToName(j);
+  // Read the LIST file line by line
+  int32_t bytesRead = 0;
+  int32_t lineStart = 0;
+  uint8_t buffer[2048];
+  int32_t bufferSize = listFile.Read(sizeof(buffer), buffer);
+  
+  listFile.Close();
+  
+  // Change back to root directory for loading individual files
+  SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory for file loading");
+  SRL::Cd::ChangeDir((char *)nullptr);
+  
+  while (bytesRead < bufferSize && i < BARRAGE_PATTERN_MAX) {
+    int lineLen = 0;
     
-    if (fname == nullptr) {
-      SRL::Logger::LogTrace("[BARRAGE] File ID %d returned null name", j);
+    // Extract one line
+    while (bytesRead < bufferSize && buffer[bytesRead] != '\n' && buffer[bytesRead] != '\r' && lineLen < 31) {
+      line[lineLen++] = buffer[bytesRead++];
+    }
+    line[lineLen] = '\0';
+    
+    // Skip newline characters
+    while (bytesRead < bufferSize && (buffer[bytesRead] == '\n' || buffer[bytesRead] == '\r')) {
+      bytesRead++;
+    }
+    
+    // Skip empty lines
+    if (lineLen == 0) {
       continue;
     }
     
-    SRL::Logger::LogTrace("[BARRAGE] Processing file: %s", (const char*)fname);
+    SRL::Logger::LogTrace("[BARRAGE] Processing file from LIST: %s", line);
     
-    // Check if it's a .blb file
-    const char* ext = strrchr((const char*)fname, '.');
-    if (ext == nullptr || strcmp(ext, ".BLB") != 0) {
-      SRL::Logger::LogTrace("[BARRAGE] Skipping non-.blb file: %s", (const char*)fname);
-      continue; // Skip non-.blb files
-    }
-    
-    // Build the file path
+    // Build the full file path (dirPath + "/" + filename)
     strcpy(fileName, dirPath);
     strcat(fileName, "/");
-    strcat(fileName, (const char*)fname);
+    strcat(fileName, line);
     
     SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s", fileName);
-    brg[i].bulletml = new BulletMLParserTinyXML(fileName);
-    brg[i].bulletml->build();
+    brg[i].bulletml = new BulletMLParserBLB(fileName);
+    if (!brg[i].bulletml->build()) {
+      SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s", fileName);
+      delete brg[i].bulletml;
+      brg[i].bulletml = nullptr;
+      continue;
+    }
     i++;
     SRL::Logger::LogInfo("[BARRAGE] Loaded: %s", fileName);
   }
