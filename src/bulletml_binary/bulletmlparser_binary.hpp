@@ -837,22 +837,38 @@ private:
     /// Load binary file from storage
     bool loadFromFile(const char* filename) {
         if (!filename) {
+            SRL::Logger::LogFatal("[BulletML] loadFromFile: null filename");
             return false;
         }
 
+        SRL::Logger::LogTrace("[BulletML] Attempting to load file: %s", filename);
+        
         SRL::Cd::File file(filename);
-        if (!file.Exists() || !file.Open()) {
+        
+        if (!file.Exists()) {
+            SRL::Logger::LogFatal("[BulletML] File does not exist: %s", filename);
             return false;
         }
+        
+        SRL::Logger::LogTrace("[BulletML] File exists: %s, attempting to open", filename);
+        
+        if (!file.Open()) {
+            SRL::Logger::LogFatal("[BulletML] Failed to open file: %s", filename);
+            return false;
+        }
+        
+        SRL::Logger::LogTrace("[BulletML] File opened: %s, size: %d bytes", filename, file.Size.Bytes);
 
         // Read file into static buffer
         int32_t bytes_read = file.Read((int32_t)sizeof(file_buffer_), file_buffer_);
         file.Close();
 
         if (bytes_read <= 0) {
+            SRL::Logger::LogFatal("[BulletML] Failed to read file: %s (bytes_read=%d)", filename, bytes_read);
             return false;
         }
 
+        SRL::Logger::LogTrace("[BulletML] Successfully read %d bytes from %s", bytes_read, filename);
         buffer_size_ = (uint32_t)bytes_read;
         return true;
     }
