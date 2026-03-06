@@ -72,9 +72,12 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
   // Read the LIST file line by line
   int32_t bytesRead = 0;
-  int32_t lineStart = 0;
   uint8_t buffer[2048];
-  int32_t bufferSize = listFile.Read(sizeof(buffer), buffer);
+  int32_t bytesToRead = (int32_t)listFile.Size.Bytes;
+  if (bytesToRead > (int32_t)sizeof(buffer)) {
+    bytesToRead = (int32_t)sizeof(buffer);
+  }
+  int32_t bufferSize = listFile.Read(bytesToRead, buffer);
   
   listFile.Close();
   
@@ -96,6 +99,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
       // Additional safety: check for valid printable characters or stop at garbage data
       if (buffer[bytesRead] < 0x20 || buffer[bytesRead] > 0x7E) {
         SRL::Logger::LogTrace("[BARRAGE] Encountered non-printable character 0x%02X at offset %d, stopping line extraction", buffer[bytesRead], bytesRead);
+        bytesRead++; // Consume byte to avoid getting stuck on same offset
         break;
       }
       line[lineLen++] = buffer[bytesRead++];
