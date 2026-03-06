@@ -101,7 +101,7 @@ To use binary BulletML files in your Saturn port:
 
 1. Convert XML patterns to `.blb` format
 2. Place binary files in `cd/data/` directory
-3. Use `BulletMLParserBin` instead of `BulletMLParserTinyXML`
+3. Use `BulletMLParserBin` instead of `BulletMLParserBLB`
 4. Load patterns from binary files
 
 See `src/bulletml_binary/README.md` for C++ integration details.
