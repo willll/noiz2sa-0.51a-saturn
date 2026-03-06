@@ -85,9 +85,8 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   
   SRL::Logger::LogDebug("[BARRAGE] Read %d bytes from LIST file", bufferSize);
   
-  // Change back to root directory for loading individual files
-  SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory for file loading");
-  SRL::Cd::ChangeDir((char *)nullptr);
+  // Stay in the current directory to load files directly by name
+  SRL::Logger::LogTrace("[BARRAGE] Loading files from directory: %s", dirPath);
   
   while (bytesRead < bufferSize && i < BARRAGE_PATTERN_MAX) {
     int lineLen = 0;
@@ -134,22 +133,22 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     
     SRL::Logger::LogTrace("[BARRAGE] Processing file from LIST: %s", line);
     
-    // Build the full file path (dirPath + "/" + filename)
-    strcpy(fileName, dirPath);
-    strcat(fileName, "/");
-    strcat(fileName, line);
-    
-    SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s", fileName);
-    brg[i].bulletml = new BulletMLParserBLB(fileName);
+    // Load the file directly by name (we're already in the correct directory)
+    SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s/%s", dirPath, line);
+    brg[i].bulletml = new BulletMLParserBLB(line);
     if (!brg[i].bulletml->build()) {
-      SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s", fileName);
+      SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
       delete brg[i].bulletml;
       brg[i].bulletml = nullptr;
       continue;
     }
     i++;
-    SRL::Logger::LogInfo("[BARRAGE] Loaded: %s", fileName);
+    SRL::Logger::LogInfo("[BARRAGE] Loaded: %s/%s", dirPath, line);
   }
+  
+  // Change back to root directory after loading all files
+  SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory");
+  SRL::Cd::ChangeDir((char *)nullptr);
   
   SRL::Logger::LogDebug("[BARRAGE] Successfully loaded %d BulletML patterns from %s", i, dirPath);
   return i;
