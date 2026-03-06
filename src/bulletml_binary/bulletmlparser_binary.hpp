@@ -592,7 +592,11 @@ inline const char* readStringAt(uint32_t index) {
 
         // Verify magic number
         if (header_.magic[0] != 'B' || header_.magic[1] != 'L' || header_.magic[2] != 'B' || header_.magic[3] != '\0') {
-            SRL::Logger::LogFatal("[BulletML] Invalid magic number in '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] Invalid magic number in '%s': %02X %02X %02X %02X", name_,
+                                  (unsigned int)(uint8_t)header_.magic[0],
+                                  (unsigned int)(uint8_t)header_.magic[1],
+                                  (unsigned int)(uint8_t)header_.magic[2],
+                                  (unsigned int)(uint8_t)header_.magic[3]);
             return false;
         }
         
@@ -905,6 +909,13 @@ private:
         
         memcpy(allocated_buffer, temp_load_buffer_, bytes_read);
         SRL::Logger::LogTrace("[BulletML] Allocated and copied %d bytes for %s", bytes_read, filename);
+        if (bytes_read >= 4) {
+            SRL::Logger::LogTrace("[BulletML] First 4 bytes for %s: %02X %02X %02X %02X", filename,
+                                  (unsigned int)allocated_buffer[0],
+                                  (unsigned int)allocated_buffer[1],
+                                  (unsigned int)allocated_buffer[2],
+                                  (unsigned int)allocated_buffer[3]);
+        }
         
         // Update data pointers (base class will own and delete this memory)
         data_ = allocated_buffer;
