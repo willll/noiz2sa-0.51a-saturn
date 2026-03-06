@@ -863,14 +863,7 @@ private:
             return false;
         }
         
-        SRL::Logger::LogTrace("[BulletML] File exists: %s, attempting to open", filename);
-        
-        if (!file.Open()) {
-            SRL::Logger::LogFatal("[BulletML] Failed to open file: %s", filename);
-            return false;
-        }
-        
-        SRL::Logger::LogTrace("[BulletML] File opened: %s, size: %d bytes", filename, file.Size.Bytes);
+        SRL::Logger::LogTrace("[BulletML] File exists: %s, preparing direct read", filename);
 
         // Read file into temporary static buffer, limiting to actual file size
         int32_t bytes_to_read = (int32_t)file.Size.Bytes;
@@ -881,11 +874,10 @@ private:
             return false;
         }
 
-        int32_t bytes_read = file.Read(bytes_to_read, temp_load_buffer_);
-        file.Close();
+        int32_t bytes_read = file.LoadBytes(0, bytes_to_read, temp_load_buffer_);
 
         if (bytes_read <= 0) {
-            SRL::Logger::LogFatal("[BulletML] Failed to read file: %s (bytes_read=%d)", filename, bytes_read);
+            SRL::Logger::LogFatal("[BulletML] Failed to load file bytes: %s (bytes_read=%d)", filename, bytes_read);
             return false;
         }
 
@@ -909,13 +901,6 @@ private:
         
         memcpy(allocated_buffer, temp_load_buffer_, bytes_read);
         SRL::Logger::LogTrace("[BulletML] Allocated and copied %d bytes for %s", bytes_read, filename);
-        if (bytes_read >= 4) {
-            SRL::Logger::LogTrace("[BulletML] First 4 bytes for %s: %02X %02X %02X %02X", filename,
-                                  (unsigned int)allocated_buffer[0],
-                                  (unsigned int)allocated_buffer[1],
-                                  (unsigned int)allocated_buffer[2],
-                                  (unsigned int)allocated_buffer[3]);
-        }
         
         // Update data pointers (base class will own and delete this memory)
         data_ = allocated_buffer;
