@@ -379,6 +379,8 @@ public:
             return false;
         }
         
+        SRL::Logger::LogTrace("[BulletML] Starting parse for '%s', size=%d", name_, data_size_);
+        
         offset_ = 0;
         current_node_id_ = 0;
         // Initialize node map (static array)
@@ -387,24 +389,31 @@ public:
         }
         
         // Verify header
+        SRL::Logger::LogTrace("[BulletML] Verifying header for '%s'", name_);
         if (!verifyHeader()) {
             SRL::Logger::LogFatal("[BulletML] Header verification failed for '%s'", name_);
             return false;
         }
+        SRL::Logger::LogTrace("[BulletML] Header verified for '%s'", name_);
         
         // Load string table
+        SRL::Logger::LogTrace("[BulletML] Loading string table for '%s'", name_);
         if (!loadStringTable()) {
             SRL::Logger::LogFatal("[BulletML] Failed to load string table for '%s'", name_);
             return false;
         }
+        SRL::Logger::LogTrace("[BulletML] String table loaded for '%s'", name_);
         
         // Load reference maps
+        SRL::Logger::LogTrace("[BulletML] Loading reference maps for '%s'", name_);
         if (!loadReferenceMaps()) {
             SRL::Logger::LogFatal("[BulletML] Failed to load reference maps for '%s'", name_);
             return false;
         }
+        SRL::Logger::LogTrace("[BulletML] Reference maps loaded for '%s'", name_);
         
         // Parse tree
+        SRL::Logger::LogTrace("[BulletML] Parsing tree for '%s'", name_);
         offset_ = header_.tree_offset;
         bulletml_ = parseNode();
         
@@ -449,6 +458,7 @@ public:
         }
         
         // Find and populate top actions
+        SRL::Logger::LogTrace("[BulletML] Finding top actions for '%s'", name_);
         topActions_count_ = 0;
         if (bulletml_) {
             BulletMLNode::ChildIterator ite;
@@ -461,6 +471,7 @@ public:
             }
         }
         
+        SRL::Logger::LogTrace("[BulletML] Parse complete for '%s', found %d top actions", name_, topActions_count_);
         return true;
     }
     
@@ -792,6 +803,7 @@ public:
     /// Constructor that stores filename for later loading
     explicit BulletMLParserBLB(const char* filename)
         : BulletMLParserBinary(filename, nullptr, 0) {
+        SRL::Logger::LogTrace("[BulletML] BulletMLParserBLB constructor called for: %s", filename ? filename : "(null)");
         // Store filename for loading in parse()
         uint32_t i = 0;
         if (filename) {
@@ -800,6 +812,7 @@ public:
             }
         }
         filename_[i] = '\0';
+        SRL::Logger::LogTrace("[BulletML] BulletMLParserBLB constructor completed, filename_=%s", filename_);
     }
     
     /// Virtual destructor
@@ -814,10 +827,14 @@ public:
             return false;
         }
         
+        SRL::Logger::LogTrace("[BulletML] BLB parse() called for: %s", filename_);
+        
         if (!loadFromFile(filename_)) {
             SRL::Logger::LogFatal("[BulletML] Failed to load file: %s", filename_);
             return false;
         }
+        
+        SRL::Logger::LogTrace("[BulletML] File loaded, calling base class parse() for: %s", filename_);
         
         // Data loaded successfully, update base class pointers
         data_ = file_buffer_;
@@ -825,7 +842,10 @@ public:
         owns_data_ = false;
         
         // Call base class parse
-        return BulletMLParserBinary::parse();
+        SRL::Logger::LogTrace("[BulletML] About to call BulletMLParserBinary::parse()");
+        bool result = BulletMLParserBinary::parse();
+        SRL::Logger::LogTrace("[BulletML] BulletMLParserBinary::parse() returned %d", result ? 1 : 0);
+        return result;
     }
     
 private:
