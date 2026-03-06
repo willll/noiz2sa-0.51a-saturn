@@ -135,17 +135,13 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     
     // Load the file directly by name (we're already in the correct directory)
     SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s/%s", dirPath, line);
-    SRL::Logger::LogTrace("[BARRAGE] About to create BulletMLParserBLB for: %s", line);
-    SRL::Logger::LogTrace("[BARRAGE] Calling new BulletMLParserBLB()...");
     brg[i].bulletml = new BulletMLParserBLB(line);
-    SRL::Logger::LogTrace("[BARRAGE] BulletMLParserBLB created successfully, pointer=%p", brg[i].bulletml);
     if (!brg[i].bulletml->build()) {
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
       delete brg[i].bulletml;
       brg[i].bulletml = nullptr;
       continue;
     }
-    SRL::Logger::LogTrace("[BARRAGE] build() succeeded");
     i++;
     SRL::Logger::LogInfo("[BARRAGE] Loaded: %s/%s", dirPath, line);
   }
