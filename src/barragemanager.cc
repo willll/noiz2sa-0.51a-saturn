@@ -96,8 +96,27 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
       bytesRead++;
     }
     
-    // Skip empty lines
+    // Trim trailing whitespace
+    while (lineLen > 0 && (line[lineLen-1] == ' ' || line[lineLen-1] == '\t')) {
+      lineLen--;
+      line[lineLen] = '\0';
+    }
+    
+    // Skip empty lines or lines with only whitespace
     if (lineLen == 0) {
+      continue;
+    }
+    
+    // Skip lines that don't look like filenames (must contain at least one alphanumeric character)
+    bool hasContent = false;
+    for (int j = 0; j < lineLen; j++) {
+      if ((line[j] >= 'A' && line[j] <= 'Z') || (line[j] >= 'a' && line[j] <= 'z') || (line[j] >= '0' && line[j] <= '9')) {
+        hasContent = true;
+        break;
+      }
+    }
+    if (!hasContent) {
+      SRL::Logger::LogTrace("[BARRAGE] Skipping invalid line from LIST (no alphanumeric characters)");
       continue;
     }
     
