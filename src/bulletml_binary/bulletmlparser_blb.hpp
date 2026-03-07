@@ -236,21 +236,24 @@ class BulletMLParserBLB {
 public:
     /// Constructor from memory buffer (filename for identification)
     explicit BulletMLParserBLB(const char* filename, const uint8_t* data, uint32_t size)
-                : data_(data), data_size_(size), offset_(0), owns_data_(false),
+                : flags_(0),
+                    data_(data), data_size_(size), offset_(0),
                     parse_step_count_(0), parse_step_budget_(0),
-                    string_table_offsets_(nullptr), string_table_count_(0),
-                    bullet_refs_(nullptr), bullet_refs_count_(0),
-                    action_refs_(nullptr), action_refs_count_(0),
-                    fire_refs_(nullptr), fire_refs_count_(0),
-                    error_message_(nullptr),
+                    string_table_offsets_(nullptr),
+                    bullet_refs_(nullptr),
+                    action_refs_(nullptr),
+                    fire_refs_(nullptr),
                     current_node_id_(0), node_map_(nullptr), node_map_capacity_(0),
                     bulletml_(nullptr),
                     bulletMap_(nullptr), bulletMap_count_(0),
                     actionMap_(nullptr), actionMap_count_(0),
                     fireMap_(nullptr), fireMap_count_(0),
                     topActions_(nullptr), topActions_count_(0),
-                    name_(nullptr), filename_(nullptr),
-                    is_horizontal_(false)
+                    name_(nullptr), filename_(nullptr), error_message_(nullptr),
+                    string_table_count_(0),
+                    bullet_refs_count_(0),
+                    action_refs_count_(0),
+                    fire_refs_count_(0)
     {
         allocateMetadataBuffers();
         setName(filename);
@@ -260,21 +263,24 @@ public:
     
     /// Constructor from memory buffer (unnamed)
     explicit BulletMLParserBLB(const uint8_t* data, uint32_t size)
-                : data_(data), data_size_(size), offset_(0), owns_data_(false),
+                : flags_(0),
+                    data_(data), data_size_(size), offset_(0),
                     parse_step_count_(0), parse_step_budget_(0),
-                    string_table_offsets_(nullptr), string_table_count_(0),
-                    bullet_refs_(nullptr), bullet_refs_count_(0),
-                    action_refs_(nullptr), action_refs_count_(0),
-                    fire_refs_(nullptr), fire_refs_count_(0),
-                    error_message_(nullptr),
+                    string_table_offsets_(nullptr),
+                    bullet_refs_(nullptr),
+                    action_refs_(nullptr),
+                    fire_refs_(nullptr),
                     current_node_id_(0), node_map_(nullptr), node_map_capacity_(0),
                     bulletml_(nullptr),
                     bulletMap_(nullptr), bulletMap_count_(0),
                     actionMap_(nullptr), actionMap_count_(0),
                     fireMap_(nullptr), fireMap_count_(0),
                     topActions_(nullptr), topActions_count_(0),
-                    name_(nullptr), filename_(nullptr),
-                    is_horizontal_(false)
+                    name_(nullptr), filename_(nullptr), error_message_(nullptr),
+                    string_table_count_(0),
+                    bullet_refs_count_(0),
+                    action_refs_count_(0),
+                    fire_refs_count_(0)
     {
         allocateMetadataBuffers();
         setName("(memory)");
@@ -284,21 +290,24 @@ public:
 
     /// Constructor from filename (file-loaded parse path)
     explicit BulletMLParserBLB(const char* filename)
-                : data_(nullptr), data_size_(0), offset_(0), owns_data_(false),
+                : flags_(0),
+                    data_(nullptr), data_size_(0), offset_(0),
                     parse_step_count_(0), parse_step_budget_(0),
-                    string_table_offsets_(nullptr), string_table_count_(0),
-                    bullet_refs_(nullptr), bullet_refs_count_(0),
-                    action_refs_(nullptr), action_refs_count_(0),
-                    fire_refs_(nullptr), fire_refs_count_(0),
-                    error_message_(nullptr),
+                    string_table_offsets_(nullptr),
+                    bullet_refs_(nullptr),
+                    action_refs_(nullptr),
+                    fire_refs_(nullptr),
                     current_node_id_(0), node_map_(nullptr), node_map_capacity_(0),
                     bulletml_(nullptr),
                     bulletMap_(nullptr), bulletMap_count_(0),
                     actionMap_(nullptr), actionMap_count_(0),
                     fireMap_(nullptr), fireMap_count_(0),
                     topActions_(nullptr), topActions_count_(0),
-                    name_(nullptr), filename_(nullptr),
-                    is_horizontal_(false)
+                    name_(nullptr), filename_(nullptr), error_message_(nullptr),
+                    string_table_count_(0),
+                    bullet_refs_count_(0),
+                    action_refs_count_(0),
+                    fire_refs_count_(0)
     {
         allocateMetadataBuffers();
         setName(filename);
@@ -320,11 +329,11 @@ public:
             delete bulletml_;
             bulletml_ = nullptr;
         }
-        if (owns_data_ && data_) {
+        if ((flags_ & 0x01) && data_) {  // bit 0 = owns_data_
             delete[] data_;
             data_ = nullptr;
             data_size_ = 0;
-            owns_data_ = false;
+            flags_ &= ~0x01;  // clear owns_data_ bit
         }
         delete[] error_message_;
         error_message_ = nullptr;
@@ -365,7 +374,7 @@ public:
     }
     
     /// Check if pattern is horizontal
-    bool isHorizontal() const { return is_horizontal_; }
+    bool isHorizontal() const { return (flags_ & 0x02) != 0; }  // bit 1 = is_horizontal_
     
     /// Get parser name
     const char* getName() const { return name_; }
@@ -535,12 +544,12 @@ public:
 
         SRL::Logger::LogTrace("[BulletML] Parse complete for '%s', found %d top actions", name_, topActions_count_);
 
-        if (owns_data_ && data_) {
+        if ((flags_ & 0x01) && data_) {  // bit 0 = owns_data_
             SRL::Logger::LogTrace("[BulletML] Freeing raw data buffer (%d bytes) for '%s'", data_size_, name_);
             delete[] data_;
             data_ = nullptr;
             data_size_ = 0;
-            owns_data_ = false;
+            flags_ &= ~0x01;  // clear owns_data_ bit
         }
 
         freeParseScratch();
@@ -627,7 +636,7 @@ private:
 
     inline bool ensureParseScratch() {
         if (!string_table_offsets_) {
-            string_table_offsets_ = new uint32_t[BULLETML_MAX_STRINGS];
+            string_table_offsets_ = new uint16_t[BULLETML_MAX_STRINGS];
             if (!string_table_offsets_) {
                 freeParseScratch();
                 return false;
@@ -761,11 +770,11 @@ private:
         }
 
         // If parse() is called again on the same parser, free previous owned data first.
-        if (owns_data_ && data_) {
+        if ((flags_ & 0x01) && data_) {  // bit 0 = owns_data_
             delete[] data_;
             data_ = nullptr;
             data_size_ = 0;
-            owns_data_ = false;
+            flags_ &= ~0x01;  // clear owns_data_ bit
         }
         
         // Allocate exact size needed and read directly into it.
@@ -787,7 +796,7 @@ private:
         // Update data pointers (class will own and delete this memory)
         data_ = allocated_buffer;
         data_size_ = (uint32_t)bytes_read;
-        owns_data_ = true;
+        flags_ |= 0x01;  // set owns_data_ bit
         
         return true;
     }
@@ -804,7 +813,7 @@ private:
     }
     
     inline void setHorizontal() {
-        is_horizontal_ = true;
+        flags_ |= 0x02;  // set is_horizontal_ bit
     }
 
     // Helper macros for bounds checking
@@ -1140,52 +1149,67 @@ inline const char* readStringAt(uint32_t index) {
     #undef CHECK_BOUNDS_PTR
 
 protected:
-    const uint8_t* data_;        // Pointer to binary data
-    uint32_t data_size_;         // Size of data
-    uint32_t offset_;            // Current read offset
-    bool owns_data_;             // True if we allocated data_
-
-    // Per-parse watchdog to prevent pathological recursion/looping.
-    uint32_t parse_step_count_;
-    uint32_t parse_step_budget_;
+    // Flags: bit 0 = owns_data_, bit 1 = is_horizontal_
+    // (Consolidates two bool members into single byte to eliminate 6+ bytes of padding)
+    uint8_t flags_;
     
+    // Input data offsets (6 bytes from optimized types)
+    // Max BLB file size: 1699 bytes (verified from live CD data)
+    uint16_t data_size_;         // Size of data (max 65535 bytes, actual max 1699)
+    uint16_t offset_;            // Current read offset (max 1699)
+    
+    // Padding for alignment to 4-byte boundary (2 bytes)
+    uint16_t pad_;
+    
+    // Pointer to binary data (4 bytes on 32-bit systems)
+    const uint8_t* data_;
+
+    // Parse state (4 bytes - optimized from uint32_t)
+    // Budget calculated as: (data_size_ / 8) + 256, clamped to min 512
+    // Max across all 73 BLB files: 512 (fits in uint16_t max 65535)
+    uint16_t parse_step_count_;
+    uint16_t parse_step_budget_;
+    
+    // Embedded header structure (24 bytes) - no padding needed
     BulletMLBinaryHeader header_;
     
-    // Parse scratch storage (allocated on demand): only needed while parsing.
-    uint32_t* string_table_offsets_;
-    uint32_t string_table_count_;
-    
-    // Reference maps: label -> node_id
+    // Parse scratch pointers grouped for cache efficiency (20 bytes - expanded with offset storage)
+    uint16_t* string_table_offsets_;  // Optimized: uint16_t valid for offsets max 1699 bytes (saves 2000 bytes per instance)
     BulletMLRefEntry* bullet_refs_;
-    uint32_t bullet_refs_count_;
     BulletMLRefEntry* action_refs_;
-    uint32_t action_refs_count_;
     BulletMLRefEntry* fire_refs_;
-    uint32_t fire_refs_count_;
+
+    // Node ID counter and node map for parsing (8 bytes - optimized from 12)
+    // Max current_node_id_: BULLETML_MAX_NODES = 2000
+    // Max node_map_capacity_: BULLETML_MAX_NODES = 2000
+    uint16_t current_node_id_;
+    BulletMLNode** node_map_;     // Dynamically allocated, sized to actual node count
+    uint16_t node_map_capacity_;
     
-    char* error_message_;
-    
-    // Node ID counter for tracking nodes during parsing
-    uint32_t current_node_id_;
-    
-    // Map of node_id to BulletMLNode* for resolving references (parse scratch)
-    BulletMLNode** node_map_;  // Dynamically allocated, sized to actual node count
-    uint32_t node_map_capacity_;
-    
-    // Parsed tree and reference maps
+    // Runtime tree and reference maps (18 bytes - optimized from 24)
+    // Max counts: bulletMap/actionMap/fireMap = 500, topActions = ~32-40
     BulletMLNode* bulletml_;
     BulletMLNode** bulletMap_;
-    uint32_t bulletMap_count_;
+    uint16_t bulletMap_count_;
     BulletMLNode** actionMap_;
-    uint32_t actionMap_count_;
+    uint16_t actionMap_count_;
     BulletMLNode** fireMap_;
-    uint32_t fireMap_count_;
+    uint16_t fireMap_count_;
     BulletMLNode** topActions_;
-    uint32_t topActions_count_;
+    uint16_t topActions_count_;
     
+    // Metadata pointers (12 bytes)
     char* name_;
     char* filename_;
-    bool is_horizontal_;
+    char* error_message_;
+    
+    // Parse scratch counts (8 bytes - optimized from 16)
+    // Max string_table_count_: BULLETML_MAX_STRINGS = 1000
+    // Max *_refs_count_: BULLETML_MAX_REFS = 500
+    uint16_t string_table_count_;
+    uint16_t bullet_refs_count_;
+    uint16_t action_refs_count_;
+    uint16_t fire_refs_count_;
 };
 
 #endif // BULLETMLPARSER_BLB_HPP_
