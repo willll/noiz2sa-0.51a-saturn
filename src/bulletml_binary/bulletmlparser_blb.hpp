@@ -229,7 +229,6 @@ struct BulletMLNodeHeader {
 class BulletMLParserBLB;
 
 #include "bulletmlstate.hpp"
-#include "bulletmlrunner.hpp"
 
 /// Binary BulletML Parser - Standalone Implementation
 class BulletMLParserBLB {
