@@ -34,7 +34,7 @@ struct foe {
   int cnt, color;
   int hit;
   
-  BulletMLParser *parser;
+  BulletMLParserBLB *parser;
 };
 
 typedef struct foe Foe;
@@ -44,9 +44,9 @@ typedef struct foe Foe;
 extern int foeCnt, enNum[];
 
 Foe* addFoe(int x, int y, double rank, int d, int spd, int typek, int shield, 
-	    BulletMLParser *parser);
+      BulletMLParserBLB *parser);
 Foe* addFoeBossActiveBullet(int x, int y, double rank, 
-			    int d, int spd, BulletMLParser *state);
+          int d, int spd, BulletMLParserBLB *state);
 void addFoeActiveBullet(Vector *pos, double rank, 
 			int d, int spd, int color, BulletMLState *state);
 void addFoeNormalBullet(Vector *pos, double rank, int d, int spd, int color);

@@ -10,7 +10,7 @@ class BulletMLNode;
 class BulletMLRunner {
 public:
     /// Constructor from parser
-    explicit BulletMLRunner(BulletMLParser* parser)
+    explicit BulletMLRunner(BulletMLParserBLB* parser)
         : parser_(parser), state_(nullptr) {}
 
     /// Constructor from state
@@ -54,13 +54,13 @@ public:
     virtual void run() {}
 
     /// Get the parser
-    BulletMLParser* getParser() const { return parser_; }
+    BulletMLParserBLB* getParser() const { return parser_; }
 
     /// Get the state
     BulletMLState* getState() const { return state_; }
 
 protected:
-    BulletMLParser* parser_;
+    BulletMLParserBLB* parser_;
     BulletMLState* state_;
 };
 

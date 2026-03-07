@@ -20,7 +20,7 @@
 #define BOSS_TYPE 3
 
 typedef struct {
-  BulletMLParser *bulletml;
+  BulletMLParserBLB *bulletml;
   double maxRank, rank;
   int type;
   int frq;

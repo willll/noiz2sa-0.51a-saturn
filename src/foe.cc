@@ -84,7 +84,7 @@ static Foe* getNextFoe() {
 }
 
 Foe* addFoe(int x, int y, double rank, int d, int spd, int type, int shield, 
-	    BulletMLParser *parser) {
+      BulletMLParserBLB *parser) {
   int i;
   Foe *fe = getNextFoe();
   if ( !fe ) return nullptr;
@@ -111,7 +111,7 @@ Foe* addFoe(int x, int y, double rank, int d, int spd, int type, int shield,
 }
 
 Foe* addFoeBossActiveBullet(int x, int y, double rank, 
-			    int d, int spd, BulletMLParser *parser) {
+          int d, int spd, BulletMLParserBLB *parser) {
   Foe *fe = addFoe(x, y, rank, d, spd, BOSS_TYPE, 0, parser);
   if ( !fe ) return nullptr;
   foeCnt--; enNum[BOSS_TYPE]--;

@@ -228,12 +228,6 @@ struct BulletMLNodeHeader {
 // Forward declarations for dependency resolution
 class BulletMLParserBLB;
 
-/// Type alias for compatibility
-#ifndef BULLETMLPARSER_ALIAS_DEFINED
-#define BULLETMLPARSER_ALIAS_DEFINED
-typedef BulletMLParserBLB BulletMLParser;
-#endif
-
 #include "bulletmlstate.hpp"
 #include "bulletmlrunner.hpp"
 
@@ -1178,7 +1172,7 @@ protected:
     BulletMLNode** node_map_;  // Dynamically allocated, sized to actual node count
     uint32_t node_map_capacity_;
     
-    // Parsed tree and reference maps (replaces BulletMLParser base members)
+    // Parsed tree and reference maps
     BulletMLNode* bulletml_;
     BulletMLNode** bulletMap_;
     uint32_t bulletMap_count_;

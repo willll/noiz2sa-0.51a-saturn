@@ -17,7 +17,7 @@
 
 class FoeCommand : public BulletMLRunner {
  public:
-  FoeCommand(BulletMLParser* parser, struct foe* f);
+  FoeCommand(BulletMLParserBLB* parser, struct foe* f);
   FoeCommand(BulletMLState* state, struct foe* f);
 
   virtual ~FoeCommand();

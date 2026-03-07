@@ -19,7 +19,7 @@
 #define COMMAND_SCREEN_SPD_RATE 800
 #define COMMAND_SCREEN_VEL_RATE 800
 
-FoeCommand::FoeCommand(BulletMLParser *parser, Foe *f)
+FoeCommand::FoeCommand(BulletMLParserBLB *parser, Foe *f)
   : BulletMLRunner(parser) {
   foe = f;
 }
