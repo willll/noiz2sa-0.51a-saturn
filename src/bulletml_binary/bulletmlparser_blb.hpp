@@ -40,9 +40,9 @@ typedef unsigned int size_t;
 #endif
 
 
-// Maximum fixed sizes for static allocation
+// Maximum limits used for dynamic allocation and validation
 #define BULLETML_MAX_CHILDREN 32
-#define BULLETML_MAX_FILENAME 256
+#define BULLETML_MAX_FILENAME 32
 #define BULLETML_MAX_STRINGS 1000
 #define BULLETML_MAX_STRING_TABLE_SIZE 65536
 #define BULLETML_MAX_NODES 2000
@@ -62,11 +62,18 @@ public:
         type_none = 0, type_aim, type_absolute, type_relative, type_sequence
     };
     
-    explicit BulletMLNode(const char* name) 
-        : name_(name), type_(type_none), value_(nullptr), refID_(0xFFFFFFFF), 
-          child_count_(0), parent_(nullptr) {
-        for (uint32_t i = 0; i < BULLETML_MAX_CHILDREN; ++i) {
-            children_[i] = nullptr;
+    explicit BulletMLNode(const char* name, uint32_t child_capacity = BULLETML_MAX_CHILDREN)
+        : name_(name), type_(type_none), value_(nullptr), refID_(0xFFFFFFFF),
+          children_(nullptr), child_capacity_(0), child_count_(0), parent_(nullptr) {
+        if (child_capacity > BULLETML_MAX_CHILDREN) {
+            child_capacity = BULLETML_MAX_CHILDREN;
+        }
+        child_capacity_ = child_capacity;
+        if (child_capacity_ > 0) {
+            children_ = new BulletMLNode*[child_capacity_];
+            for (uint32_t i = 0; i < child_capacity_; ++i) {
+                children_[i] = nullptr;
+            }
         }
     }
     
@@ -74,6 +81,8 @@ public:
         for (uint32_t i = 0; i < child_count_; ++i) {
             delete children_[i];
         }
+        delete[] children_;
+        children_ = nullptr;
     }
     
     void setType(const char* typeStr) {
@@ -104,7 +113,7 @@ public:
     void setRefID(uint32_t id) { refID_ = id; }
     
     void addChild(BulletMLNode* child) {
-        if (child_count_ < BULLETML_MAX_CHILDREN) {
+        if (child_count_ < child_capacity_) {
             children_[child_count_++] = child;
             child->parent_ = this;
         }
@@ -178,7 +187,8 @@ private:
     Type type_;
     const char* value_;
     uint32_t refID_;
-    BulletMLNode* children_[BULLETML_MAX_CHILDREN];
+    BulletMLNode** children_;
+    uint32_t child_capacity_;
     uint32_t child_count_;
     BulletMLNode* parent_;
     
@@ -234,47 +244,84 @@ public:
     explicit BulletMLParserBLB(const char* filename, const uint8_t* data, uint32_t size)
                 : data_(data), data_size_(size), offset_(0), owns_data_(false),
                     parse_step_count_(0), parse_step_budget_(0),
-                    bulletml_(nullptr), 
-          bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
-          topActions_count_(0), is_horizontal_(false)
+                    string_table_offsets_(nullptr), string_table_count_(0),
+                    bullet_refs_(nullptr), bullet_refs_count_(0),
+                    action_refs_(nullptr), action_refs_count_(0),
+                    fire_refs_(nullptr), fire_refs_count_(0),
+                    error_message_(nullptr),
+                    current_node_id_(0), node_map_(nullptr), node_map_capacity_(0),
+                    bulletml_(nullptr),
+                    bulletMap_(nullptr), bulletMap_count_(0),
+                    actionMap_(nullptr), actionMap_count_(0),
+                    fireMap_(nullptr), fireMap_count_(0),
+                    topActions_(nullptr), topActions_count_(0),
+                    name_(nullptr), filename_(nullptr),
+                    is_horizontal_(false)
     {
+        allocateMetadataBuffers();
         setName(filename);
-        error_message_[0] = '\0';
+        if (error_message_) error_message_[0] = '\0';
+        if (filename_) filename_[0] = '\0';
     }
     
     /// Constructor from memory buffer (unnamed)
     explicit BulletMLParserBLB(const uint8_t* data, uint32_t size)
                 : data_(data), data_size_(size), offset_(0), owns_data_(false),
                     parse_step_count_(0), parse_step_budget_(0),
+                    string_table_offsets_(nullptr), string_table_count_(0),
+                    bullet_refs_(nullptr), bullet_refs_count_(0),
+                    action_refs_(nullptr), action_refs_count_(0),
+                    fire_refs_(nullptr), fire_refs_count_(0),
+                    error_message_(nullptr),
+                    current_node_id_(0), node_map_(nullptr), node_map_capacity_(0),
                     bulletml_(nullptr),
-          bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
-          topActions_count_(0), is_horizontal_(false)
+                    bulletMap_(nullptr), bulletMap_count_(0),
+                    actionMap_(nullptr), actionMap_count_(0),
+                    fireMap_(nullptr), fireMap_count_(0),
+                    topActions_(nullptr), topActions_count_(0),
+                    name_(nullptr), filename_(nullptr),
+                    is_horizontal_(false)
     {
+        allocateMetadataBuffers();
         setName("(memory)");
-        error_message_[0] = '\0';
+        if (error_message_) error_message_[0] = '\0';
+        if (filename_) filename_[0] = '\0';
     }
 
     /// Constructor from filename (file-loaded parse path)
     explicit BulletMLParserBLB(const char* filename)
                 : data_(nullptr), data_size_(0), offset_(0), owns_data_(false),
                     parse_step_count_(0), parse_step_budget_(0),
+                    string_table_offsets_(nullptr), string_table_count_(0),
+                    bullet_refs_(nullptr), bullet_refs_count_(0),
+                    action_refs_(nullptr), action_refs_count_(0),
+                    fire_refs_(nullptr), fire_refs_count_(0),
+                    error_message_(nullptr),
+                    current_node_id_(0), node_map_(nullptr), node_map_capacity_(0),
                     bulletml_(nullptr),
-          bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
-          topActions_count_(0), is_horizontal_(false)
+                    bulletMap_(nullptr), bulletMap_count_(0),
+                    actionMap_(nullptr), actionMap_count_(0),
+                    fireMap_(nullptr), fireMap_count_(0),
+                    topActions_(nullptr), topActions_count_(0),
+                    name_(nullptr), filename_(nullptr),
+                    is_horizontal_(false)
     {
+        allocateMetadataBuffers();
         setName(filename);
-        error_message_[0] = '\0';
+        if (error_message_) error_message_[0] = '\0';
 
         uint32_t i = 0;
-        if (filename) {
+        if (filename_ && filename) {
             for (; i < BULLETML_MAX_FILENAME - 1 && filename[i] != '\0'; ++i) {
                 filename_[i] = filename[i];
             }
         }
-        filename_[i] = '\0';
+        if (filename_) filename_[i] = '\0';
     }
     
     virtual ~BulletMLParserBLB() {
+        freeParseScratch();
+        freeRuntimeMaps();
         if (bulletml_) {
             delete bulletml_;
             bulletml_ = nullptr;
@@ -285,6 +332,12 @@ public:
             data_size_ = 0;
             owns_data_ = false;
         }
+        delete[] error_message_;
+        error_message_ = nullptr;
+        delete[] name_;
+        name_ = nullptr;
+        delete[] filename_;
+        filename_ = nullptr;
     }
     
     /// Build the parser (calls parse internally)
@@ -314,7 +367,7 @@ public:
     /// Get top-level actions
     BulletMLNode** getTopActions(uint32_t* count) const {
         if (count) *count = topActions_count_;
-        return const_cast<BulletMLNode**>(topActions_);
+        return topActions_;
     }
     
     /// Check if pattern is horizontal
@@ -326,24 +379,37 @@ public:
     /// Parse the binary file (called by build())
     /// Returns true on success, false on failure
     virtual bool parse() {
-        if ((!data_ || data_size_ == 0) && filename_[0] != '\0') {
+        freeRuntimeMaps();
+
+        if (!ensureParseScratch()) {
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate parse scratch for '%s'", name_ ? name_ : "(null)");
+            return false;
+        }
+
+        if (bulletml_) {
+            delete bulletml_;
+            bulletml_ = nullptr;
+        }
+
+        if ((!data_ || data_size_ == 0) && filename_ && filename_[0] != '\0') {
             if (!loadFromFile(filename_)) {
                 SRL::Logger::LogFatal("[BulletML] Failed to load file: %s", filename_);
+                freeParseScratch();
                 return false;
             }
         }
 
         if (!data_ || data_size_ == 0) {
-            SRL::Logger::LogFatal("[BulletML] No data to parse for '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] No data to parse for '%s'", name_ ? name_ : "(null)");
+            freeParseScratch();
             return false;
         }
-        
+
         SRL::Logger::LogTrace("[BulletML] Starting parse for '%s', size=%d", name_, data_size_);
-        
+
         offset_ = 0;
         current_node_id_ = 0;
         parse_step_count_ = 0;
-        // Budget scales with file size and has a floor, preventing infinite recursion.
         parse_step_budget_ = (data_size_ / 8) + 256;
         if (parse_step_budget_ < 512) {
             parse_step_budget_ = 512;
@@ -352,98 +418,129 @@ public:
         bullet_refs_count_ = 0;
         action_refs_count_ = 0;
         fire_refs_count_ = 0;
-        // Initialize node map (static array)
-        for (uint32_t i = 0; i < BULLETML_MAX_NODES; ++i) {
-            node_map_[i] = nullptr;
-        }
-        
-        // Verify header
+
         SRL::Logger::LogTrace("[BulletML] Verifying header for '%s'", name_);
         if (!verifyHeader()) {
             SRL::Logger::LogFatal("[BulletML] Header verification failed for '%s'", name_);
+            freeParseScratch();
             return false;
         }
         SRL::Logger::LogTrace("[BulletML] Header verified for '%s'", name_);
-        
-        // Load string table
+
+        uint32_t actual_node_count = countNodesInTree();
+        if (actual_node_count == 0 || actual_node_count > BULLETML_MAX_NODES) {
+            SRL::Logger::LogFatal("[BulletML] Invalid node count %u for '%s'", actual_node_count, name_);
+            freeParseScratch();
+            return false;
+        }
+        if (!allocateNodeMap(actual_node_count)) {
+            freeParseScratch();
+            return false;
+        }
+        for (uint32_t i = 0; i < node_map_capacity_; ++i) {
+            node_map_[i] = nullptr;
+        }
+
         SRL::Logger::LogTrace("[BulletML] Loading string table for '%s'", name_);
         if (!loadStringTable()) {
             SRL::Logger::LogFatal("[BulletML] Failed to load string table for '%s'", name_);
+            freeParseScratch();
             return false;
         }
         SRL::Logger::LogTrace("[BulletML] String table loaded for '%s'", name_);
-        
-        // Load reference maps
+
         SRL::Logger::LogTrace("[BulletML] Loading reference maps for '%s'", name_);
         if (!loadReferenceMaps()) {
             SRL::Logger::LogFatal("[BulletML] Failed to load reference maps for '%s'", name_);
+            freeParseScratch();
             return false;
         }
         SRL::Logger::LogTrace("[BulletML] Reference maps loaded for '%s'", name_);
-        
-        // Parse tree
+
         SRL::Logger::LogTrace("[BulletML] Parsing tree for '%s'", name_);
         offset_ = header_.tree_offset;
         bulletml_ = parseNode();
-        
         if (!bulletml_) {
             SRL::Logger::LogFatal("[BulletML] Failed to parse tree for '%s'", name_);
+            freeParseScratch();
             return false;
         }
-        
-        // Build reference maps
+
         bulletMap_count_ = 0;
         actionMap_count_ = 0;
         fireMap_count_ = 0;
-        
-        // Process bullet references
+        topActions_count_ = 0;
+
+        uint32_t bullet_valid_count = 0;
+        uint32_t action_valid_count = 0;
+        uint32_t fire_valid_count = 0;
+        uint32_t top_valid_count = 0;
+
         for (uint32_t i = 0; i < bullet_refs_count_; ++i) {
             uint32_t node_id = bullet_refs_[i].node_id;
-            if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
-                if (bulletMap_count_ < BULLETML_MAX_REFS) {
-                    bulletMap_[bulletMap_count_++] = node_map_[node_id];
-                }
+            if (node_id < node_map_capacity_ && node_map_[node_id]) {
+                ++bullet_valid_count;
             }
         }
-        
-        // Process action references
         for (uint32_t i = 0; i < action_refs_count_; ++i) {
             uint32_t node_id = action_refs_[i].node_id;
-            if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
-                if (actionMap_count_ < BULLETML_MAX_REFS) {
-                    actionMap_[actionMap_count_++] = node_map_[node_id];
-                }
+            if (node_id < node_map_capacity_ && node_map_[node_id]) {
+                ++action_valid_count;
             }
         }
-        
-        // Process fire references
         for (uint32_t i = 0; i < fire_refs_count_; ++i) {
             uint32_t node_id = fire_refs_[i].node_id;
-            if (node_id < BULLETML_MAX_NODES && node_map_[node_id]) {
-                if (fireMap_count_ < BULLETML_MAX_REFS) {
-                    fireMap_[fireMap_count_++] = node_map_[node_id];
+            if (node_id < node_map_capacity_ && node_map_[node_id]) {
+                ++fire_valid_count;
+            }
+        }
+        if (bulletml_) {
+            BulletMLNode::ChildIterator ite;
+            for (ite = bulletml_->childBegin(); ite != bulletml_->childEnd(); ++ite) {
+                if ((*ite)->getNameAsName() == BulletMLNode::action) {
+                    ++top_valid_count;
                 }
             }
         }
-        
-        // Find and populate top actions
+
+        if (!allocateRuntimeMaps(bullet_valid_count, action_valid_count, fire_valid_count, top_valid_count)) {
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate runtime maps for '%s'", name_ ? name_ : "(null)");
+            freeParseScratch();
+            return false;
+        }
+
+        for (uint32_t i = 0; i < bullet_refs_count_; ++i) {
+            uint32_t node_id = bullet_refs_[i].node_id;
+            if (node_id < node_map_capacity_ && node_map_[node_id] && bulletMap_count_ < bullet_valid_count) {
+                bulletMap_[bulletMap_count_++] = node_map_[node_id];
+            }
+        }
+        for (uint32_t i = 0; i < action_refs_count_; ++i) {
+            uint32_t node_id = action_refs_[i].node_id;
+            if (node_id < node_map_capacity_ && node_map_[node_id] && actionMap_count_ < action_valid_count) {
+                actionMap_[actionMap_count_++] = node_map_[node_id];
+            }
+        }
+        for (uint32_t i = 0; i < fire_refs_count_; ++i) {
+            uint32_t node_id = fire_refs_[i].node_id;
+            if (node_id < node_map_capacity_ && node_map_[node_id] && fireMap_count_ < fire_valid_count) {
+                fireMap_[fireMap_count_++] = node_map_[node_id];
+            }
+        }
+
         SRL::Logger::LogTrace("[BulletML] Finding top actions for '%s'", name_);
         topActions_count_ = 0;
         if (bulletml_) {
             BulletMLNode::ChildIterator ite;
             for (ite = bulletml_->childBegin(); ite != bulletml_->childEnd(); ++ite) {
-                if ((*ite)->getNameAsName() == BulletMLNode::action) {
-                    if (topActions_count_ < BULLETML_MAX_REFS) {
-                        topActions_[topActions_count_++] = *ite;
-                    }
+                if ((*ite)->getNameAsName() == BulletMLNode::action && topActions_count_ < top_valid_count) {
+                    topActions_[topActions_count_++] = *ite;
                 }
             }
         }
-        
+
         SRL::Logger::LogTrace("[BulletML] Parse complete for '%s', found %d top actions", name_, topActions_count_);
-        
-        // Free raw data buffer after successful parse (saves ~1-2KB per file).
-        // The parsed tree structure in bulletml_ is all we need going forward.
+
         if (owns_data_ && data_) {
             SRL::Logger::LogTrace("[BulletML] Freeing raw data buffer (%d bytes) for '%s'", data_size_, name_);
             delete[] data_;
@@ -451,7 +548,8 @@ public:
             data_size_ = 0;
             owns_data_ = false;
         }
-        
+
+        freeParseScratch();
         return true;
     }
     
@@ -459,8 +557,186 @@ public:
     const char* getErrorMessage() const { return error_message_; }
 
 private:
-    /// Static temp buffer for file loading (reused across instances)
-    static uint8_t temp_load_buffer_[65536];
+    inline void allocateMetadataBuffers() {
+        error_message_ = new char[256];
+        name_ = new char[BULLETML_MAX_FILENAME];
+        filename_ = new char[BULLETML_MAX_FILENAME];
+    }
+
+    inline bool allocateRuntimeMaps(uint32_t bullet_count,
+                                    uint32_t action_count,
+                                    uint32_t fire_count,
+                                    uint32_t top_count) {
+        freeRuntimeMaps();
+
+        if (bullet_count > 0) {
+            bulletMap_ = new BulletMLNode*[bullet_count];
+            if (!bulletMap_) {
+                freeRuntimeMaps();
+                return false;
+            }
+            for (uint32_t i = 0; i < bullet_count; ++i) {
+                bulletMap_[i] = nullptr;
+            }
+        }
+
+        if (action_count > 0) {
+            actionMap_ = new BulletMLNode*[action_count];
+            if (!actionMap_) {
+                freeRuntimeMaps();
+                return false;
+            }
+            for (uint32_t i = 0; i < action_count; ++i) {
+                actionMap_[i] = nullptr;
+            }
+        }
+
+        if (fire_count > 0) {
+            fireMap_ = new BulletMLNode*[fire_count];
+            if (!fireMap_) {
+                freeRuntimeMaps();
+                return false;
+            }
+            for (uint32_t i = 0; i < fire_count; ++i) {
+                fireMap_[i] = nullptr;
+            }
+        }
+
+        if (top_count > 0) {
+            topActions_ = new BulletMLNode*[top_count];
+            if (!topActions_) {
+                freeRuntimeMaps();
+                return false;
+            }
+            for (uint32_t i = 0; i < top_count; ++i) {
+                topActions_[i] = nullptr;
+            }
+        }
+
+        return true;
+    }
+
+    inline void freeRuntimeMaps() {
+        delete[] bulletMap_;
+        bulletMap_ = nullptr;
+        delete[] actionMap_;
+        actionMap_ = nullptr;
+        delete[] fireMap_;
+        fireMap_ = nullptr;
+        delete[] topActions_;
+        topActions_ = nullptr;
+        bulletMap_count_ = 0;
+        actionMap_count_ = 0;
+        fireMap_count_ = 0;
+        topActions_count_ = 0;
+    }
+
+    inline bool ensureParseScratch() {
+        if (!string_table_offsets_) {
+            string_table_offsets_ = new uint32_t[BULLETML_MAX_STRINGS];
+            if (!string_table_offsets_) {
+                freeParseScratch();
+                return false;
+            }
+        }
+        if (!bullet_refs_) {
+            bullet_refs_ = new BulletMLRefEntry[BULLETML_MAX_REFS];
+            if (!bullet_refs_) {
+                freeParseScratch();
+                return false;
+            }
+        }
+        if (!action_refs_) {
+            action_refs_ = new BulletMLRefEntry[BULLETML_MAX_REFS];
+            if (!action_refs_) {
+                freeParseScratch();
+                return false;
+            }
+        }
+        if (!fire_refs_) {
+            fire_refs_ = new BulletMLRefEntry[BULLETML_MAX_REFS];
+            if (!fire_refs_) {
+                freeParseScratch();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    inline void freeParseScratch() {
+        delete[] string_table_offsets_;
+        string_table_offsets_ = nullptr;
+        delete[] bullet_refs_;
+        bullet_refs_ = nullptr;
+        delete[] action_refs_;
+        action_refs_ = nullptr;
+        delete[] fire_refs_;
+        fire_refs_ = nullptr;
+        delete[] node_map_;
+        node_map_ = nullptr;
+        node_map_capacity_ = 0;
+        string_table_count_ = 0;
+        bullet_refs_count_ = 0;
+        action_refs_count_ = 0;
+        fire_refs_count_ = 0;
+        current_node_id_ = 0;
+    }
+
+    inline bool allocateNodeMap(uint32_t node_count) {
+        delete[] node_map_;
+        node_map_ = nullptr;
+        node_map_capacity_ = 0;
+        if (node_count == 0) {
+            return false;
+        }
+        node_map_ = new BulletMLNode*[node_count];
+        if (!node_map_) {
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate node_map for %u nodes in '%s'", node_count, name_ ? name_ : "(null)");
+            return false;
+        }
+        node_map_capacity_ = node_count;
+        return true;
+    }
+
+    inline uint32_t countNodesInTree() {
+        if (!data_ || header_.tree_offset >= data_size_) {
+            return 0;
+        }
+        uint32_t saved_offset = offset_;
+        uint32_t count = 0;
+        offset_ = header_.tree_offset;
+        if (!countNodesRecursive(count, 0)) {
+            offset_ = saved_offset;
+            return 0;
+        }
+        offset_ = saved_offset;
+        return count;
+    }
+
+    inline bool countNodesRecursive(uint32_t& count, uint32_t depth) {
+        if (depth > BULLETML_MAX_NODES || offset_ + sizeof(BulletMLNodeHeader) > data_size_) {
+            return false;
+        }
+
+        uint8_t node_type = readUInt8();
+        uint8_t value_type = readUInt8();
+        uint16_t child_count = readUInt16();
+        (void)readUInt32();
+        (void)readUInt32();
+        (void)readUInt32();
+
+        if (node_type >= 20 || value_type >= 5 || child_count > BULLETML_MAX_CHILDREN) {
+            return false;
+        }
+
+        ++count;
+        for (uint16_t i = 0; i < child_count; ++i) {
+            if (!countNodesRecursive(count, depth + 1)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     /// Load binary file from storage
     bool loadFromFile(const char* filename) {
@@ -480,24 +756,15 @@ private:
         
         SRL::Logger::LogTrace("[BulletML] File exists: %s, preparing direct read", filename);
 
-        // Read file into temporary static buffer, limiting to actual file size
+        // Read file directly into final-sized buffer to avoid extra temporary allocation.
+        const uint32_t max_file_size = 65536;
         int32_t bytes_to_read = (int32_t)file.Size.Bytes;
-        if (bytes_to_read > (int32_t)sizeof(temp_load_buffer_)) {
+        if (bytes_to_read > (int32_t)max_file_size) {
             SRL::Logger::LogFatal("[BulletML] File too large: %s (%d bytes, buffer is %d)", 
-                                  filename, bytes_to_read, (int32_t)sizeof(temp_load_buffer_));
+                                  filename, bytes_to_read, (int32_t)max_file_size);
             file.Close();
             return false;
         }
-
-        int32_t bytes_read = file.LoadBytes(0, bytes_to_read, temp_load_buffer_);
-
-        if (bytes_read <= 0) {
-            SRL::Logger::LogFatal("[BulletML] Failed to load file bytes: %s (bytes_read=%d)", filename, bytes_read);
-            return false;
-        }
-
-        SRL::Logger::LogTrace("[BulletML] Successfully read %d bytes from %s (expected %d)", 
-                              bytes_read, filename, bytes_to_read);
 
         // If parse() is called again on the same parser, free previous owned data first.
         if (owns_data_ && data_) {
@@ -507,15 +774,21 @@ private:
             owns_data_ = false;
         }
         
-        // Allocate exact size needed and copy data (so temp buffer can be reused)
-        uint8_t* allocated_buffer = new uint8_t[bytes_read];
+        // Allocate exact size needed and read directly into it.
+        uint8_t* allocated_buffer = new uint8_t[bytes_to_read];
         if (!allocated_buffer) {
-            SRL::Logger::LogFatal("[BulletML] Failed to allocate %d bytes for %s", bytes_read, filename);
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate %d bytes for %s", bytes_to_read, filename);
             return false;
         }
-        
-        memcpy(allocated_buffer, temp_load_buffer_, bytes_read);
-        SRL::Logger::LogTrace("[BulletML] Allocated and copied %d bytes for %s", bytes_read, filename);
+
+        int32_t bytes_read = file.LoadBytes(0, bytes_to_read, allocated_buffer);
+        if (bytes_read <= 0) {
+            SRL::Logger::LogFatal("[BulletML] Failed to load file bytes: %s (bytes_read=%d)", filename, bytes_read);
+            delete[] allocated_buffer;
+            return false;
+        }
+        SRL::Logger::LogTrace("[BulletML] Successfully read %d bytes from %s (expected %d)", 
+                              bytes_read, filename, bytes_to_read);
         
         // Update data pointers (class will own and delete this memory)
         data_ = allocated_buffer;
@@ -526,6 +799,9 @@ private:
     }
 
     inline void setName(const char* name) {
+        if (!name_) {
+            return;
+        }
         uint32_t i = 0;
         for (; i < BULLETML_MAX_FILENAME - 1 && name && name[i] != '\0'; ++i) {
             name_[i] = name[i];
@@ -589,7 +865,7 @@ inline const char* readString() {
     }
     
     // Store offset into data buffer for this string
-    if (string_table_count_ < BULLETML_MAX_STRINGS) {
+    if (string_table_offsets_ && string_table_count_ < BULLETML_MAX_STRINGS) {
         string_table_offsets_[string_table_count_] = offset_;  // Store offset into data_
         string_table_count_++;
     }
@@ -601,7 +877,7 @@ inline const char* readString() {
 
 /// Get string from string table by index
 inline const char* readStringAt(uint32_t index) {
-    if (index >= string_table_count_) {
+    if (!string_table_offsets_ || index >= string_table_count_) {
         return "";
     }
     // string_table_offsets_ stores offsets into data_
@@ -746,15 +1022,28 @@ inline const char* readStringAt(uint32_t index) {
     
     /// Convert binary node type to string name
     inline static const char* nodeTypeToString(uint8_t type) {
-        static const char* names[] = {
-            "bulletml", "bullet", "action", "fire", "changeDirection", "changeSpeed",
-            "accel", "wait", "repeat", "bulletRef", "actionRef", "fireRef",
-            "vanish", "horizontal", "vertical", "term", "times", "direction",
-            "speed", "param"
-        };
-        
-        if (type < 20) {
-            return names[type];
+        switch (type) {
+            case 0: return "bulletml";
+            case 1: return "bullet";
+            case 2: return "action";
+            case 3: return "fire";
+            case 4: return "changeDirection";
+            case 5: return "changeSpeed";
+            case 6: return "accel";
+            case 7: return "wait";
+            case 8: return "repeat";
+            case 9: return "bulletRef";
+            case 10: return "actionRef";
+            case 11: return "fireRef";
+            case 12: return "vanish";
+            case 13: return "horizontal";
+            case 14: return "vertical";
+            case 15: return "term";
+            case 16: return "times";
+            case 17: return "direction";
+            case 18: return "speed";
+            case 19: return "param";
+            default: break;
         }
         return "unknown";
     }
@@ -766,8 +1055,8 @@ inline const char* readStringAt(uint32_t index) {
             return nullptr;
         }
 
-        if (current_node_id_ >= BULLETML_MAX_NODES) {
-            SRL::Logger::LogFatal("[BulletML] Node count limit exceeded in '%s' (max=%u)", name_, BULLETML_MAX_NODES);
+        if (current_node_id_ >= node_map_capacity_) {
+            SRL::Logger::LogFatal("[BulletML] Node count limit exceeded in '%s' (max=%u)", name_, node_map_capacity_);
             return nullptr;
         }
 
@@ -809,19 +1098,22 @@ inline const char* readStringAt(uint32_t index) {
         
         // Create node
         const char* node_name = nodeTypeToString(node_header.node_type);
-        BulletMLNode* node = new BulletMLNode(node_name);
+        BulletMLNode* node = new BulletMLNode(node_name, node_header.child_count);
         
         // Set node ID for reference mapping
         uint32_t this_node_id = current_node_id_++;
-        if (this_node_id < BULLETML_MAX_NODES) {
+        if (this_node_id < node_map_capacity_) {
             node_map_[this_node_id] = node;
         }
         
         // Set type if present
         if (node_header.value_type != 0) {
-            static const char* type_names[] = { "", "aim", "absolute", "relative", "sequence" };
-            if (node_header.value_type < 5) {
-                node->setType(type_names[node_header.value_type]);
+            switch (node_header.value_type) {
+                case 1: node->setType("aim"); break;
+                case 2: node->setType("absolute"); break;
+                case 3: node->setType("relative"); break;
+                case 4: node->setType("sequence"); break;
+                default: break;
             }
         }
         
@@ -865,55 +1157,41 @@ protected:
     
     BulletMLBinaryHeader header_;
     
-    // Parse scratch storage (shared): only needed while parsing, not at runtime.
-    static uint32_t string_table_offsets_[BULLETML_MAX_STRINGS];
-    static uint32_t string_table_count_;
+    // Parse scratch storage (allocated on demand): only needed while parsing.
+    uint32_t* string_table_offsets_;
+    uint32_t string_table_count_;
     
     // Reference maps: label -> node_id
-    static BulletMLRefEntry bullet_refs_[BULLETML_MAX_REFS];
-    static uint32_t bullet_refs_count_;
-    static BulletMLRefEntry action_refs_[BULLETML_MAX_REFS];
-    static uint32_t action_refs_count_;
-    static BulletMLRefEntry fire_refs_[BULLETML_MAX_REFS];
-    static uint32_t fire_refs_count_;
+    BulletMLRefEntry* bullet_refs_;
+    uint32_t bullet_refs_count_;
+    BulletMLRefEntry* action_refs_;
+    uint32_t action_refs_count_;
+    BulletMLRefEntry* fire_refs_;
+    uint32_t fire_refs_count_;
     
-    char error_message_[256];
+    char* error_message_;
     
     // Node ID counter for tracking nodes during parsing
-    static uint32_t current_node_id_;
+    uint32_t current_node_id_;
     
     // Map of node_id to BulletMLNode* for resolving references (parse scratch)
-    static BulletMLNode* node_map_[BULLETML_MAX_NODES];
+    BulletMLNode** node_map_;  // Dynamically allocated, sized to actual node count
+    uint32_t node_map_capacity_;
     
     // Parsed tree and reference maps (replaces BulletMLParser base members)
     BulletMLNode* bulletml_;
-    BulletMLNode* bulletMap_[BULLETML_MAX_REFS];
+    BulletMLNode** bulletMap_;
     uint32_t bulletMap_count_;
-    BulletMLNode* actionMap_[BULLETML_MAX_REFS];
+    BulletMLNode** actionMap_;
     uint32_t actionMap_count_;
-    BulletMLNode* fireMap_[BULLETML_MAX_REFS];
+    BulletMLNode** fireMap_;
     uint32_t fireMap_count_;
-    BulletMLNode* topActions_[BULLETML_MAX_REFS];
+    BulletMLNode** topActions_;
     uint32_t topActions_count_;
     
-    char name_[BULLETML_MAX_FILENAME];
-    char filename_[BULLETML_MAX_FILENAME];
+    char* name_;
+    char* filename_;
     bool is_horizontal_;
 };
-
-// Shared parse scratch storage (reduces per-instance RAM usage significantly).
-inline uint32_t BulletMLParserBLB::string_table_offsets_[BULLETML_MAX_STRINGS];
-inline uint32_t BulletMLParserBLB::string_table_count_ = 0;
-inline BulletMLRefEntry BulletMLParserBLB::bullet_refs_[BULLETML_MAX_REFS];
-inline uint32_t BulletMLParserBLB::bullet_refs_count_ = 0;
-inline BulletMLRefEntry BulletMLParserBLB::action_refs_[BULLETML_MAX_REFS];
-inline uint32_t BulletMLParserBLB::action_refs_count_ = 0;
-inline BulletMLRefEntry BulletMLParserBLB::fire_refs_[BULLETML_MAX_REFS];
-inline uint32_t BulletMLParserBLB::fire_refs_count_ = 0;
-inline uint32_t BulletMLParserBLB::current_node_id_ = 0;
-inline BulletMLNode* BulletMLParserBLB::node_map_[BULLETML_MAX_NODES];
-
-// Static temp buffer for file loading (shared across all instances for loading only)
-inline uint8_t BulletMLParserBLB::temp_load_buffer_[65536];
 
 #endif // BULLETMLPARSER_BLB_HPP_
