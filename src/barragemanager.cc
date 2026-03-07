@@ -137,10 +137,12 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
       delete brg[i].bulletml;
       brg[i].bulletml = nullptr;
-      continue;
+      //continue;
+      SRL::System::Exit(1);
+    } else {
+      SRL::Logger::LogDebug("[BARRAGE] Successfully loaded BulletML file: %s/%s", dirPath, line);
     }
     i++;
-    SRL::Logger::LogInfo("[BARRAGE] Loaded: %s/%s", dirPath, line);
   }
   
   // Change back to root directory after loading all files
