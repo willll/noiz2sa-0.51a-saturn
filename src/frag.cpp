@@ -72,7 +72,7 @@ void addShotFrag(Vector *p) {
 void addEnemyFrag(Vector *p, int mx, int my, int type) {
   Vector pos, vel;
   int cmx, cmy;
-  int i;
+  unsigned int i;
   pos.x = (p->x/SCAN_WIDTH*LAYER_WIDTH)>>8;
   pos.y = (p->y/SCAN_HEIGHT*LAYER_HEIGHT)>>8;
   cmx = (mx/SCAN_WIDTH*LAYER_WIDTH)>>8;
