@@ -57,14 +57,9 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   
   SRL::Logger::LogDebug("[BARRAGE] Opening list file: %s", listPath);
   SRL::Cd::File listFile(listPath);
-  
-  if (!listFile.Open()) {
-    SRL::Logger::LogFatal("[BARRAGE] Failed to open LIST file: %s", listPath);
-    SRL::System::Exit(1);
-  }
-  
-  if (!listFile.IsOpen()) {
-    SRL::Logger::LogFatal("[BARRAGE] file: %s is not opened", listPath);
+
+  if (!listFile.Exists()) {
+    SRL::Logger::LogFatal("[BARRAGE] LIST file does not exist: %s", listPath);
     SRL::System::Exit(1);
   }
   
@@ -77,9 +72,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   if (bytesToRead > (int32_t)sizeof(buffer)) {
     bytesToRead = (int32_t)sizeof(buffer);
   }
-  int32_t bufferSize = listFile.Read(bytesToRead, buffer);
-  
-  listFile.Close();
+  int32_t bufferSize = listFile.LoadBytes(0, bytesToRead, buffer);
   
   if (bufferSize <= 0) {
     SRL::Logger::LogFatal("[BARRAGE] Failed to read LIST file or file is empty (bytes read: %d)", bufferSize);

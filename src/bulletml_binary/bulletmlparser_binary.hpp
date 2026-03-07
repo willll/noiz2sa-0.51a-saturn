@@ -39,10 +39,6 @@
 typedef unsigned int size_t;
 #endif
 
-// Platform-specific export declarations
-#ifndef DECLSPEC
-#define DECLSPEC
-#endif
 
 // Maximum fixed sizes for static allocation
 #define BULLETML_MAX_CHILDREN 32
@@ -303,8 +299,9 @@ protected:
 class BulletMLParserBinary {
 public:
     /// Constructor from memory buffer (filename for identification)
-    DECLSPEC explicit BulletMLParserBinary(const char* filename, const uint8_t* data, uint32_t size)
+    explicit BulletMLParserBinary(const char* filename, const uint8_t* data, uint32_t size)
                 : data_(data), data_size_(size), offset_(0), owns_data_(false),
+                    parse_step_count_(0), parse_step_budget_(0),
                     bulletml_(nullptr), 
           bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
           topActions_count_(0), is_horizontal_(false)
@@ -314,8 +311,9 @@ public:
     }
     
     /// Constructor from memory buffer (unnamed)
-    DECLSPEC explicit BulletMLParserBinary(const uint8_t* data, uint32_t size)
+    explicit BulletMLParserBinary(const uint8_t* data, uint32_t size)
                 : data_(data), data_size_(size), offset_(0), owns_data_(false),
+                    parse_step_count_(0), parse_step_budget_(0),
                     bulletml_(nullptr),
           bulletMap_count_(0), actionMap_count_(0), fireMap_count_(0),
           topActions_count_(0), is_horizontal_(false)
@@ -324,7 +322,7 @@ public:
         error_message_[0] = '\0';
     }
     
-    DECLSPEC virtual ~BulletMLParserBinary() {
+    virtual ~BulletMLParserBinary() {
         if (bulletml_) {
             delete bulletml_;
             bulletml_ = nullptr;
@@ -339,43 +337,43 @@ public:
     
     /// Build the parser (calls parse internally)
     /// Returns true on success, false on failure
-    DECLSPEC bool build() {
+    bool build() {
         return parse();
     }
     
     /// Get the root node
-    DECLSPEC BulletMLNode* getRoot() const { return bulletml_; }
+    BulletMLNode* getRoot() const { return bulletml_; }
     
     /// Get bullet by reference ID
-    DECLSPEC BulletMLNode* getBullet(uint32_t id) const {
+    BulletMLNode* getBullet(uint32_t id) const {
         return id < bulletMap_count_ ? bulletMap_[id] : nullptr;
     }
     
     /// Get action by reference ID
-    DECLSPEC BulletMLNode* getAction(uint32_t id) const {
+    BulletMLNode* getAction(uint32_t id) const {
         return id < actionMap_count_ ? actionMap_[id] : nullptr;
     }
     
     /// Get fire by reference ID  
-    DECLSPEC BulletMLNode* getFire(uint32_t id) const {
+    BulletMLNode* getFire(uint32_t id) const {
         return id < fireMap_count_ ? fireMap_[id] : nullptr;
     }
     
     /// Get top-level actions
-    DECLSPEC BulletMLNode** getTopActions(uint32_t* count) const {
+    BulletMLNode** getTopActions(uint32_t* count) const {
         if (count) *count = topActions_count_;
         return const_cast<BulletMLNode**>(topActions_);
     }
     
     /// Check if pattern is horizontal
-    DECLSPEC bool isHorizontal() const { return is_horizontal_; }
+    bool isHorizontal() const { return is_horizontal_; }
     
     /// Get parser name
-    DECLSPEC const char* getName() const { return name_; }
+    const char* getName() const { return name_; }
 
     /// Parse the binary file (called by build())
     /// Returns true on success, false on failure
-    DECLSPEC virtual bool parse() {
+    virtual bool parse() {
         if (!data_ || data_size_ == 0) {
             SRL::Logger::LogFatal("[BulletML] No data to parse for '%s'", name_);
             return false;
@@ -385,6 +383,12 @@ public:
         
         offset_ = 0;
         current_node_id_ = 0;
+        parse_step_count_ = 0;
+        // Budget scales with file size and has a floor, preventing infinite recursion.
+        parse_step_budget_ = (data_size_ / 8) + 256;
+        if (parse_step_budget_ < 512) {
+            parse_step_budget_ = 512;
+        }
         string_table_count_ = 0;
         bullet_refs_count_ = 0;
         action_refs_count_ = 0;
@@ -478,11 +482,22 @@ public:
         }
         
         SRL::Logger::LogTrace("[BulletML] Parse complete for '%s', found %d top actions", name_, topActions_count_);
+        
+        // Free raw data buffer after successful parse (saves ~1-2KB per file).
+        // The parsed tree structure in bulletml_ is all we need going forward.
+        if (owns_data_ && data_) {
+            SRL::Logger::LogTrace("[BulletML] Freeing raw data buffer (%d bytes) for '%s'", data_size_, name_);
+            delete[] data_;
+            data_ = nullptr;
+            data_size_ = 0;
+            owns_data_ = false;
+        }
+        
         return true;
     }
     
     /// Get last error message (deprecated, use SRL logging instead)
-    DECLSPEC const char* getErrorMessage() const { return error_message_; }
+    const char* getErrorMessage() const { return error_message_; }
 
 private:
     inline void setName(const char* name) {
@@ -611,6 +626,23 @@ inline const char* readStringAt(uint32_t index) {
             SRL::Logger::LogFatal("[BulletML] File size mismatch in '%s': header says %u, actual is %u", name_, header_.file_size, data_size_);
             return false;
         }
+
+        // Validate section offsets to prevent out-of-range tree parsing.
+        if (header_.string_table_offset < sizeof(BulletMLBinaryHeader) || header_.string_table_offset >= data_size_) {
+            SRL::Logger::LogFatal("[BulletML] Invalid string table offset in '%s': %u (size=%u)",
+                                  name_, header_.string_table_offset, data_size_);
+            return false;
+        }
+        if (header_.refmap_offset < sizeof(BulletMLBinaryHeader) || header_.refmap_offset >= data_size_) {
+            SRL::Logger::LogFatal("[BulletML] Invalid reference map offset in '%s': %u (size=%u)",
+                                  name_, header_.refmap_offset, data_size_);
+            return false;
+        }
+        if (header_.tree_offset < sizeof(BulletMLBinaryHeader) || header_.tree_offset >= data_size_) {
+            SRL::Logger::LogFatal("[BulletML] Invalid tree offset in '%s': %u (size=%u)",
+                                  name_, header_.tree_offset, data_size_);
+            return false;
+        }
         
         // Set orientation
         if (header_.orientation == 1) {
@@ -703,7 +735,24 @@ inline const char* readStringAt(uint32_t index) {
     }
     
     /// Parse node tree recursively
-    inline BulletMLNode* parseNode() {
+    inline BulletMLNode* parseNode(uint32_t depth = 0) {
+        if (depth > BULLETML_MAX_NODES) {
+            SRL::Logger::LogFatal("[BulletML] Parse depth limit exceeded in '%s'", name_);
+            return nullptr;
+        }
+
+        if (current_node_id_ >= BULLETML_MAX_NODES) {
+            SRL::Logger::LogFatal("[BulletML] Node count limit exceeded in '%s' (max=%u)", name_, BULLETML_MAX_NODES);
+            return nullptr;
+        }
+
+        parse_step_count_++;
+        if (parse_step_count_ > parse_step_budget_) {
+            SRL::Logger::LogFatal("[BulletML] Parse step budget exceeded in '%s' (steps=%u, budget=%u)",
+                                  name_, parse_step_count_, parse_step_budget_);
+            return nullptr;
+        }
+
         CHECK_BOUNDS_PTR(16);
         
         // Read node header
@@ -714,6 +763,24 @@ inline const char* readStringAt(uint32_t index) {
         node_header.ref_id = readUInt32();
         node_header.value_string_id = readUInt32();
         node_header.label_string_id = readUInt32();
+
+        if (node_header.node_type >= 20) {
+            SRL::Logger::LogFatal("[BulletML] Invalid node type %u in '%s' at depth %u (offset=%u)",
+                                  node_header.node_type, name_, depth, offset_);
+            return nullptr;
+        }
+
+        if (node_header.value_type >= 5) {
+            SRL::Logger::LogFatal("[BulletML] Invalid value type %u in '%s' at depth %u (offset=%u)",
+                                  node_header.value_type, name_, depth, offset_);
+            return nullptr;
+        }
+
+        if (node_header.child_count > BULLETML_MAX_CHILDREN) {
+            SRL::Logger::LogFatal("[BulletML] Child count %u exceeds max %u in '%s' at depth %u",
+                                  node_header.child_count, BULLETML_MAX_CHILDREN, name_, depth);
+            return nullptr;
+        }
         
         // Create node
         const char* node_name = nodeTypeToString(node_header.node_type);
@@ -747,7 +814,7 @@ inline const char* readStringAt(uint32_t index) {
         
         // Parse children
         for (uint16_t i = 0; i < node_header.child_count; ++i) {
-            BulletMLNode* child = parseNode();
+            BulletMLNode* child = parseNode(depth + 1);
             if (!child) {
                 delete node;
                 return nullptr;
@@ -766,6 +833,10 @@ protected:
     uint32_t data_size_;         // Size of data
     uint32_t offset_;            // Current read offset
     bool owns_data_;             // True if we allocated data_
+
+    // Per-parse watchdog to prevent pathological recursion/looping.
+    uint32_t parse_step_count_;
+    uint32_t parse_step_budget_;
     
     BulletMLBinaryHeader header_;
     
@@ -832,12 +903,12 @@ public:
             SRL::Logger::LogFatal("[BulletML] No filename specified");
             return false;
         }
-        
+
         if (!loadFromFile(filename_)) {
             SRL::Logger::LogFatal("[BulletML] Failed to load file: %s", filename_);
             return false;
         }
-        
+
         // Data loaded and allocated by loadFromFile(), call base class parse
         return BulletMLParserBinary::parse();
     }
@@ -855,7 +926,7 @@ private:
         }
 
         SRL::Logger::LogTrace("[BulletML] Attempting to load file: %s", filename);
-        
+
         SRL::Cd::File file(filename);
         
         if (!file.Exists()) {
