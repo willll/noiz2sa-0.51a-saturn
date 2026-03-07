@@ -40,6 +40,8 @@ static const char *BARRAGE_DIR_NAME[] = {
 
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   int i = 0;
+  int listEntries = 0;
+  int parseFailures = 0;
   char fileName[256];
   const char * listPath = "LIST.TXT";
   char line[32];
@@ -76,10 +78,11 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   
   if (bufferSize <= 0) {
     SRL::Logger::LogFatal("[BARRAGE] Failed to read LIST file or file is empty (bytes read: %d)", bufferSize);
-    return 0;
+    SRL::System::Exit(1);
   }
   
   SRL::Logger::LogDebug("[BARRAGE] Read %d bytes from LIST file", bufferSize);
+  SRL::Logger::LogInfo("[BLB-TRACE] Begin directory scan: %s", dirPath);
   
   // Stay in the current directory to load files directly by name
   SRL::Logger::LogTrace("[BARRAGE] Loading files from directory: %s", dirPath);
@@ -129,17 +132,22 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     }
     
     SRL::Logger::LogTrace("[BARRAGE] Processing file from LIST: %s", line);
+    listEntries++;
     
     // Load the file directly by name (we're already in the correct directory)
+    SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-start: %s", dirPath, listEntries, line);
     SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s/%s", dirPath, line);
     brg[i].bulletml = new BulletMLParserBLB(line);
     if (!brg[i].bulletml->build()) {
+      parseFailures++;
+      SRL::Logger::LogFatal("[BLB-TRACE] [%s] #%d build-failed: %s", dirPath, listEntries, line);
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
       delete brg[i].bulletml;
       brg[i].bulletml = nullptr;
       //continue;
       SRL::System::Exit(1);
     } else {
+      SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-ok: %s", dirPath, listEntries, line);
       SRL::Logger::LogDebug("[BARRAGE] Successfully loaded BulletML file: %s/%s", dirPath, line);
     }
     i++;
@@ -149,6 +157,8 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory");
   SRL::Cd::ChangeDir((char *)nullptr);
   
+  SRL::Logger::LogInfo("[BLB-TRACE] End directory scan: %s (list_entries=%d, loaded=%d, failures=%d)",
+                       dirPath, listEntries, i, parseFailures);
   SRL::Logger::LogDebug("[BARRAGE] Successfully loaded %d BulletML patterns from %s", i, dirPath);
   return i;
 }
