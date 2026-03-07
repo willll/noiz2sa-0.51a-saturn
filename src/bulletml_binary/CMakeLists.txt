@@ -22,7 +22,7 @@ install(TARGETS bulletml_binary
 )
 
 install(FILES
-    bulletmlparser_binary.hpp
+    bulletmlparser_blb.hpp
     BINARY_FORMAT.md
     DESTINATION include/bulletml_binary
 )

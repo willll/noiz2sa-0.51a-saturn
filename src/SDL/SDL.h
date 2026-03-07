@@ -43,22 +43,17 @@ typedef struct SDL_PixelFormat {
     uint8_t Rshift, Gshift, Bshift, Ashift;
 } SDL_PixelFormat;
 
-// SDL Surface type - complete version
-typedef struct SDL_Surface {
-    uint32_t flags;
-    SDL_PixelFormat* format;
+// SDL Surface type - C++ struct with constructor
+struct SDL_Surface {
+    int32_t textureIndex;
     int w, h;
-    uint16_t pitch;
-    void* pixels;
-    int offset;
-    void* hwdata;
-    SDL_Rect clip_rect;
-    uint32_t unused1;
-    uint32_t locked;
-    void* map;
-    unsigned int format_version;
-    int refcount;
-} SDL_Surface;
+    
+    // Constructor for proper initialization
+    SDL_Surface() : textureIndex(-1), w(0), h(0) {}
+    
+    // Constructor with dimensions
+    SDL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height) {}
+};
 
 // SDL Event type - needs 'type' field for the main event loop
 typedef struct {
@@ -134,35 +129,33 @@ static inline int SDL_InitSubSystem(uint32_t flags) { (void)flags; return 0; }
 static inline const char* SDL_GetError(void) { return "SDL stub"; }
 
 // SDL video functions
-static inline SDL_Surface* SDL_SetVideoMode(int width, int height, int bpp, uint32_t flags) {
-    (void)width; (void)height; (void)bpp; (void)flags;
-    static SDL_Surface stub_surface = {0};
-    static SDL_PixelFormat stub_format = {0};
-    stub_surface.format = &stub_format;
-    stub_surface.w = width;
-    stub_surface.h = height;
-    stub_format.BitsPerPixel = bpp;
-    stub_format.BytesPerPixel = bpp / 8;
-    return &stub_surface;
-}
+// static inline SDL_Surface* SDL_SetVideoMode(int width, int height, int bpp, uint32_t flags) {
+//     (void)width; (void)height; (void)bpp; (void)flags;
+//     static SDL_Surface stub_surface = {0};
+//     static SDL_PixelFormat stub_format = {0};
+//     stub_surface.format = &stub_format;
+//     stub_surface.w = width;
+//     stub_surface.h = height;
+//     stub_format.BitsPerPixel = bpp;
+//     stub_format.BytesPerPixel = bpp / 8;
+//     return &stub_surface;
+// }
 
-static inline SDL_Surface* SDL_CreateRGBSurface(uint32_t flags, int width, int height, int depth, 
-                                                 uint32_t Rmask, uint32_t Gmask, uint32_t Bmask, uint32_t Amask) {
-    (void)flags; (void)Rmask; (void)Gmask; (void)Bmask; (void)Amask;
-    static SDL_Surface stub_surface = {0};
-    static SDL_PixelFormat stub_format = {0};
-    stub_surface.format = &stub_format;
-    stub_surface.w = width;
-    stub_surface.h = height;
-    stub_format.BitsPerPixel = depth;
-    stub_format.BytesPerPixel = depth / 8;
-    return &stub_surface;
-}
+// static inline SDL_Surface* SDL_CreateRGBSurface(uint32_t flags, int width, int height, int depth, 
+//                                                  uint32_t Rmask, uint32_t Gmask, uint32_t Bmask, uint32_t Amask) {
+//     (void)flags; (void)Rmask; (void)Gmask; (void)Bmask; (void)Amask;
+//     static SDL_Surface stub_surface = {0};
+//     static SDL_PixelFormat stub_format = {0};
+//     stub_surface.format = &stub_format;
+//     stub_surface.w = width;
+//     stub_surface.h = height;
+//     stub_format.BitsPerPixel = depth;
+//     stub_format.BytesPerPixel = depth / 8;
+//     return &stub_surface;
+// }
 
 static inline SDL_Surface* SDL_LoadBMP(const char* file) { (void)file; return nullptr; }
-static inline SDL_Surface* SDL_ConvertSurface(SDL_Surface* src, SDL_PixelFormat* fmt, uint32_t flags) {
-    (void)fmt; (void)flags; return src;
-}
+
 
 static inline int SDL_SetColors(SDL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
     (void)surface; (void)colors; (void)firstcolor; (void)ncolors; return 0;

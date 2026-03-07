@@ -12,7 +12,7 @@
 #ifndef FOE_H_
 #define FOE_H_
 
-#include "bulletml_binary/bulletmlparser_binary.hpp"
+#include "bulletml_binary/bulletmlparser_blb.hpp"
 #include "foecommand.h"
 #include "barragemanager.h"
 

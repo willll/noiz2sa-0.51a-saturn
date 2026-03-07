@@ -1,11 +1,12 @@
 #ifndef BULLETMLSTATE_HPP_
 #define BULLETMLSTATE_HPP_
 
-class BulletMLParserBinary;
+class BulletMLParserBLB;
 
 #ifndef BULLETMLPARSER_ALIAS_DEFINED
 #define BULLETMLPARSER_ALIAS_DEFINED
-typedef BulletMLParserBinary BulletMLParser;
+// Keep BulletMLParser as stable API name while concrete parser type is BLB.
+typedef BulletMLParserBLB BulletMLParser;
 #endif
 
 /// BulletML State - Minimal state object for BulletML execution

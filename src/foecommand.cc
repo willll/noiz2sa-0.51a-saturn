@@ -9,7 +9,7 @@
  *
  * @version $Revision: 1.2 $
  */
-#include "bulletml_binary/bulletmlparser_binary.hpp"
+#include "bulletml_binary/bulletmlparser_blb.hpp"
 #include "foe.h"
 
 #include "noiz2sa.h"

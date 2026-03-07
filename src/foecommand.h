@@ -12,7 +12,7 @@
 #ifndef FOECOMMAND_H_
 #define FOECOMMAND_H_
 
-#include "bulletml_binary/bulletmlparser_binary.hpp"
+#include "bulletml_binary/bulletmlparser_blb.hpp"
 #include "foe.h"
 
 class FoeCommand : public BulletMLRunner {

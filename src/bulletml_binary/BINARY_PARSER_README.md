@@ -2,7 +2,7 @@
 
 ## Overview
 
-`bulletmlparser_binary.hpp` is a header-only C++ library that provides fast binary parsing for BulletML pattern files (.blb format).
+`bulletmlparser_blb.hpp` is a header-only C++ library that provides fast binary parsing for BulletML pattern files (.blb format).
 
 ## Features
 
@@ -17,22 +17,22 @@
 ### 1. Copy the header to your project
 
 ```bash
-cp src/bulletml_binary/bulletmlparser_binary.hpp <your_project>/include/
+cp src/bulletml_binary/bulletmlparser_blb.hpp <your_project>/include/
 ```
 
 ### 2. Include in your code
 
 ```cpp
-#include "bulletmlparser_binary.hpp"
+#include "bulletmlparser_blb.hpp"
 
 // Load from file
-BulletMLParserBinary parser("patterns/boss01.blb");
+BulletMLParserBLB parser("patterns/boss01.blb");
 parser.build();
 
 // Or load from memory
 const uint8_t* data = ... // your binary data
 size_t size = ... // size in bytes
-BulletMLParserBinary parser(data, size);
+BulletMLParserBLB parser(data, size);
 parser.build();
 ```
 
@@ -88,7 +88,7 @@ python3 tools/bulletml_converter.py pattern.blb pattern_verify.xml
 ## Error Handling
 
 ```cpp
-BulletMLParserBinary parser("pattern.blb");
+BulletMLParserBLB parser("pattern.blb");
 
 try {
     parser.build();  // May throw BulletMLError
@@ -110,11 +110,11 @@ Tested with 73 pattern files (boss + middle + zako):
 
 ```cpp
 // In your Saturn game code:
-#include "bulletmlparser_binary.hpp"
+#include "bulletmlparser_blb.hpp"
 
 void loadPattern(const char* filename) {
     // Binary patterns stored on CD-ROM
-    BulletMLParserBinary* parser = new BulletMLParserBinary(filename);
+    BulletMLParserBLB* parser = new BulletMLParserBLB(filename);
     parser->build();
     
     // Use with existing BulletML runner
@@ -124,7 +124,7 @@ void loadPattern(const char* filename) {
 
 ## Files
 
-- `src/bulletml_binary/bulletmlparser_binary.hpp` - Header-only library (single file)
+- `src/bulletml_binary/bulletmlparser_blb.hpp` - Primary header-only parser implementation
 - `src/bulletml_binary/BINARY_PARSER_README.md` - This file (integration guide)
 - `tools/bulletml_converter.py` - Python converter tool
 - `tools/BINARY_FORMAT.md` - Complete format specification
