@@ -28,9 +28,12 @@
 
 Ship ship;
 
-#define SHIP_SPEED 1280
-#define SHIP_SLOW_SPEED 640
-#define SHIP_SLOW_DOWN 64
+#define SHIP_SPEED (1280 / SCREEN_DIVISOR)
+//#define SHIP_SPEED (insanespeed ? 1280 : (1280 / SCREEN_DIVISOR))
+#define SHIP_SLOW_SPEED (640 / SCREEN_DIVISOR)
+//#define SHIP_SLOW_SPEED (insanespeed ? 640 : (640 / SCREEN_DIVISOR))
+#define SHIP_SLOW_DOWN (64 / SCREEN_DIVISOR)
+//#define SHIP_SLOW_DOWN (insanespeed ? 64 : (64 / SCREEN_DIVISOR))
 
 #define SHIP_INVINCIBLE_CNT_BASE 240
 
@@ -123,9 +126,9 @@ void moveShip() {
   if ( ship.invCnt > 0 ) ship.invCnt--;
 }
 
-#define SHIP_DRAW_WIDTH 6
-#define SHIP_DRUM_WIDTH 15
-#define SHIP_DRUM_SIZE 4
+#define SHIP_DRAW_WIDTH (6 / SCREEN_DIVISOR)
+#define SHIP_DRUM_WIDTH (15 / SCREEN_DIVISOR)
+#define SHIP_DRUM_SIZE (4 / SCREEN_DIVISOR)
 
 void drawShip() {
   int x, y, d;

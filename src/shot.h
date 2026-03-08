@@ -18,7 +18,9 @@ typedef struct {
 
 #define SHOT_MAX 16
 
-#define SHOT_SPEED 4096
+//#define SHOT_SPEED (insanespeed ? 4096 : (4096 / SCREEN_DIVISOR))
+
+#define SHOT_SPEED (4096 / SCREEN_DIVISOR)
 
 #define SHOT_WIDTH 8
 #define SHOT_HEIGHT 24

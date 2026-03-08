@@ -42,18 +42,18 @@ static void addFrag(Vector *pos, Vector *vel, int spc, int size) {
   frag[i].vel = *vel;
   switch ( spc ) {
   case 0:
-    frag[i].width = 5+randN(10);
-    frag[i].height = 5+randN(10);
+    frag[i].width = 5+randN(10)/SCREEN_DIVISOR;
+    frag[i].height = 5+randN(10)/SCREEN_DIVISOR;
     frag[i].cnt = 4+randN(8);
     break;
   case 1:
-    frag[i].width = size*5+randN(size*3);
-    frag[i].height = size*5+randN(size*3);
+    frag[i].width = size*5+randN(size*3)/SCREEN_DIVISOR;
+    frag[i].height = size*5+randN(size*3)/SCREEN_DIVISOR;
     frag[i].cnt = 12+randN(12);
     break;
   case 2:
-    frag[i].width = 4;
-    frag[i].height = 4;
+    frag[i].width = 4/SCREEN_DIVISOR;
+    frag[i].height = 4/SCREEN_DIVISOR;
     frag[i].cnt = 10+randN(4);
     break;
   }

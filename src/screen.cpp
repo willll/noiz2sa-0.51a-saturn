@@ -695,7 +695,8 @@ int drawNum(int n, int x, int y, int s, int c1, int c2)
   for (;;)
   {
     drawLetter(n % 10, x, y, s, 1, c1, c2, lpbuf);
-    y += s * 1.7f;
+    // y += (s*1.8f) / (float)SCREEN_DIVISOR;
+    y += s; // (s*480) >> 9;
     n /= 10;
     if (n <= 0)
       break;
@@ -713,14 +714,14 @@ int drawNumRight(int n, int x, int y, int s, int c1, int c2)
     {
       n -= d * nd;
       drawLetter(nd % 10, x, y, s, 3, c1, c2, rpbuf);
-      y += s * 1.7f;
+      y += (s*1.7f) / (float)SCREEN_DIVISOR;
       drawn = 1;
     }
   }
   if (!drawn)
   {
     drawLetter(0, x, y, s, 3, c1, c2, rpbuf);
-    y += s * 1.7f;
+    y += (s*1.7f) / (float)SCREEN_DIVISOR;
   }
   return y;
 }
@@ -730,7 +731,7 @@ int drawNumCenter(int n, int x, int y, int s, int c1, int c2)
   for (;;)
   {
     drawLetterBuf(n % 10, x, y, s, 2, c1, c2, buf, 0);
-    x -= s * 1.7f;
+    x -= (s*1.7f) / (float)SCREEN_DIVISOR;
     n /= 10;
     if (n <= 0)
       break;

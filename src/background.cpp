@@ -40,6 +40,7 @@ static void addBoard(int x, int y, int z, int width, int height)
     return;
   board[bdIdx].x = x;
   board[bdIdx].y = y;
+  z*=SCREEN_DIVISOR;
   board[bdIdx].z = z;
   board[bdIdx].width = width / z;
   board[bdIdx].height = height / z;

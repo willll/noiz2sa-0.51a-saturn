@@ -164,7 +164,7 @@ static void wipeBullets(Vector *pos, int width) {
   }
 }
 
-static int foeSize[] = {30, 40, 56, 96};
+static int foeSize[] = {30/SCREEN_DIVISOR, 40/SCREEN_DIVISOR, 56/SCREEN_DIVISOR, 96/SCREEN_DIVISOR};
 static int foeScanSize[] = {
   foeSize[0]*256*SCAN_WIDTH/LAYER_WIDTH/4*3, foeSize[1]*256*SCAN_WIDTH/LAYER_WIDTH/4*3, 
   foeSize[2]*256*SCAN_WIDTH/LAYER_WIDTH/4*3, foeSize[3]*256*SCAN_WIDTH/LAYER_WIDTH/4*3, 
@@ -362,7 +362,7 @@ static int bulletColor[BULLET_COLOR_NUM][2] = {
   {16*14-1, 16*2-1}, {16*16-1, 16*4-1}, {16*12-1, 16*6-1}, 
 };
 
-#define BULLET_WIDTH 6
+#define BULLET_WIDTH (6 / SCREEN_DIVISOR)
  
 void drawBullets() {
   int i;
