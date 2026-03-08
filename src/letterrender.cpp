@@ -20,7 +20,7 @@ void drawLetterBuf(int idx, int lx, int ly, int ltSize, int d,
   float x, y, length, size, t;
   int deg;
 
-  ltSize+=(SCREEN_DIVISOR*SCREEN_DIVISOR)-1;
+  ltSize += (SCREEN_DIVISOR * SCREEN_DIVISOR) - 1;
 
   for (i = 0;; i++)
   {
