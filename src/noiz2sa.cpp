@@ -386,6 +386,20 @@ int main()
   // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
   SRL::Core::Initialize(SRL::Types::HighColor::Colors::White);
 
+  // SRL::CRAM::Palette palette(SRL::CRAM::TextureColorMode::Paletted16, 1);
+
+  // //palette.GetData()[0] = SRL::Types::HighColor(255, 0, 0); // Red
+  // palette.GetData()[1] = SRL::Types::HighColor(255, 0, 0); // Red
+  // palette.GetData()[2] = SRL::Types::HighColor(255, 0, 0); // Red
+
+  // SRL::CRAM::SetBankUsedState(1, SRL::CRAM::TextureColorMode::Paletted16, true);
+
+  // SRL::Debug::PrintColorSet(1);
+
+  // SRL::Debug::Print(1,1,"LOADING");
+
+  // SRL::Core::Synchronize();
+
   SRL::Logger::LogDebug("[MAIN] Initializing game config");
   initGameConfig();
 

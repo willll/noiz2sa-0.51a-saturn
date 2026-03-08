@@ -1,68 +1,69 @@
 #include "palette.h"
+#include "clrtbl.h"
+
 #include <srl_log.hpp>
 #include <srl_cram.hpp>
+#include <srl_memory.hpp>
 
-Palette::Palette(size_t count)
-    : SRL::Bitmap::Palette(count)
+MyPalette::MyPalette(const uint16_t id)
+    : SRL::CRAM::Palette(SRL::CRAM::TextureColorMode::Paletted256, id)
 {
-    SRL::Logger::LogDebug("[Palette] Palette created with %zu colors", count);
+    SRL::Logger::LogDebug("[Palette] Palette created with ID %d", id);
 }
 
-void Palette::SetColor(uint16_t index, HighColor&& color)
+void MyPalette::SetColor(uint16_t index, HighColor&& color)
 {
-    if (index < Count)
+    if (index < 256)
     {
-        Colors[index] = std::move(color);
+        this->GetData()[index] = std::move(color);
         SRL::Logger::LogTrace("[Palette] SetColor[%d] = 0x%04X", index, color);
     }
     else
     {
-        SRL::Logger::LogFatal("[Palette] SetColor: index(%d) out of bounds (max=%zu)", index, Count);
+        SRL::Logger::LogFatal("[Palette] SetColor: index(%d) out of bounds", index);
     }
 }
 
-HighColor Palette::GetColor(uint16_t index) const
+HighColor MyPalette::GetColor(uint16_t index) const
 {
-    if (index < Count)
+    if (index < 256)
     {
-        return Colors[index];
+        return this->GetData()[index];
     }
     else
     {
-        SRL::Logger::LogFatal("[Palette] GetColor: index(%d) out of bounds (max=%zu)", index, Count);
+        SRL::Logger::LogFatal("[Palette] GetColor: index(%d) out of bounds", index);
         return HighColor(0, 0, 0);
     }
 }
 
-void Palette::Init()
+void MyPalette::Init()
 {
-    SRL::Logger::LogDebug("[Palette] Initializing palette with gradient (%zu colors)", Count);
-
     // Fill with gradient: each component cycles at different rates for interesting colors
-    for (uint16_t i = 0; i < Count - 1; ++i)
+    for (uint16_t i = 0; i < 256 - 1; ++i)
     {
         SetColor(i, HighColor::FromRGB555(i, (i * 2) % 256, (i * 4) % 256));
     }
 
     // Final entry is white for highlighting
-    SetColor(Count - 1, HighColor::FromRGB555(255, 255, 255));
+    SetColor(256 - 1, HighColor::FromRGB555(255, 255, 255));
 
     SRL::Logger::LogDebug("[Palette] Palette initialization complete");
 }
 
-void Palette::ApplyBrightness(uint8_t brightness)
+void MyPalette::ApplyBrightness(uint8_t brightness)
 {
-    if (Colors == nullptr)
+    if (brightness < 0 || brightness > 255)
     {
-        SRL::Logger::LogWarning("[Palette] ApplyBrightness: null color array");
+        SRL::Logger::LogFatal("[Palette] ApplyBrightness: brightness(%d) out of range (0-255)", brightness);
         return;
-    }
+    } 
 
-    SRL::Logger::LogDebug("[Palette] Applying brightness %d to %zu colors", brightness, Count);
+    SRL::Logger::LogDebug("[Palette] Applying brightness %d", brightness);
 
-    for (uint16_t i = 0; i < Count; ++i)
+    for (uint16_t i = 0; i < 256; ++i)
     {
-        HighColor color = Colors[i];
+        HighColor color = this->GetColor(i);
 
         // Extract RGB components (5-bit each for RGB555)
         uint8_t red = (color >> 10) & 0x1F;
@@ -80,13 +81,13 @@ void Palette::ApplyBrightness(uint8_t brightness)
         if (blue > 31) blue = 31;
 
         // Reconstruct color with new brightness
-        Colors[i] = HighColor::FromRGB555(red << 3, green << 3, blue << 3);
+        this->SetColor(i, HighColor::FromRGB555(red, green, blue));
     }
 
     SRL::Logger::LogTrace("[Palette] Brightness adjustment complete");
 }
 
-int16_t Palette::LoadPalette(SRL::Bitmap::BitmapInfo* bitmap)
+int16_t MyPalette::LoadPalette(SRL::Bitmap::BitmapInfo* bitmap)
 {
     if (bitmap == nullptr || bitmap->Palette == nullptr)
     {
@@ -94,36 +95,29 @@ int16_t Palette::LoadPalette(SRL::Bitmap::BitmapInfo* bitmap)
         return -1;
     }
 
-    // Get free CRAM bank for this color mode
-    int32_t id = SRL::CRAM::GetFreeBank(bitmap->ColorMode);
+    return initPalette();
+}
 
-    SRL::Logger::LogDebug("[Palette::LoadPalette] Found CRAM bank: %d (ColorMode: %d)", 
-                         id, static_cast<int>(bitmap->ColorMode));
+int32_t MyPalette::initPalette()
+{
+    if (palette)
+        return palette->GetId(); // Already initialized
+
+     // Get free CRAM bank
+    int32_t id = SRL::CRAM::GetFreeBank(SRL::CRAM::TextureColorMode::Paletted256);
 
     if (id >= 0)
     {
-        // Create CRAM palette entry
-        SRL::CRAM::Palette cramPalette(bitmap->ColorMode, id);
+        palette = new MyPalette(id);
 
-        // Load colors into CRAM
-        if (cramPalette.Load((HighColor*)bitmap->Palette->Colors, bitmap->Palette->Count) >= 0)
+        for (int i = 0; i < 256; i++)
         {
-            // Mark bank as in use
-            SRL::CRAM::SetBankUsedState(id, bitmap->ColorMode, true);
-            SRL::Logger::LogDebug("[Palette::LoadPalette] Palette loaded successfully at CRAM bank %d (%zu colors)", 
-                                 id, bitmap->Palette->Count);
-            return id;
+            palette->SetColor(i, std::move(color[i]));
         }
-        else
-        {
-            SRL::Logger::LogFatal("[Palette::LoadPalette] Failed to load palette into CRAM bank %d", id);
-        }
-    }
-    else
-    {
-        SRL::Logger::LogFatal("[Palette::LoadPalette] No free CRAM bank available for ColorMode %d", 
-                             static_cast<int>(bitmap->ColorMode));
+
+        // Mark bank as in use
+        SRL::CRAM::SetBankUsedState(id, SRL::CRAM::TextureColorMode::Paletted256, true);
     }
 
-    return -1;
+    return id;
 }

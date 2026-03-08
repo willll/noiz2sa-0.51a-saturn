@@ -17,7 +17,7 @@ typedef uint32_t Uint32;
 typedef int32_t Sint32;
 
 // Forward declarations
-struct SDL_Surface;
+struct SRL_Surface;
 struct SDL_PixelFormat;
 
 // SDL Rect type (defined early to avoid forward declaration issues)
@@ -43,15 +43,15 @@ typedef struct SDL_PixelFormat {
 } SDL_PixelFormat;
 
 // SDL Surface type - C++ struct with constructor
-struct SDL_Surface {
+struct SRL_Surface {
     int32_t textureIndex;
     int w, h;
     
     // Constructor for proper initialization
-    SDL_Surface() : textureIndex(-1), w(0), h(0) {}
+    SRL_Surface() : textureIndex(-1), w(0), h(0) {}
     
     // Constructor with dimensions
-    SDL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height) {}
+    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height) {}
 };
 
 // SDL Event type - needs 'type' field for the main event loop
@@ -101,19 +101,19 @@ static inline int SDL_Init(uint32_t flags) {
 static inline int SDL_InitSubSystem(uint32_t flags) { (void)flags; return 0; }
 static inline const char* SDL_GetError(void) { return "SDL stub"; }
 
-static inline int SDL_SetColors(SDL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
+static inline int SDL_SetColors(SRL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
     (void)surface; (void)colors; (void)firstcolor; (void)ncolors; return 0;
 }
 
-static inline int SDL_BlitSurface(SDL_Surface* src, SDL_Rect* srcrect, SDL_Surface* dst, SDL_Rect* dstrect) {
+static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surface* dst, SDL_Rect* dstrect) {
     (void)src; (void)srcrect; (void)dst; (void)dstrect; return 0;
 }
 
-static inline int SDL_FillRect(SDL_Surface* dst, SDL_Rect* dstrect, uint32_t color) {
+static inline int SDL_FillRect(SRL_Surface* dst, SDL_Rect* dstrect, uint32_t color) {
     (void)dst; (void)dstrect; (void)color; return 0;
 }
 
-static inline int SDL_Flip(SDL_Surface* screen) { (void)screen; return 0; }
+static inline int SDL_Flip(SRL_Surface* screen) { (void)screen; return 0; }
 
 // SDL event and input functions - Saturn implementation
 // Hardware timer-based timing using the FRT (Free-Running Timer)

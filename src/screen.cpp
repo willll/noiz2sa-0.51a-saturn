@@ -33,20 +33,20 @@ using namespace SRL::Math::Types;
 
 int brightness = DEFAULT_BRIGHTNESS;
 
-static SDL_Surface *video, *layer, *lpanel, *rpanel;
+static SRL_Surface *video, *layer, *lpanel, *rpanel;
 static LayerBit **smokeBuf;
 static LayerBit *pbuf;
 LayerBit *l1buf, *l2buf;
 LayerBit *buf;
 LayerBit *lpbuf, *rpbuf;
-static SDL_Rect screenRect, layerRect, layerClearRect;
+static SDL_Rect layerRect, layerClearRect;
 static SDL_Rect lpanelRect, rpanelRect, panelClearRect;
-static int pitch, ppitch;
+static int pitch;
 
 // Handle TGA images in ISO 8:3 format
 #define SPRITE_NUM 7
 
-static SDL_Surface sprite[SPRITE_NUM];
+static SRL_Surface sprite[SPRITE_NUM];
 static const char *spriteFile[SPRITE_NUM] = {
     "TITLEN.TGA",
     "TITLEO.TGA",
@@ -60,7 +60,6 @@ static const char *spriteFile[SPRITE_NUM] = {
 // SDL_Joystick *stick = nullptr;
 // SDL_GameController *gamepad = nullptr;
 Digital *gamepad = nullptr;
-;
 
 static void loadSprites()
 {
@@ -69,7 +68,7 @@ static void loadSprites()
   int i;
   char name[256];
   SRL::Bitmap::TGA *tga = nullptr;
-  // SDL_Surface *img = nullptr;
+  // SRL_Surface *img = nullptr;
 
   // FIX ME !
   // color[0].Red = 100 >> 3; color[0].Green = 0; color[0].Blue = 0;
@@ -116,9 +115,8 @@ static void loadSprites()
     else
     {
       // assume is pallet texture
-      textureIndex = SRL::VDP1::TryLoadTexture(tga, Palette::LoadPalette);
+      textureIndex = SRL::VDP1::TryLoadTexture(tga, MyPalette::LoadPalette);
     }
-
 
     if (textureIndex < 0)
     {
@@ -142,7 +140,7 @@ static void loadSprites()
 
     delete tga;
 
-    sprite[i] = SDL_Surface(textureIndex, info.Width, info.Height);
+    sprite[i] = SRL_Surface(textureIndex, info.Width, info.Height);
     SRL::Logger::LogTrace("[SPRITE] SDL surface created for sprite %d", i);
 
     // SDL_ConvertSurface(img,
@@ -172,20 +170,20 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
 }
 
 // Initialize palletes.
-static void initPalette()
-{
-  int i;
-  for (i = 0; i < 256; i++)
-  {
-    color[i].Red = color[i].Red * brightness / 256;
-    color[i].Green = color[i].Green * brightness / 256;
-    color[i].Blue = color[i].Blue * brightness / 256;
-  }
-  SDL_SetColors(video, color, 0, 256);
-  SDL_SetColors(layer, color, 0, 256);
-  SDL_SetColors(lpanel, color, 0, 256);
-  SDL_SetColors(rpanel, color, 0, 256);
-}
+// static void initPalette()
+// {
+//   int i;
+//   for (i = 0; i < 256; i++)
+//   {
+//     color[i].Red = color[i].Red * brightness / 256;
+//     color[i].Green = color[i].Green * brightness / 256;
+//     color[i].Blue = color[i].Blue * brightness / 256;
+//   }
+//   SDL_SetColors(video, color, 0, 256);
+//   SDL_SetColors(layer, color, 0, 256);
+//   SDL_SetColors(lpanel, color, 0, 256);
+//   SDL_SetColors(rpanel, color, 0, 256);
+// }
 
 static int lyrSize;
 
@@ -226,10 +224,6 @@ static void makeSmokeBuf()
 
 void initSDL()
 {
-  Uint8 videoBpp;
-  Uint32 videoFlags;
-  SDL_PixelFormat *pfrm;
-
   // if ( SDL_Init(SDL_INIT_VIDEO) < 0 ) {
   //   SRL::Logger::LogFatal("Unable to initialize SDL: %s", SDL_GetError());
   //   SRL::System::Exit(1);
@@ -243,17 +237,11 @@ void initSDL()
   //   joystickMode = 0;
   // }
 
-  videoBpp = BPP;
-  videoFlags = SDL_DOUBLEBUF | SDL_HWSURFACE | SDL_HWPALETTE;
-  videoFlags |= SDL_FULLSCREEN;
-
-  // if ( (video = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, videoBpp, videoFlags)) == nullptr ) {
+  // if ( (video = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, BPP,
+  //                                SDL_DOUBLEBUF | SDL_HWSURFACE | SDL_HWPALETTE | SDL_FULLSCREEN)) == nullptr ) {
   //   SRL::Logger::LogFatal("Unable to create SDL screen: %s", SDL_GetError());
   //   SRL::System::Exit(1);
   // }
-  screenRect.x = screenRect.y = 0;
-  screenRect.w = SCREEN_WIDTH;
-  screenRect.h = SCREEN_HEIGHT;
   // pfrm = video->format;
   // if ( nullptr == ( layer = SDL_CreateRGBSurface
   // 	(SDL_SWSURFACE, LAYER_WIDTH, LAYER_HEIGHT, videoBpp,
@@ -290,7 +278,7 @@ void initSDL()
   // lpbuf = (LayerBit*)lpanel->pixels;
   // rpbuf = (LayerBit*)rpanel->pixels;
 
-  // initPalette();
+  initPalette();
   // makeSmokeBuf();
   // clearLPanel();
   // clearRPanel();
@@ -714,14 +702,14 @@ int drawNumRight(int n, int x, int y, int s, int c1, int c2)
     {
       n -= d * nd;
       drawLetter(nd % 10, x, y, s, 3, c1, c2, rpbuf);
-      y += (s*1.7f) / (float)SCREEN_DIVISOR;
+      y += (s * 1.7f) / (float)SCREEN_DIVISOR;
       drawn = 1;
     }
   }
   if (!drawn)
   {
     drawLetter(0, x, y, s, 3, c1, c2, rpbuf);
-    y += (s*1.7f) / (float)SCREEN_DIVISOR;
+    y += (s * 1.7f) / (float)SCREEN_DIVISOR;
   }
   return y;
 }
@@ -731,7 +719,7 @@ int drawNumCenter(int n, int x, int y, int s, int c1, int c2)
   for (;;)
   {
     drawLetterBuf(n % 10, x, y, s, 2, c1, c2, buf, 0);
-    x -= (s*1.7f) / (float)SCREEN_DIVISOR;
+    x -= (s * 1.7f) / (float)SCREEN_DIVISOR;
     n /= 10;
     if (n <= 0)
       break;

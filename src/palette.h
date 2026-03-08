@@ -12,7 +12,7 @@ using namespace SRL::Types;
  * and logging. The palette is initialized with a gradient of colors that
  * can be further customized.
  */
-class Palette : public SRL::Bitmap::Palette
+class MyPalette : public SRL::CRAM::Palette
 {
 public:
 
@@ -21,7 +21,7 @@ public:
      * Allocates a new color palette with the specified number of entries.
      * @param count Number of colors in the palette
      */
-    explicit Palette(size_t count);
+    explicit MyPalette(const uint16_t id);
 
     /** @brief Set a palette entry
      *
@@ -65,4 +65,8 @@ public:
      * @return CRAM bank id on success, or -1 on failure
      */
     static int16_t LoadPalette(SRL::Bitmap::BitmapInfo* bitmap);
+
+    static int32_t initPalette();
+
+    static MyPalette * palette = nullptr;
 };
