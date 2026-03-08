@@ -68,5 +68,5 @@ public:
 
     static int32_t initPalette();
 
-    static MyPalette * palette = nullptr;
+    static MyPalette* palette;
 };

@@ -5,6 +5,8 @@
 #include <srl_cram.hpp>
 #include <srl_memory.hpp>
 
+MyPalette* MyPalette::palette = nullptr;
+
 MyPalette::MyPalette(const uint16_t id)
     : SRL::CRAM::Palette(SRL::CRAM::TextureColorMode::Paletted256, id)
 {
@@ -28,7 +30,8 @@ HighColor MyPalette::GetColor(uint16_t index) const
 {
     if (index < 256)
     {
-        return this->GetData()[index];
+        // SRL::CRAM::Palette exposes only a non-const GetData(); read access is safe here.
+        return const_cast<MyPalette*>(this)->GetData()[index];
     }
     else
     {
@@ -53,12 +56,6 @@ void MyPalette::Init()
 
 void MyPalette::ApplyBrightness(uint8_t brightness)
 {
-    if (brightness < 0 || brightness > 255)
-    {
-        SRL::Logger::LogFatal("[Palette] ApplyBrightness: brightness(%d) out of range (0-255)", brightness);
-        return;
-    } 
-
     SRL::Logger::LogDebug("[Palette] Applying brightness %d", brightness);
 
     for (uint16_t i = 0; i < 256; ++i)
