@@ -260,7 +260,6 @@ static void draw()
   // Periodic debug logging to track rendering execution
   // Log every 180 frames (~3 seconds at 60Hz) to avoid spam
   static int draw_frame_counter = 0;
-  draw_frame_counter++;
   
   if ((draw_frame_counter % 180) == 0)
   {
@@ -276,6 +275,8 @@ static void draw()
     SRL::Logger::LogDebug("[DRAW] Rendering state: %s (frame: %d)", state_name, draw_frame_counter);
   }
   
+  draw_frame_counter++;
+
   switch (status)
   {
   case TITLE:
@@ -383,7 +384,7 @@ int main()
 
   // Initialize the SRL core (graphics/video setup?)
   // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
-  SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
+  SRL::Core::Initialize(SRL::Types::HighColor::Colors::White);
 
   SRL::Logger::LogDebug("[MAIN] Initializing game config");
   initGameConfig();
