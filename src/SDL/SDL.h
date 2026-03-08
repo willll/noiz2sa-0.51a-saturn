@@ -19,7 +19,6 @@ typedef int32_t Sint32;
 // Forward declarations
 struct SDL_Surface;
 struct SDL_PixelFormat;
-struct SDL_Joystick;
 
 // SDL Rect type (defined early to avoid forward declaration issues)
 typedef struct {
@@ -76,32 +75,6 @@ typedef struct {
 #define SDL_FULLSCREEN 0x80000000
 #define SDL_HWPALETTE 0x20000000
 
-// SDL color key and RLE flags
-#define SDL_SRCCOLORKEY 0x00001000
-#define SDL_RLEACCEL 0x00004000
-
-// SDL event types
-#define SDL_QUIT 12
-#define SDL_PRESSED 1
-#define SDL_RELEASED 0
-
-// SDL cursor visibility
-#define SDL_DISABLE 0
-#define SDL_ENABLE 1
-
-// SDL keysym codes
-#define SDLK_ESCAPE 256
-#define SDLK_p 'p'
-#define SDLK_z 'z'
-#define SDLK_x 'x'
-#define SDLK_UP 273
-#define SDLK_DOWN 274
-#define SDLK_RIGHT 275
-#define SDLK_LEFT 276
-#define SDLK_KP8 273
-#define SDLK_KP2 274
-#define SDLK_KP6 275
-#define SDLK_KP4 276
 
 // SDL timing - Track elapsed time since SDL_Init for SDL_GetTicks()
 // Uses Saturn's Free-Running Timer (FRT) hardware for accurate microsecond timing
@@ -128,41 +101,8 @@ static inline int SDL_Init(uint32_t flags) {
 static inline int SDL_InitSubSystem(uint32_t flags) { (void)flags; return 0; }
 static inline const char* SDL_GetError(void) { return "SDL stub"; }
 
-// SDL video functions
-// static inline SDL_Surface* SDL_SetVideoMode(int width, int height, int bpp, uint32_t flags) {
-//     (void)width; (void)height; (void)bpp; (void)flags;
-//     static SDL_Surface stub_surface = {0};
-//     static SDL_PixelFormat stub_format = {0};
-//     stub_surface.format = &stub_format;
-//     stub_surface.w = width;
-//     stub_surface.h = height;
-//     stub_format.BitsPerPixel = bpp;
-//     stub_format.BytesPerPixel = bpp / 8;
-//     return &stub_surface;
-// }
-
-// static inline SDL_Surface* SDL_CreateRGBSurface(uint32_t flags, int width, int height, int depth, 
-//                                                  uint32_t Rmask, uint32_t Gmask, uint32_t Bmask, uint32_t Amask) {
-//     (void)flags; (void)Rmask; (void)Gmask; (void)Bmask; (void)Amask;
-//     static SDL_Surface stub_surface = {0};
-//     static SDL_PixelFormat stub_format = {0};
-//     stub_surface.format = &stub_format;
-//     stub_surface.w = width;
-//     stub_surface.h = height;
-//     stub_format.BitsPerPixel = depth;
-//     stub_format.BytesPerPixel = depth / 8;
-//     return &stub_surface;
-// }
-
-static inline SDL_Surface* SDL_LoadBMP(const char* file) { (void)file; return nullptr; }
-
-
 static inline int SDL_SetColors(SDL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
     (void)surface; (void)colors; (void)firstcolor; (void)ncolors; return 0;
-}
-
-static inline int SDL_SetColorKey(SDL_Surface* surface, uint32_t flag, uint32_t key) {
-    (void)surface; (void)flag; (void)key; return 0;
 }
 
 static inline int SDL_BlitSurface(SDL_Surface* src, SDL_Rect* srcrect, SDL_Surface* dst, SDL_Rect* dstrect) {
@@ -233,30 +173,6 @@ static inline void SDL_Delay(uint32_t ms) {
     TIM_FRT_SET_16(0);
     while (remaining > TIM_FRT_GET_16());
 }
-
-// SDL joystick/controller functions
-typedef int SDL_bool;
-
-#define SDL_FALSE 0
-#define SDL_TRUE  1
-
-// SDL joystick hat positions
-#define SDL_HAT_CENTERED  0x00
-#define SDL_HAT_UP        0x01
-#define SDL_HAT_RIGHT     0x02
-#define SDL_HAT_DOWN      0x04
-#define SDL_HAT_LEFT      0x08
-
-static inline int SDL_NumJoysticks(void) { return 0; }
-static inline SDL_Joystick* SDL_JoystickOpen(int device_index) { (void)device_index; return nullptr; }
-static inline void SDL_JoystickClose(SDL_Joystick* joystick) { (void)joystick; }
-static inline void SDL_JoystickUpdate(void) { }
-static inline SDL_bool SDL_JoystickOpened(int device_index) { (void)device_index; return SDL_FALSE; }
-static inline const char* SDL_JoystickName(SDL_Joystick* joystick) { (void)joystick; return ""; }
-static inline uint8_t SDL_JoystickGetButton(SDL_Joystick* joystick, int button) { (void)joystick; (void)button; return 0; }
-static inline int16_t SDL_JoystickGetAxis(SDL_Joystick* joystick, int axis) { (void)joystick; (void)axis; return 0; }
-static inline uint8_t SDL_JoystickGetHat(SDL_Joystick* joystick, int hat) { (void)joystick; (void)hat; return SDL_HAT_CENTERED; }
-static inline void SDL_QuitSubSystem(uint32_t flags) { (void)flags; }
 
 // SDL_GameControllerOpen is defined in gamepad.cpp, declared in gamepad.h
 // Declare it here for files that include SDL.h before gamepad.h
