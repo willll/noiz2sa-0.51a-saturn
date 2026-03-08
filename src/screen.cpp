@@ -278,7 +278,7 @@ void initSDL()
   // lpbuf = (LayerBit*)lpanel->pixels;
   // rpbuf = (LayerBit*)rpanel->pixels;
 
-  initPalette();
+  MyPalette::initPalette();
   // makeSmokeBuf();
   // clearLPanel();
   // clearRPanel();
