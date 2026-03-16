@@ -148,18 +148,18 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
       SRL::System::Exit(1);
     } else {
       SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-ok: %s", dirPath, listEntries, line);
-      SRL::Logger::LogDebug("[BARRAGE] Successfully loaded BulletML file: %s/%s", dirPath, line);
+      //SRL::Logger::LogDebug("[BARRAGE] Successfully loaded BulletML file: %s/%s", dirPath, line);
     }
     i++;
   }
   
   // Change back to root directory after loading all files
-  SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory");
+  //SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory");
   SRL::Cd::ChangeDir((char *)nullptr);
   
   SRL::Logger::LogInfo("[BLB-TRACE] End directory scan: %s (list_entries=%d, loaded=%d, failures=%d)",
                        dirPath, listEntries, i, parseFailures);
-  SRL::Logger::LogDebug("[BARRAGE] Successfully loaded %d BulletML patterns from %s", i, dirPath);
+  //SRL::Logger::LogDebug("[BARRAGE] Successfully loaded %d BulletML patterns from %s", i, dirPath);
   return i;
 }
 

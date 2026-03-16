@@ -407,8 +407,6 @@ public:
             return false;
         }
 
-        SRL::Logger::LogTrace("[BulletML] Starting parse for '%s', size=%d", name_, data_size_);
-
         offset_ = 0;
         current_node_id_ = 0;
         parse_step_count_ = 0;
@@ -421,13 +419,11 @@ public:
         action_refs_count_ = 0;
         fire_refs_count_ = 0;
 
-        SRL::Logger::LogTrace("[BulletML] Verifying header for '%s'", name_);
         if (!verifyHeader()) {
             SRL::Logger::LogFatal("[BulletML] Header verification failed for '%s'", name_);
             freeParseScratch();
             return false;
         }
-        SRL::Logger::LogTrace("[BulletML] Header verified for '%s'", name_);
 
         uint32_t actual_node_count = countNodesInTree();
         if (actual_node_count == 0 || actual_node_count > BULLETML_MAX_NODES) {
@@ -443,23 +439,18 @@ public:
             node_map_[i] = nullptr;
         }
 
-        SRL::Logger::LogTrace("[BulletML] Loading string table for '%s'", name_);
         if (!loadStringTable()) {
             SRL::Logger::LogFatal("[BulletML] Failed to load string table for '%s'", name_);
             freeParseScratch();
             return false;
         }
-        SRL::Logger::LogTrace("[BulletML] String table loaded for '%s'", name_);
 
-        SRL::Logger::LogTrace("[BulletML] Loading reference maps for '%s'", name_);
         if (!loadReferenceMaps()) {
             SRL::Logger::LogFatal("[BulletML] Failed to load reference maps for '%s'", name_);
             freeParseScratch();
             return false;
         }
-        SRL::Logger::LogTrace("[BulletML] Reference maps loaded for '%s'", name_);
 
-        SRL::Logger::LogTrace("[BulletML] Parsing tree for '%s'", name_);
         offset_ = header_.tree_offset;
         bulletml_ = parseNode();
         if (!bulletml_) {
@@ -530,7 +521,6 @@ public:
             }
         }
 
-        SRL::Logger::LogTrace("[BulletML] Finding top actions for '%s'", name_);
         topActions_count_ = 0;
         if (bulletml_) {
             BulletMLNode::ChildIterator ite;
@@ -541,10 +531,7 @@ public:
             }
         }
 
-        SRL::Logger::LogTrace("[BulletML] Parse complete for '%s', found %d top actions", name_, topActions_count_);
-
         if ((flags_ & 0x01) && data_) {  // bit 0 = owns_data_
-            SRL::Logger::LogTrace("[BulletML] Freeing raw data buffer (%d bytes) for '%s'", data_size_, name_);
             delete[] data_;
             data_ = nullptr;
             data_size_ = 0;
@@ -747,8 +734,6 @@ private:
             return false;
         }
 
-        SRL::Logger::LogTrace("[BulletML] Attempting to load file: %s", filename);
-
         SRL::Cd::File file(filename);
         
         if (!file.Exists()) {
@@ -756,8 +741,6 @@ private:
             return false;
         }
         
-        SRL::Logger::LogTrace("[BulletML] File exists: %s, preparing direct read", filename);
-
         // Read file directly into final-sized buffer to avoid extra temporary allocation.
         const uint32_t max_file_size = 65536;
         int32_t bytes_to_read = (int32_t)file.Size.Bytes;
@@ -789,9 +772,6 @@ private:
             delete[] allocated_buffer;
             return false;
         }
-        SRL::Logger::LogTrace("[BulletML] Successfully read %d bytes from %s (expected %d)", 
-                              bytes_read, filename, bytes_to_read);
-        
         // Update data pointers (class will own and delete this memory)
         data_ = allocated_buffer;
         data_size_ = (uint32_t)bytes_read;

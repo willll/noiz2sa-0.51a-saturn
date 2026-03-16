@@ -105,9 +105,7 @@ public:
           spd_(0.0),
           dir_(0.0),
           prev_spd_(0.0),
-          prev_dir_(0.0),
-          run_tick_counter_(0),
-          executed_node_counter_(0) {
+          prev_dir_(0.0) {
         if (!state || !runner_) {
             end_ = true;
             return;
@@ -141,7 +139,6 @@ public:
             pushNodeTask(nodes_[i]);
         }
         wait_until_turn_ = runner_->getTurn();
-        SRL::Logger::LogTrace("[BML-RUNNER] Impl init: nodes=%u, params=%u", node_count_, param_count_);
     }
 
     ~BulletMLRunnerImpl() {
@@ -167,15 +164,12 @@ public:
     void run() {
         if (end_) return;
 
-        ++run_tick_counter_;
-
         applyChanges();
 
         const int now = runner_->getTurn();
         if (task_count_ == 0) {
             if (!change_dir_active_ && !change_speed_active_ && !accel_x_active_ && !accel_y_active_) {
                 end_ = true;
-                SRL::Logger::LogTrace("[BML-RUNNER] Impl completed (no pending tasks/changes)");
             }
             return;
         }
@@ -189,7 +183,6 @@ public:
 
             switch (task.type) {
                 case TASK_NODE:
-                    ++executed_node_counter_;
                     executeNode(task.node);
                     break;
                 case TASK_REPEAT:
@@ -220,11 +213,6 @@ public:
                 SRL::Logger::LogWarning("[BML-RUNNER] Safety break triggered (tasks=%u)", task_count_);
                 break;
             }
-        }
-
-        if ((run_tick_counter_ & 255U) == 0U) {
-            SRL::Logger::LogTrace("[BML-RUNNER] progress tick=%u executed=%u pending=%u wait_until=%d end=%d",
-                                  run_tick_counter_, executed_node_counter_, task_count_, wait_until_turn_, end_ ? 1 : 0);
         }
 
         if (task_count_ == 0) {
@@ -829,7 +817,6 @@ private:
                 const uint16_t total = static_cast<uint16_t>(action_count + action_ref_count);
 
                 if (total == 0) {
-                    SRL::Logger::LogTrace("[BML-RUNNER] createSimpleBullet dir=%.3f spd=%.3f", dir_, spd_);
                     runner_->createSimpleBullet(dir_, spd_);
                     return;
                 }
@@ -854,7 +841,6 @@ private:
                     SRL::Logger::LogWarning("[BML-RUNNER] Failed to allocate child state for bullet actions=%u", total);
                     return;
                 }
-                SRL::Logger::LogTrace("[BML-RUNNER] createBullet dir=%.3f spd=%.3f actions=%u", dir_, spd_, total);
                 runner_->createBullet(st, dir_, spd_);
                 return;
             }
@@ -884,7 +870,6 @@ private:
                 int frame = static_cast<int>(evalNodeValue(node));
                 if (frame < 0) frame = 0;
                 wait_until_turn_ = runner_->getTurn() + frame;
-                SRL::Logger::LogTrace("[BML-RUNNER] wait frame=%d until=%d", frame, wait_until_turn_);
                 return;
             }
 
@@ -899,7 +884,6 @@ private:
 
                 pushRepeatTask(action, times_num - 1);
                 pushNodeTask(action);
-                SRL::Logger::LogTrace("[BML-RUNNER] repeat count=%d", times_num);
                 return;
             }
 
@@ -935,7 +919,6 @@ private:
                 param_count_ = new_count;
                 owns_params_ = (new_params != nullptr);
                 pushNodeTask(target);
-                SRL::Logger::LogTrace("[BML-RUNNER] ref resolved name=%d id=%u params=%u", static_cast<int>(name), id, new_count);
                 return;
             }
 
@@ -952,7 +935,6 @@ private:
                 if (type != BulletMLNode::type_sequence) d = getDirection(dir_node, false);
                 else d = evalNodeValue(dir_node);
                 calcChangeDirection(d, t, type == BulletMLNode::type_sequence);
-                SRL::Logger::LogTrace("[BML-RUNNER] changeDirection term=%d dir=%.3f type=%d", t, d, static_cast<int>(type));
                 return;
             }
 
@@ -970,7 +952,6 @@ private:
                 else s = evalNodeValue(spd_node) * static_cast<double>(t) + runner_->getBulletSpeed();
 
                 calcChangeSpeed(s, t);
-                SRL::Logger::LogTrace("[BML-RUNNER] changeSpeed term=%d speed=%.3f type=%d", t, s, static_cast<int>(type));
                 return;
             }
 
@@ -990,12 +971,10 @@ private:
                     if (h) calcAccelX(evalNodeValue(h), t, h->getType());
                     if (v) calcAccelY(evalNodeValue(v), t, v->getType());
                 }
-                SRL::Logger::LogTrace("[BML-RUNNER] accel term=%d hasH=%d hasV=%d", t, h ? 1 : 0, v ? 1 : 0);
                 return;
             }
 
             case BulletMLNode::vanish:
-                SRL::Logger::LogTrace("[BML-RUNNER] vanish");
                 runner_->doVanish();
                 return;
 
@@ -1039,8 +1018,6 @@ private:
     double dir_;
     double prev_spd_;
     double prev_dir_;
-    uint32_t run_tick_counter_;
-    uint32_t executed_node_counter_;
 
     BulletMLRunnerImpl(const BulletMLRunnerImpl&);
     BulletMLRunnerImpl& operator=(const BulletMLRunnerImpl&);
@@ -1076,7 +1053,6 @@ inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
 
         impls_[impl_count_++] = impl;
     }
-    SRL::Logger::LogTrace("[BML-RUNNER] Runner init from parser: topActions=%u impls=%u", top_count, impl_count_);
 }
 
 inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
@@ -1096,7 +1072,6 @@ inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
 
     impl_count_ = 1;
     state_ = nullptr;  // ownership moved to impl
-    SRL::Logger::LogTrace("[BML-RUNNER] Runner init from state: impls=%u", impl_count_);
 }
 
 inline BulletMLRunner::~BulletMLRunner() {

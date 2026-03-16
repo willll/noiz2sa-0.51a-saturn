@@ -82,7 +82,7 @@ static void loadSprites()
 
   for (i = 0; i < SPRITE_NUM; i++)
   {
-    SRL::Logger::LogDebug("[SPRITE] Loading sprite %d: %s", i, spriteFile[i]);
+    SRL::Logger::LogInfo("[SPRITE] Loading sprite %d: %s", i, spriteFile[i]);
 
     // Load TGA file directly from IMAGES directory (already changed via ChangeDir above)
     strcpy(name, spriteFile[i]);
@@ -98,7 +98,7 @@ static void loadSprites()
 
     // Get bitmap info to check if loaded successfully
     SRL::Bitmap::BitmapInfo info = tga->GetInfo();
-    SRL::Logger::LogTrace("[SPRITE] TGA info: %dx%d pixels", info.Width, info.Height);
+    //SRL::Logger::LogTrace("[SPRITE] TGA info: %dx%d pixels", info.Width, info.Height);
 
     if (info.Width == 0 || tga->GetData() == nullptr)
     {
@@ -127,10 +127,10 @@ static void loadSprites()
     }
     else
     {
-      SRL::Logger::LogTrace("[SPRITE] TGA loaded into VDP1 with texture index: %d", textureIndex);
+      //SRL::Logger::LogTrace("[SPRITE] TGA loaded into VDP1 with texture index: %d", textureIndex);
     }
 
-    SRL::Logger::LogTrace("[SPRITE] TGA object created for: %s", spriteFile[i]);
+    //SRL::Logger::LogTrace("[SPRITE] TGA object created for: %s", spriteFile[i]);
 
     // Copy TGA image data to SDL surface
     // if ( img->pixels != nullptr && tga->GetData() != nullptr ) {
@@ -737,18 +737,26 @@ int getPadState()
   {
     if (gamepad->IsHeld(SRL::Input::Digital::Button::Right))
     {
+      if (gamepad->WasPressed(SRL::Input::Digital::Button::Right))
+        SRL::Logger::LogTrace("[INPUT] Key pressed: RIGHT");
       pad |= PAD_RIGHT;
     }
     if (gamepad->IsHeld(SRL::Input::Digital::Button::Left))
     {
+      if (gamepad->WasPressed(SRL::Input::Digital::Button::Left))
+        SRL::Logger::LogTrace("[INPUT] Key pressed: LEFT");
       pad |= PAD_LEFT;
     }
     if (gamepad->IsHeld(SRL::Input::Digital::Button::Down))
     {
+      if (gamepad->WasPressed(SRL::Input::Digital::Button::Down))
+        SRL::Logger::LogTrace("[INPUT] Key pressed: DOWN");
       pad |= PAD_DOWN;
     }
     if (gamepad->IsHeld(SRL::Input::Digital::Button::Up))
     {
+      if (gamepad->WasPressed(SRL::Input::Digital::Button::Up))
+        SRL::Logger::LogTrace("[INPUT] Key pressed: UP");
       pad |= PAD_UP;
     }
   }
@@ -765,10 +773,18 @@ int getButtonState()
   if (gamepad->IsConnected())
   {
     fireBtn1 = gamepad->IsHeld(Digital::Button::A);
+    if (gamepad->WasPressed(Digital::Button::A))
+      SRL::Logger::LogTrace("[INPUT] Button pressed: A (fire)");
     fireBtn2 = gamepad->IsHeld(Digital::Button::B);
+    if (gamepad->WasPressed(Digital::Button::B))
+      SRL::Logger::LogTrace("[INPUT] Button pressed: B (fire)");
 
     slowBtn1 = gamepad->IsHeld(Digital::Button::R);
+    if (gamepad->WasPressed(Digital::Button::R))
+      SRL::Logger::LogTrace("[INPUT] Button pressed: R (slow)");
     slowBtn2 = gamepad->IsHeld(Digital::Button::L);
+    if (gamepad->WasPressed(Digital::Button::L))
+      SRL::Logger::LogTrace("[INPUT] Button pressed: L (slow)");
   }
   if (fireBtn1 || fireBtn2)
   {
