@@ -343,14 +343,14 @@ cmake --build build
 
 ## Related Documentation
 
-- [SRL_CMAKE_MIGRATION.md](SRL_CMAKE_MIGRATION.md) - CMake migration details
-- [src/bulletml_binary/README.md](src/bulletml_binary/README.md) - Binary BulletML format
-- [SaturnRingLib/readme.md](SaturnRingLib/readme.md) - SaturnRingLib documentation
+- [BUILD_SYSTEM_SUMMARY.md](BUILD_SYSTEM_SUMMARY.md) - CMake and build system summary
+- [src/bulletml_binary/BINARY_PARSER_README.md](src/bulletml_binary/BINARY_PARSER_README.md) - Binary BulletML format
+- SaturnRingLib docs: [../SaturnRingLib/readme.md](../SaturnRingLib/readme.md)
 - [README.md](README.md) - Project overview
 
 ## Support
 
 For build issues specific to:
-- **SaturnRingLib**: See `SaturnRingLib/Documentation/`
+- **SaturnRingLib**: See `../SaturnRingLib/Documentation/`
 - **BulletML**: See `src/bulletml/`
 - **Saturn toolchain**: Consult your toolchain documentation

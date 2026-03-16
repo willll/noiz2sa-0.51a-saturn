@@ -53,8 +53,8 @@ cmake --build build
 ### Documentation
 
 - [BUILD_GUIDE.md](BUILD_GUIDE.md) - Complete build instructions and configuration options
-- [SRL_CMAKE_MIGRATION.md](SRL_CMAKE_MIGRATION.md) - SaturnRingLib CMake integration details
-- [src/bulletml_binary/README.md](src/bulletml_binary/README.md) - BulletML binary format documentation
+- [BUILD_SYSTEM_SUMMARY.md](../BUILD_SYSTEM_SUMMARY.md) - SaturnRingLib and build system integration summary
+- [src/bulletml_binary/BINARY_PARSER_README.md](../src/bulletml_binary/BINARY_PARSER_README.md) - BulletML binary format documentation
 
 ## Upstream / Legacy Readme
 

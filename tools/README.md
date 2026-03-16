@@ -2,6 +2,18 @@
 
 This directory contains utility tools for the Noiz2sa Saturn port.
 
+## Emulator Launch Scripts
+
+- `run_mednafen.sh`: Launches Mednafen with the default image `BuildDrop/noiz2sa.cue`
+- `run_kronos.sh`: Launches Kronos with `QT_QPA_PLATFORM="xcb"` and `BuildDrop/noiz2sa.cue`
+
+Usage:
+
+```bash
+./tools/run_mednafen.sh
+./tools/run_kronos.sh
+```
+
 ## BulletML Converter
 
 The `bulletml_converter.py` script provides bidirectional conversion between BulletML XML and binary formats.
@@ -48,7 +60,7 @@ python3 tools/bulletml_converter.py binary_output/ xml_output/
 The script is executable and can be run directly:
 
 ```bash
-./tools/bulletml_converter.py input.xml output.bmlb
+./tools/bulletml_converter.py input.xml output.blb
 ```
 
 ### Examples
@@ -104,4 +116,4 @@ To use binary BulletML files in your Saturn port:
 3. Use `BulletMLParserBin` instead of `BulletMLParserBLB`
 4. Load patterns from binary files
 
-See `src/bulletml_binary/README.md` for C++ integration details.
+See `src/bulletml_binary/BINARY_PARSER_README.md` for C++ integration details.
