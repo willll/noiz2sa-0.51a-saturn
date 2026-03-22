@@ -63,7 +63,7 @@ public:
     };
     
     explicit BulletMLNode(const char* name, uint32_t child_capacity = BULLETML_MAX_CHILDREN)
-        : name_(name), type_(type_none), value_(nullptr), refID_(0xFFFFFFFF),
+                : name_(name), type_(type_none), value_(nullptr), label_(nullptr), refID_(0xFFFFFFFF),
           children_(nullptr), child_capacity_(0), child_count_(0), parent_(nullptr) {
         if (child_capacity > BULLETML_MAX_CHILDREN) {
             child_capacity = BULLETML_MAX_CHILDREN;
@@ -110,6 +110,7 @@ public:
     }
     
     void setValue(const char* value) { value_ = value; }
+    void setLabel(const char* label) { label_ = label; }
     void setRefID(uint32_t id) { refID_ = id; }
     
     void addChild(BulletMLNode* child) {
@@ -171,6 +172,7 @@ public:
     
     Type getType() const { return type_; }
     const char* getValue() const { return value_ ? value_ : ""; }
+    const char* getLabel() const { return label_ ? label_ : ""; }
     uint32_t getRefID() const { return refID_; }
     
     // Iterator support (pointer-based)
@@ -186,6 +188,7 @@ private:
     const char* name_;
     Type type_;
     const char* value_;
+    const char* label_;
     uint32_t refID_;
     BulletMLNode** children_;
     uint32_t child_capacity_;
@@ -238,7 +241,7 @@ public:
                 : flags_(0),
                     data_(data), data_size_(size), offset_(0),
                     parse_step_count_(0), parse_step_budget_(0),
-                    string_table_offsets_(nullptr),
+                    string_table_(nullptr),
                     bullet_refs_(nullptr),
                     action_refs_(nullptr),
                     fire_refs_(nullptr),
@@ -265,7 +268,7 @@ public:
                 : flags_(0),
                     data_(data), data_size_(size), offset_(0),
                     parse_step_count_(0), parse_step_budget_(0),
-                    string_table_offsets_(nullptr),
+                    string_table_(nullptr),
                     bullet_refs_(nullptr),
                     action_refs_(nullptr),
                     fire_refs_(nullptr),
@@ -292,7 +295,7 @@ public:
                 : flags_(0),
                     data_(nullptr), data_size_(0), offset_(0),
                     parse_step_count_(0), parse_step_budget_(0),
-                    string_table_offsets_(nullptr),
+                    string_table_(nullptr),
                     bullet_refs_(nullptr),
                     action_refs_(nullptr),
                     fire_refs_(nullptr),
@@ -328,6 +331,9 @@ public:
             delete bulletml_;
             bulletml_ = nullptr;
         }
+        freeStringTableEntries();
+        delete[] string_table_;
+        string_table_ = nullptr;
         if ((flags_ & 0x01) && data_) {  // bit 0 = owns_data_
             delete[] data_;
             data_ = nullptr;
@@ -383,27 +389,22 @@ public:
     virtual bool parse() {
         freeRuntimeMaps();
 
-        if (!ensureParseScratch()) {
-            SRL::Logger::LogFatal("[BulletML] Failed to allocate parse scratch for '%s'", name_ ? name_ : "(null)");
-            return false;
-        }
-
         if (bulletml_) {
             delete bulletml_;
             bulletml_ = nullptr;
         }
+        freeStringTableStorage();
+        freeParseScratch();
 
         if ((!data_ || data_size_ == 0) && filename_ && filename_[0] != '\0') {
             if (!loadFromFile(filename_)) {
                 SRL::Logger::LogFatal("[BulletML] Failed to load file: %s", filename_);
-                freeParseScratch();
                 return false;
             }
         }
 
         if (!data_ || data_size_ == 0) {
             SRL::Logger::LogFatal("[BulletML] No data to parse for '%s'", name_ ? name_ : "(null)");
-            freeParseScratch();
             return false;
         }
 
@@ -421,17 +422,42 @@ public:
 
         if (!verifyHeader()) {
             SRL::Logger::LogFatal("[BulletML] Header verification failed for '%s'", name_);
-            freeParseScratch();
+            return false;
+        }
+
+        uint32_t string_count = 0;
+        if (!peekStringCount(string_count)) {
+            SRL::Logger::LogFatal("[BulletML] Failed to read string table count for '%s'", name_);
+            return false;
+        }
+        if (!allocateStringTableStorage(string_count)) {
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate string table storage for '%s'", name_ ? name_ : "(null)");
+            return false;
+        }
+
+        uint32_t bullet_ref_count = 0;
+        uint32_t action_ref_count = 0;
+        uint32_t fire_ref_count = 0;
+        if (!peekReferenceCounts(bullet_ref_count, action_ref_count, fire_ref_count)) {
+            SRL::Logger::LogFatal("[BulletML] Failed to read reference counts for '%s'", name_);
+            freeStringTableStorage();
+            return false;
+        }
+        if (!allocateReferenceScratch(bullet_ref_count, action_ref_count, fire_ref_count)) {
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate parse scratch for '%s'", name_ ? name_ : "(null)");
+            freeStringTableStorage();
             return false;
         }
 
         uint32_t actual_node_count = countNodesInTree();
         if (actual_node_count == 0 || actual_node_count > BULLETML_MAX_NODES) {
             SRL::Logger::LogFatal("[BulletML] Invalid node count %u for '%s'", actual_node_count, name_);
+            freeStringTableStorage();
             freeParseScratch();
             return false;
         }
         if (!allocateNodeMap(actual_node_count)) {
+            freeStringTableStorage();
             freeParseScratch();
             return false;
         }
@@ -441,12 +467,14 @@ public:
 
         if (!loadStringTable()) {
             SRL::Logger::LogFatal("[BulletML] Failed to load string table for '%s'", name_);
+            freeStringTableStorage();
             freeParseScratch();
             return false;
         }
 
         if (!loadReferenceMaps()) {
             SRL::Logger::LogFatal("[BulletML] Failed to load reference maps for '%s'", name_);
+            freeStringTableStorage();
             freeParseScratch();
             return false;
         }
@@ -455,6 +483,7 @@ public:
         bulletml_ = parseNode();
         if (!bulletml_) {
             SRL::Logger::LogFatal("[BulletML] Failed to parse tree for '%s'", name_);
+            freeStringTableStorage();
             freeParseScratch();
             return false;
         }
@@ -498,6 +527,9 @@ public:
 
         if (!allocateRuntimeMaps(bullet_valid_count, action_valid_count, fire_valid_count, top_valid_count)) {
             SRL::Logger::LogFatal("[BulletML] Failed to allocate runtime maps for '%s'", name_ ? name_ : "(null)");
+            delete bulletml_;
+            bulletml_ = nullptr;
+            freeStringTableStorage();
             freeParseScratch();
             return false;
         }
@@ -620,41 +652,89 @@ private:
         topActions_count_ = 0;
     }
 
-    inline bool ensureParseScratch() {
-        if (!string_table_offsets_) {
-            string_table_offsets_ = new uint16_t[BULLETML_MAX_STRINGS];
-            if (!string_table_offsets_) {
-                freeParseScratch();
-                return false;
-            }
+    inline bool allocateStringTableStorage(uint32_t string_count) {
+        freeStringTableStorage();
+
+        if (string_count > BULLETML_MAX_STRINGS) {
+            return false;
         }
-        if (!bullet_refs_) {
-            bullet_refs_ = new BulletMLRefEntry[BULLETML_MAX_REFS];
+
+        string_table_capacity_ = static_cast<uint16_t>(string_count);
+        if (string_count == 0) {
+            return true;
+        }
+
+        string_table_ = new char*[string_count];
+        if (!string_table_) {
+            string_table_capacity_ = 0;
+            return false;
+        }
+        for (uint32_t i = 0; i < string_count; ++i) {
+            string_table_[i] = nullptr;
+        }
+        return true;
+    }
+
+    inline void freeStringTableEntries() {
+        if (!string_table_) {
+            string_table_count_ = 0;
+            return;
+        }
+        for (uint32_t i = 0; i < string_table_capacity_; ++i) {
+            delete[] string_table_[i];
+            string_table_[i] = nullptr;
+        }
+        string_table_count_ = 0;
+    }
+
+    inline void freeStringTableStorage() {
+        freeStringTableEntries();
+        delete[] string_table_;
+        string_table_ = nullptr;
+        string_table_capacity_ = 0;
+    }
+
+    inline bool allocateReferenceScratch(uint32_t bullet_count,
+                                         uint32_t action_count,
+                                         uint32_t fire_count) {
+        freeParseScratch();
+
+        if (bullet_count > BULLETML_MAX_REFS || action_count > BULLETML_MAX_REFS || fire_count > BULLETML_MAX_REFS) {
+            return false;
+        }
+
+        bullet_refs_capacity_ = static_cast<uint16_t>(bullet_count);
+        action_refs_capacity_ = static_cast<uint16_t>(action_count);
+        fire_refs_capacity_ = static_cast<uint16_t>(fire_count);
+
+        if (bullet_count > 0) {
+            bullet_refs_ = new BulletMLRefEntry[bullet_count];
             if (!bullet_refs_) {
                 freeParseScratch();
                 return false;
             }
         }
-        if (!action_refs_) {
-            action_refs_ = new BulletMLRefEntry[BULLETML_MAX_REFS];
+
+        if (action_count > 0) {
+            action_refs_ = new BulletMLRefEntry[action_count];
             if (!action_refs_) {
                 freeParseScratch();
                 return false;
             }
         }
-        if (!fire_refs_) {
-            fire_refs_ = new BulletMLRefEntry[BULLETML_MAX_REFS];
+
+        if (fire_count > 0) {
+            fire_refs_ = new BulletMLRefEntry[fire_count];
             if (!fire_refs_) {
                 freeParseScratch();
                 return false;
             }
         }
+
         return true;
     }
 
     inline void freeParseScratch() {
-        delete[] string_table_offsets_;
-        string_table_offsets_ = nullptr;
         delete[] bullet_refs_;
         bullet_refs_ = nullptr;
         delete[] action_refs_;
@@ -668,6 +748,9 @@ private:
         bullet_refs_count_ = 0;
         action_refs_count_ = 0;
         fire_refs_count_ = 0;
+        bullet_refs_capacity_ = 0;
+        action_refs_capacity_ = 0;
+        fire_refs_capacity_ = 0;
         current_node_id_ = 0;
     }
 
@@ -700,6 +783,65 @@ private:
         }
         offset_ = saved_offset;
         return count;
+    }
+
+    inline bool peekStringCount(uint32_t& string_count) const {
+        string_count = 0;
+        if (!data_ || header_.string_table_offset + 4 > data_size_) {
+            return false;
+        }
+
+        const uint8_t* ptr = data_ + header_.string_table_offset;
+        string_count = static_cast<uint32_t>(ptr[0] |
+                                             (ptr[1] << 8) |
+                                             (ptr[2] << 16) |
+                                             (ptr[3] << 24));
+        return true;
+    }
+
+    inline bool peekReferenceCounts(uint32_t& bullet_count,
+                                    uint32_t& action_count,
+                                    uint32_t& fire_count) const {
+        bullet_count = 0;
+        action_count = 0;
+        fire_count = 0;
+
+        if (!data_ || header_.refmap_offset + 12 > data_size_) {
+            return false;
+        }
+
+        uint32_t pos = header_.refmap_offset;
+        const uint8_t* ptr = data_ + pos;
+        bullet_count = static_cast<uint32_t>(ptr[0] |
+                                             (ptr[1] << 8) |
+                                             (ptr[2] << 16) |
+                                             (ptr[3] << 24));
+        pos += 4;
+        if (pos + bullet_count * 8 + 4 > data_size_) {
+            return false;
+        }
+
+        ptr = data_ + pos + bullet_count * 8;
+        action_count = static_cast<uint32_t>(ptr[0] |
+                                             (ptr[1] << 8) |
+                                             (ptr[2] << 16) |
+                                             (ptr[3] << 24));
+        pos += 4 + bullet_count * 8;
+        if (pos + action_count * 8 + 4 > data_size_) {
+            return false;
+        }
+
+        ptr = data_ + pos + action_count * 8;
+        fire_count = static_cast<uint32_t>(ptr[0] |
+                                           (ptr[1] << 8) |
+                                           (ptr[2] << 16) |
+                                           (ptr[3] << 24));
+        pos += 4 + action_count * 8;
+        if (pos + fire_count * 8 > data_size_) {
+            return false;
+        }
+
+        return true;
     }
 
     inline bool countNodesRecursive(uint32_t& count, uint32_t depth) {
@@ -839,31 +981,38 @@ private:
         return value;
     }
     
-/// Read string from current position and store its offset
+/// Read string from current position and store a null-terminated copy
 inline const char* readString() {
     uint16_t length = readUInt16();
     if (offset_ + length > data_size_) {
-        return "";
+        return nullptr;
     }
-    
-    // Store offset into data buffer for this string
-    if (string_table_offsets_ && string_table_count_ < BULLETML_MAX_STRINGS) {
-        string_table_offsets_[string_table_count_] = offset_;  // Store offset into data_
-        string_table_count_++;
+
+    if (!string_table_ || string_table_count_ >= string_table_capacity_) {
+        return nullptr;
     }
-    
-    const char* str = reinterpret_cast<const char*>(data_ + offset_);
+
+    char* str = new char[length + 1];
+    if (!str) {
+        return nullptr;
+    }
+    for (uint16_t i = 0; i < length; ++i) {
+        str[i] = static_cast<char>(data_[offset_ + i]);
+    }
+    str[length] = '\0';
+
+    string_table_[string_table_count_] = str;
+    string_table_count_++;
     offset_ += length;
     return str;
 }
 
 /// Get string from string table by index
 inline const char* readStringAt(uint32_t index) {
-    if (!string_table_offsets_ || index >= string_table_count_) {
+    if (!string_table_ || index >= string_table_count_) {
         return "";
     }
-    // string_table_offsets_ stores offsets into data_
-    return reinterpret_cast<const char*>(data_ + string_table_offsets_[index]);
+    return string_table_[index] ? string_table_[index] : "";
 }
     
     /// Verify header magic and version
@@ -941,10 +1090,17 @@ inline const char* readStringAt(uint32_t index) {
         
         offset_ = header_.string_table_offset;
         uint32_t string_count = readUInt32();
-        
-        if (string_count > BULLETML_MAX_STRINGS) string_count = BULLETML_MAX_STRINGS;
+
+        if (string_count > string_table_capacity_) {
+            SRL::Logger::LogFatal("[BulletML] String table count %u exceeds capacity %u in '%s'",
+                                  string_count, string_table_capacity_, name_);
+            return false;
+        }
         for (uint32_t i = 0; i < string_count; ++i) {
-            readString();
+            if (!readString()) {
+                SRL::Logger::LogFatal("[BulletML] Failed to load string %u in '%s'", i, name_);
+                return false;
+            }
         }
         
         return true;
@@ -957,14 +1113,18 @@ inline const char* readStringAt(uint32_t index) {
         // Load bullet references
         CHECK_BOUNDS(4);
         uint32_t bullet_count = readUInt32();
-        if (bullet_count > BULLETML_MAX_REFS) bullet_count = BULLETML_MAX_REFS;
+        if (bullet_count > bullet_refs_capacity_) {
+            SRL::Logger::LogFatal("[BulletML] Bullet ref count %u exceeds capacity %u in '%s'",
+                                  bullet_count, bullet_refs_capacity_, name_);
+            return false;
+        }
         bullet_refs_count_ = 0;
         for (uint32_t i = 0; i < bullet_count; ++i) {
             CHECK_BOUNDS(8);
             BulletMLRefEntry entry;
             entry.label_id = readUInt32();
             entry.node_id = readUInt32();
-            if (bullet_refs_count_ < BULLETML_MAX_REFS) {
+            if (bullet_refs_count_ < bullet_refs_capacity_) {
                 bullet_refs_[bullet_refs_count_++] = entry;
             }
         }
@@ -972,14 +1132,18 @@ inline const char* readStringAt(uint32_t index) {
         // Load action references
         CHECK_BOUNDS(4);
         uint32_t action_count = readUInt32();
-        if (action_count > BULLETML_MAX_REFS) action_count = BULLETML_MAX_REFS;
+        if (action_count > action_refs_capacity_) {
+            SRL::Logger::LogFatal("[BulletML] Action ref count %u exceeds capacity %u in '%s'",
+                                  action_count, action_refs_capacity_, name_);
+            return false;
+        }
         action_refs_count_ = 0;
         for (uint32_t i = 0; i < action_count; ++i) {
             CHECK_BOUNDS(8);
             BulletMLRefEntry entry;
             entry.label_id = readUInt32();
             entry.node_id = readUInt32();
-            if (action_refs_count_ < BULLETML_MAX_REFS) {
+            if (action_refs_count_ < action_refs_capacity_) {
                 action_refs_[action_refs_count_++] = entry;
             }
         }
@@ -987,14 +1151,18 @@ inline const char* readStringAt(uint32_t index) {
         // Load fire references
         CHECK_BOUNDS(4);
         uint32_t fire_count = readUInt32();
-        if (fire_count > BULLETML_MAX_REFS) fire_count = BULLETML_MAX_REFS;
+        if (fire_count > fire_refs_capacity_) {
+            SRL::Logger::LogFatal("[BulletML] Fire ref count %u exceeds capacity %u in '%s'",
+                                  fire_count, fire_refs_capacity_, name_);
+            return false;
+        }
         fire_refs_count_ = 0;
         for (uint32_t i = 0; i < fire_count; ++i) {
             CHECK_BOUNDS(8);
             BulletMLRefEntry entry;
             entry.label_id = readUInt32();
             entry.node_id = readUInt32();
-            if (fire_refs_count_ < BULLETML_MAX_REFS) {
+            if (fire_refs_count_ < fire_refs_capacity_) {
                 fire_refs_[fire_refs_count_++] = entry;
             }
         }
@@ -1110,6 +1278,12 @@ inline const char* readStringAt(uint32_t index) {
                 node->setValue(readStringAt(node_header.value_string_id));
             }
         }
+
+        if (node_header.label_string_id != 0xFFFFFFFF) {
+            if (node_header.label_string_id < string_table_count_) {
+                node->setLabel(readStringAt(node_header.label_string_id));
+            }
+        }
         
         // Parse children
         for (uint16_t i = 0; i < node_header.child_count; ++i) {
@@ -1152,8 +1326,8 @@ protected:
     // Embedded header structure (24 bytes) - no padding needed
     BulletMLBinaryHeader header_;
     
-    // Parse scratch pointers grouped for cache efficiency (20 bytes - expanded with offset storage)
-    uint16_t* string_table_offsets_;  // Optimized: uint16_t valid for offsets max 1699 bytes (saves 2000 bytes per instance)
+    // String table entries are copied into null-terminated runtime storage.
+    char** string_table_;
     BulletMLRefEntry* bullet_refs_;
     BulletMLRefEntry* action_refs_;
     BulletMLRefEntry* fire_refs_;
@@ -1186,9 +1360,13 @@ protected:
     // Max string_table_count_: BULLETML_MAX_STRINGS = 1000
     // Max *_refs_count_: BULLETML_MAX_REFS = 500
     uint16_t string_table_count_;
+    uint16_t string_table_capacity_;
     uint16_t bullet_refs_count_;
+    uint16_t bullet_refs_capacity_;
     uint16_t action_refs_count_;
+    uint16_t action_refs_capacity_;
     uint16_t fire_refs_count_;
+    uint16_t fire_refs_capacity_;
 };
 
 #endif // BULLETMLPARSER_BLB_HPP_
