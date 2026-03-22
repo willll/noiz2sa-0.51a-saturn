@@ -32,7 +32,7 @@ All multi-byte values are stored in **little-endian** format.
 | uint16   | 2            | Unsigned 16-bit integer              |
 | uint32   | 4            | Unsigned 32-bit integer              |
 | float32  | 4            | IEEE 754 single-precision float      |
-| string   | variable     | Length-prefixed UTF-8 string         |
+| string   | variable     | Length-prefixed ASCII string         |
 
 ## Header Structure
 
@@ -67,8 +67,10 @@ Each string is encoded as:
 Offset | Size     | Type    | Field          | Description
 -------|----------|---------|----------------|---------------------------
 0x00   | 2        | uint16  | length         | String length in bytes
-0x02   | length   | char[]  | data           | UTF-8 encoded string (not null-terminated)
+0x02   | length   | char[]  | data           | ASCII bytes (not null-terminated)
 ```
+
+Strings in the BLB string table are limited to 7-bit ASCII characters stored in 8-bit bytes.
 
 ## Reference Maps
 

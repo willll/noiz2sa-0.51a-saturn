@@ -4,6 +4,8 @@
 
 `bulletmlparser_blb.hpp` is a header-only C++ library that provides fast binary parsing for BulletML pattern files (.blb format).
 
+The parser exposes a pointer-based API and returns `bool` from `build()`/`parse()` rather than throwing exceptions.
+
 ## Features
 
 - **Header-only**: No separate compilation required, just include the header
@@ -14,10 +16,11 @@
 
 ## Integration
 
-### 1. Copy the header to your project
+### 1. Copy the header and required dependencies
 
 ```bash
 cp src/bulletml_binary/bulletmlparser_blb.hpp <your_project>/include/
+cp src/bulletml_binary/bulletmlstate.hpp <your_project>/include/
 ```
 
 ### 2. Include in your code
@@ -27,13 +30,17 @@ cp src/bulletml_binary/bulletmlparser_blb.hpp <your_project>/include/
 
 // Load from file
 BulletMLParserBLB parser("patterns/boss01.blb");
-parser.build();
+if (!parser.build()) {
+    // handle parse failure
+}
 
 // Or load from memory
 const uint8_t* data = ... // your binary data
 size_t size = ... // size in bytes
 BulletMLParserBLB parser(data, size);
-parser.build();
+if (!parser.build()) {
+    // handle parse failure
+}
 ```
 
 ### 3. Use like standard BulletMLParser
@@ -45,13 +52,17 @@ if (parser.isHorizontal()) {
 }
 
 // Get top-level actions
-const std::vector<BulletMLNode*>& actions = parser.getTopActions();
-for (BulletMLNode* action : actions) {
+uint32_t action_count = 0;
+BulletMLNode** actions = parser.getTopActions(&action_count);
+for (uint32_t i = 0; i < action_count; ++i) {
+    BulletMLNode* action = actions[i];
     // process action
 }
 
-// Get bulletMap, actionMap, fireMap for resolving references
-// These are populated automatically during build()
+// Resolve references by ID
+BulletMLNode* bullet = parser.getBullet(0);
+BulletMLNode* action = parser.getAction(0);
+BulletMLNode* fire = parser.getFire(0);
 ```
 
 ## Binary Format
@@ -82,19 +93,16 @@ python3 tools/bulletml_converter.py pattern.blb pattern_verify.xml
 ## Requirements
 
 - C++11 or later
-- Existing BulletML library (bulletmlparser.h, bulletmlnode.h, etc.)
-- Standard library: `<vector>`, `<string>`, `<cstdint>`, `<cstring>`, `<fstream>`
+- `bulletmlstate.hpp`
+- Saturn runtime headers used by this implementation: `srl_cd.hpp`, `srl_log.hpp`
 
 ## Error Handling
 
 ```cpp
 BulletMLParserBLB parser("pattern.blb");
 
-try {
-    parser.build();  // May throw BulletMLError
-} catch (const BulletMLError& e) {
-    std::cerr << "Parse error: " << e.what() << std::endl;
-    // Also check: parser.getErrorMessage()
+if (!parser.build()) {
+    std::cerr << "Parse error: " << parser.getErrorMessage() << std::endl;
 }
 ```
 
@@ -125,7 +133,7 @@ void loadPattern(const char* filename) {
 ## Files
 
 - `src/bulletml_binary/bulletmlparser_blb.hpp` - Primary header-only parser implementation
-- `src/bulletml_binary/BINARY_PARSER_README.md` - This file (integration guide)
+- `doc/BINARY_PARSER_README.md` - This file (integration guide)
 - `tools/bulletml_converter.py` - Python converter tool
 - `tools/BINARY_FORMAT.md` - Complete format specification
 - `tools/README.md` - Converter usage guide

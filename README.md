@@ -14,8 +14,8 @@ This repository contains the Saturn build of Noiz2sa with platform integrations 
 Recent maintenance in this fork includes:
 
 - migration of the top-level game sources in `src/` from C to C++
-- a documented BulletML binary format (`.bmlb`)
-- XML-to-binary conversion tooling in `src/bulletml_binary/`
+- a documented BulletML binary format (`.blb`)
+- XML-to-binary conversion tooling in `tools/`
 - Complete SaturnRingLib CMake integration with shared.mk feature parity
 
 ## Building
@@ -54,7 +54,8 @@ cmake --build build
 
 - [BUILD_GUIDE.md](BUILD_GUIDE.md) - Complete build instructions and configuration options
 - [BUILD_SYSTEM_SUMMARY.md](BUILD_SYSTEM_SUMMARY.md) - SaturnRingLib and build system integration summary
-- [src/bulletml_binary/BINARY_PARSER_README.md](src/bulletml_binary/BINARY_PARSER_README.md) - BulletML binary format documentation
+- [doc/BINARY_PARSER_README.md](doc/BINARY_PARSER_README.md) - BulletML binary parser integration guide
+- [doc/BINARY_FORMAT.md](doc/BINARY_FORMAT.md) - BulletML binary format specification
 
 ## Upstream / Legacy Readme
 

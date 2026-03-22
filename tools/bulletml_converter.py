@@ -269,7 +269,12 @@ class Converter:
         """Write string table to output."""
         out.write(struct.pack("<I", len(self._strings)))
         for s in self._strings:
-            raw = s.encode("utf-8")
+            try:
+                raw = s.encode("ascii")
+            except UnicodeEncodeError as exc:
+                raise ValueError(
+                    f"BLB string table only supports ASCII text: {s[:80]}..."
+                ) from exc
             if len(raw) > 0xFFFF:
                 raise ValueError(f"String too long for format (max 65535 bytes): {s[:80]}...")
             out.write(struct.pack("<H", len(raw)))
@@ -384,7 +389,10 @@ class Deconverter:
         for _ in range(string_count):
             length, = struct.unpack("<H", data[pos:pos+2])
             pos += 2
-            string_data = data[pos:pos+length].decode("utf-8")
+            try:
+                string_data = data[pos:pos+length].decode("ascii")
+            except UnicodeDecodeError as exc:
+                raise ValueError("BLB string table contains non-ASCII bytes") from exc
             pos += length
             self._strings.append(string_data)
 

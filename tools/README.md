@@ -18,6 +18,8 @@ Usage:
 
 The `bulletml_converter.py` script provides bidirectional conversion between BulletML XML and binary formats.
 
+The BLB string table stores 7-bit ASCII text in 8-bit bytes. XML input and output remain UTF-8.
+
 ### Features
 
 - **XML → Binary**: Convert `.xml` BulletML files to compact `.blb` binary format
@@ -113,7 +115,7 @@ To use binary BulletML files in your Saturn port:
 
 1. Convert XML patterns to `.blb` format
 2. Place binary files in `cd/data/` directory
-3. Use `BulletMLParserBin` instead of `BulletMLParserBLB`
+3. Use `BulletMLParserBLB` to load `.blb` files
 4. Load patterns from binary files
 
-See `src/bulletml_binary/BINARY_PARSER_README.md` for C++ integration details.
+See `../doc/BINARY_PARSER_README.md` for C++ integration details.
