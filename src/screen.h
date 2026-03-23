@@ -14,6 +14,7 @@
 #include "SDL.h"
 #include "vector.h"
 #include "gamepad.h"
+#include "canvas.h"
 
 using namespace SRL::Input;
 
@@ -33,7 +34,6 @@ using namespace SRL::Input;
 #define SCAN_HEIGHT_8 (SCAN_HEIGHT<<8)
 
 #define BPP 8
-#define LayerBit Uint8
 
 #define PAD_UP 1
 #define PAD_DOWN 2
@@ -44,9 +44,9 @@ using namespace SRL::Input;
 
 #define DEFAULT_BRIGHTNESS 224
 
-extern LayerBit *l1buf, *l2buf;
-extern LayerBit *buf;
-extern LayerBit *lpbuf, *rpbuf;
+extern Canvas::Pixel *l1buf, *l2buf;
+extern Canvas::Pixel *buf;
+extern Canvas::Pixel *lpbuf, *rpbuf;
 extern int buttonReversed;
 extern int brightness;
 extern Digital *gamepad;
@@ -59,12 +59,12 @@ void clearScreen();
 void clearLPanel();
 void clearRPanel();
 void smokeScreen();
-void drawThickLine(int x1, int y1, int x2, int y2, LayerBit color1, LayerBit color2, int width);
-void drawLine(int x1, int y1, int x2, int y2, LayerBit color, int width, LayerBit *buf);
+void drawThickLine(int x1, int y1, int x2, int y2, Canvas::Pixel color1, Canvas::Pixel color2, int width);
+void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Canvas::Pixel *buf);
 void drawBox(int x, int y, int width, int height,
-	     LayerBit color1, LayerBit color2, LayerBit *buf);
+	     Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf);
 void drawBoxPanel(int x, int y, int width, int height,
-		  LayerBit color1, LayerBit color2, LayerBit *buf);
+		  Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf);
 int drawNum(int n, int x ,int y, int s, int c1, int c2);
 int drawNumRight(int n, int x ,int y, int s, int c1, int c2);
 int drawNumCenter(int n, int x ,int y, int s, int c1, int c2);

@@ -10,11 +10,13 @@
  * @version $Revision: 1.1.1.1 $
  */
 
+#include "screen.h"
+
 void drawLetterBuf(int idx, int lx, int ly, int ltSize, int d,
-		LayerBit color1, LayerBit color2, LayerBit *buf, int panel);
+		Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf, int panel);
 void drawLetter(int idx, int lx, int ly, int ltSize, int d,
-		LayerBit color1, LayerBit color2, LayerBit *buf);
+		Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf);
 void drawStringBuf(const char *str, int lx, int ly, int ltSize, int d, 
-		LayerBit color1, LayerBit color2, LayerBit *buf, int panel);
+		Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf, int panel);
 void drawString(const char *str, int lx, int ly, int ltSize, int d, 
-		LayerBit color1, LayerBit color2, LayerBit *buf);
+		Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf);

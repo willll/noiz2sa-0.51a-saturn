@@ -14,7 +14,7 @@
 #include "letterdata.h"
 
 void drawLetterBuf(int idx, int lx, int ly, int ltSize, int d,
-                   LayerBit color1, LayerBit color2, LayerBit *buf, int panel)
+                   Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf, int panel)
 {
   int i;
   float x, y, length, size, t;
@@ -88,13 +88,13 @@ void drawLetterBuf(int idx, int lx, int ly, int ltSize, int d,
 }
 
 void drawLetter(int idx, int lx, int ly, int ltSize, int d,
-                LayerBit color1, LayerBit color2, LayerBit *buf)
+                Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
   drawLetterBuf(idx, lx, ly, ltSize, d, color1, color2, buf, 1);
 }
 
 void drawStringBuf(const char *str, int lx, int ly, int ltSize, int d,
-                   LayerBit color1, LayerBit color2, LayerBit *buf, int panel)
+                   Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf, int panel)
 {
   int x = lx, y = ly;
   int i, c, idx;
@@ -154,7 +154,7 @@ void drawStringBuf(const char *str, int lx, int ly, int ltSize, int d,
 }
 
 void drawString(const char *str, int lx, int ly, int ltSize, int d,
-                LayerBit color1, LayerBit color2, LayerBit *buf)
+                Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
   drawStringBuf(str, lx, ly, ltSize, d, color1, color2, buf, 1);
 }

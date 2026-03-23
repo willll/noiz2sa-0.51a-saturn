@@ -208,7 +208,8 @@ set(SOURCES_NOIZ2SA
   src/bonus.cpp
   src/frag.cpp
   src/clrtbl.cpp
-  src/palette.cpp
+    src/canvas.cpp
+    src/canvas_palette.cpp
   src/letterrender.cpp
   src/gamepad.cpp
   src/rand.cpp

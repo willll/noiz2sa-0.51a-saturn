@@ -27,18 +27,31 @@
 #include "letterrender.h"
 #include "attractmanager.h"
 #include "gamepad.h"
-#include "palette.h"
+#include "canvas_palette.h"
 
 using namespace SRL::Math::Types;
 
 int brightness = DEFAULT_BRIGHTNESS;
 
 static SRL_Surface *video, *layer, *lpanel, *rpanel;
-static LayerBit **smokeBuf;
-static LayerBit *pbuf;
-LayerBit *l1buf, *l2buf;
-LayerBit *buf;
-LayerBit *lpbuf, *rpbuf;
+static SRL_Surface videoSurface;
+static SRL_Surface layerSurface;
+static SRL_Surface lpanelSurface;
+static SRL_Surface rpanelSurface;
+
+static Canvas::Pixel **smokeBuf;
+static Canvas::Pixel *pbuf;
+Canvas::Pixel *l1buf, *l2buf;
+Canvas::Pixel *buf;
+Canvas::Pixel *lpbuf, *rpbuf;
+static Canvas *layerCanvas = nullptr;
+static Canvas *leftPanelCanvas = nullptr;
+static Canvas *rightPanelCanvas = nullptr;
+static Canvas *smokeCanvas = nullptr;
+static Canvas *layer1Canvas = nullptr;
+static Canvas *layer2Canvas = nullptr;
+static Palette *canvasPalette = nullptr;
+static Canvas::Pixel smokeFallback = 0;
 static SDL_Rect layerRect, layerClearRect;
 static SDL_Rect lpanelRect, rpanelRect, panelClearRect;
 static int pitch;
@@ -115,7 +128,7 @@ static void loadSprites()
     else
     {
       // assume is pallet texture
-      textureIndex = SRL::VDP1::TryLoadTexture(tga, MyPalette::LoadPalette);
+      textureIndex = SRL::VDP1::TryLoadTexture(tga, Palette::LoadPalette);
     }
 
     if (textureIndex < 0)
@@ -131,12 +144,6 @@ static void loadSprites()
     }
 
     //SRL::Logger::LogTrace("[SPRITE] TGA object created for: %s", spriteFile[i]);
-
-    // Copy TGA image data to SDL surface
-    // if ( img->pixels != nullptr && tga->GetData() != nullptr ) {
-    //   memcpy(img->pixels, tga->GetData(), info.Width * info.Height);
-    //   SRL::Logger::LogTrace("[SPRITE] Image data copied to SDL surface (%d bytes)", info.Width * info.Height);
-    // }
 
     delete tga;
 
@@ -157,8 +164,8 @@ static void loadSprites()
     SRL::Logger::LogDebug("[SPRITE] Sprite %d loaded successfully", i);
   }
 
-  // color[0].Red = color[0].Green = color[0].Blue = 31;
-  // SDL_SetColors(video, color, 0, 1);
+  color[0].Red = color[0].Green = color[0].Blue = 31;
+  SDL_SetColors(video, color, 0, 1);
 
   SRL::Logger::LogInfo("[SPRITE] Sprite loading complete: %d sprites loaded", SPRITE_NUM);
 }
@@ -169,41 +176,68 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
   SRL::Scene2D::DrawSprite(sprite[n].textureIndex, pos);
 }
 
-// Initialize palletes.
-// static void initPalette()
-// {
-//   int i;
-//   for (i = 0; i < 256; i++)
-//   {
-//     color[i].Red = color[i].Red * brightness / 256;
-//     color[i].Green = color[i].Green * brightness / 256;
-//     color[i].Blue = color[i].Blue * brightness / 256;
-//   }
-//   SDL_SetColors(video, color, 0, 256);
-//   SDL_SetColors(layer, color, 0, 256);
-//   SDL_SetColors(lpanel, color, 0, 256);
-//   SDL_SetColors(rpanel, color, 0, 256);
-// }
-
 static int lyrSize;
 
 static void makeSmokeBuf()
 {
   int x, y, mx, my;
-  lyrSize = sizeof(LayerBit) * pitch * LAYER_HEIGHT;
-  if (nullptr == (smokeBuf = (LayerBit **)malloc(sizeof(LayerBit *) * pitch * LAYER_HEIGHT)))
+
+  if (canvasPalette == nullptr)
   {
-    SRL::Logger::LogFatal("Couldn't malloc smokeBuf.");
+    canvasPalette = new Palette(256);
+    if (canvasPalette == nullptr)
+    {
+      SRL::Logger::LogFatal("Couldn't allocate canvas palette.");
+      SRL::System::Exit(1);
+    }
+    canvasPalette->Init();
+  }
+
+  if (smokeCanvas == nullptr)
+  {
+    smokeCanvas = new Canvas(pitch, LAYER_HEIGHT, *canvasPalette);
+  }
+  if (layer1Canvas == nullptr)
+  {
+    layer1Canvas = new Canvas(pitch, LAYER_HEIGHT, *canvasPalette);
+  }
+  if (layer2Canvas == nullptr)
+  {
+    layer2Canvas = new Canvas(pitch, LAYER_HEIGHT, *canvasPalette);
+  }
+
+  if (smokeCanvas == nullptr || layer1Canvas == nullptr || layer2Canvas == nullptr)
+  {
+    SRL::Logger::LogFatal("Couldn't allocate Canvas buffers.");
     SRL::System::Exit(1);
   }
-  if (nullptr == (pbuf = (LayerBit *)malloc(lyrSize + sizeof(LayerBit))) ||
-      nullptr == (l1buf = (LayerBit *)malloc(lyrSize + sizeof(LayerBit))) ||
-      nullptr == (l2buf = (LayerBit *)malloc(lyrSize + sizeof(LayerBit))))
+
+  pbuf = smokeCanvas->GetData();
+  l1buf = layer1Canvas->GetData();
+  l2buf = layer2Canvas->GetData();
+
+  if (pbuf == nullptr || l1buf == nullptr || l2buf == nullptr)
   {
-    SRL::Logger::LogFatal("Couldn't malloc buffer.");
+    SRL::Logger::LogFatal("Couldn't access Canvas pixel buffers.");
     SRL::System::Exit(1);
   }
-  pbuf[pitch * LAYER_HEIGHT] = 0;
+
+  lyrSize = sizeof(Canvas::Pixel) * pitch * LAYER_HEIGHT;
+
+  if (smokeBuf != nullptr)
+  {
+    free(smokeBuf);
+    smokeBuf = nullptr;
+  }
+
+  smokeBuf = (Canvas::Pixel **)malloc(sizeof(Canvas::Pixel *) * pitch * LAYER_HEIGHT);
+  if (smokeBuf == nullptr)
+  {
+    SRL::Logger::LogWarning("Couldn't allocate smokeBuf lookup table. Using fallback smoke mode.");
+    return;
+  }
+
+  smokeFallback = 0;
   for (y = 0; y < LAYER_HEIGHT; y++)
   {
     for (x = 0; x < LAYER_WIDTH; x++)
@@ -212,7 +246,7 @@ static void makeSmokeBuf()
       my = y + sctbl[(y * 8) & (DIV - 1)] / 128;
       if (mx < 0 || mx >= LAYER_WIDTH || my < 0 || my >= LAYER_HEIGHT)
       {
-        smokeBuf[x + y * pitch] = &(pbuf[pitch * LAYER_HEIGHT]);
+        smokeBuf[x + y * pitch] = &smokeFallback;
       }
       else
       {
@@ -224,37 +258,46 @@ static void makeSmokeBuf()
 
 void initSDL()
 {
-  // if ( SDL_Init(SDL_INIT_VIDEO) < 0 ) {
-  //   SRL::Logger::LogFatal("Unable to initialize SDL: %s", SDL_GetError());
-  //   SRL::System::Exit(1);
-  // }
-  // else {
-  //   SRL::Logger::LogInfo("SDL initialized successfully");
-  // }
+  videoSurface = SRL_Surface(-1, SCREEN_WIDTH, SCREEN_HEIGHT);
+  layerSurface = SRL_Surface(-1, LAYER_WIDTH, LAYER_HEIGHT);
+  lpanelSurface = SRL_Surface(-1, PANEL_WIDTH, PANEL_HEIGHT);
+  rpanelSurface = SRL_Surface(-1, PANEL_WIDTH, PANEL_HEIGHT);
 
-  // if ( SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0 ) {
-  //   SRL::Logger::LogWarning("Unable to initialize SDL_JOYSTICK");
-  //   joystickMode = 0;
-  // }
+  video = &videoSurface;
+  layer = &layerSurface;
+  lpanel = &lpanelSurface;
+  rpanel = &rpanelSurface;
 
-  // if ( (video = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, BPP,
-  //                                SDL_DOUBLEBUF | SDL_HWSURFACE | SDL_HWPALETTE | SDL_FULLSCREEN)) == nullptr ) {
-  //   SRL::Logger::LogFatal("Unable to create SDL screen: %s", SDL_GetError());
-  //   SRL::System::Exit(1);
-  // }
-  // pfrm = video->format;
-  // if ( nullptr == ( layer = SDL_CreateRGBSurface
-  // 	(SDL_SWSURFACE, LAYER_WIDTH, LAYER_HEIGHT, videoBpp,
-  // 	 pfrm->Rmask, pfrm->Gmask, pfrm->Bmask, pfrm->Amask)) ||
-  //      nullptr == ( lpanel = SDL_CreateRGBSurface
-  // 	(SDL_SWSURFACE, PANEL_WIDTH, PANEL_HEIGHT, videoBpp,
-  // 	 pfrm->Rmask, pfrm->Gmask, pfrm->Bmask, pfrm->Amask)) ||
-  //      nullptr == ( rpanel = SDL_CreateRGBSurface
-  // 	(SDL_SWSURFACE, PANEL_WIDTH, PANEL_HEIGHT, videoBpp,
-  // 	 pfrm->Rmask, pfrm->Gmask, pfrm->Bmask, pfrm->Amask)) ) {
-  //       SRL::Logger::LogFatal("Couldn't create surface: %s", SDL_GetError());
-  //     SRL::System::Exit(1);
-  // }
+  if (canvasPalette == nullptr)
+  {
+    canvasPalette = new Palette(256);
+    if (canvasPalette == nullptr)
+    {
+      SRL::Logger::LogFatal("Couldn't allocate canvas palette.");
+      SRL::System::Exit(1);
+    }
+    canvasPalette->Init();
+  }
+
+  if (layerCanvas == nullptr)
+  {
+    layerCanvas = new Canvas(LAYER_WIDTH, LAYER_HEIGHT, *canvasPalette);
+  }
+  if (leftPanelCanvas == nullptr)
+  {
+    leftPanelCanvas = new Canvas(PANEL_WIDTH, PANEL_HEIGHT, *canvasPalette);
+  }
+  if (rightPanelCanvas == nullptr)
+  {
+    rightPanelCanvas = new Canvas(PANEL_WIDTH, PANEL_HEIGHT, *canvasPalette);
+  }
+
+  if (layerCanvas == nullptr || leftPanelCanvas == nullptr || rightPanelCanvas == nullptr)
+  {
+    SRL::Logger::LogFatal("Couldn't allocate render Canvas objects.");
+    SRL::System::Exit(1);
+  }
+
   layerRect.x = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
   layerRect.y = (SCREEN_HEIGHT - LAYER_HEIGHT) / 2;
   layerRect.w = LAYER_WIDTH;
@@ -272,16 +315,15 @@ void initSDL()
   panelClearRect.w = PANEL_WIDTH;
   panelClearRect.h = PANEL_HEIGHT;
 
-  // pitch = layer->pitch/(videoBpp/8);
-  // buf = (LayerBit*)layer->pixels;
-  // ppitch = lpanel->pitch/(videoBpp/8);
-  // lpbuf = (LayerBit*)lpanel->pixels;
-  // rpbuf = (LayerBit*)rpanel->pixels;
+  pitch = LAYER_WIDTH;
+  buf = layerCanvas->GetData();
+  lpbuf = leftPanelCanvas->GetData();
+  rpbuf = rightPanelCanvas->GetData();
 
-  MyPalette::initPalette();
-  // makeSmokeBuf();
-  // clearLPanel();
-  // clearRPanel();
+  Palette::initPalette();
+  makeSmokeBuf();
+  clearLPanel();
+  clearRPanel();
 
   loadSprites();
   // if (joystickMode == 1) {
@@ -316,23 +358,35 @@ void flipScreen()
 
 void clearScreen()
 {
-  SDL_FillRect(layer, &layerClearRect, 0);
+  memset(buf, 0, LAYER_WIDTH * LAYER_HEIGHT);
 }
 
 void clearLPanel()
 {
-  SDL_FillRect(lpanel, &panelClearRect, 0);
+  memset(lpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
 }
 
 void clearRPanel()
 {
-  SDL_FillRect(rpanel, &panelClearRect, 0);
+  memset(rpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
 }
 
 void smokeScreen()
 {
   int i;
+  smokeFallback = 0;
   memcpy(pbuf, l2buf, lyrSize);
+
+  if (smokeBuf == nullptr)
+  {
+    for (i = lyrSize - 1; i >= 0; i--)
+    {
+      l1buf[i] = colorDfs[l1buf[i]];
+      l2buf[i] = colorDfs[pbuf[i]];
+    }
+    return;
+  }
+
   for (i = lyrSize - 1; i >= 0; i--)
   {
     l1buf[i] = colorDfs[l1buf[i]];
@@ -340,7 +394,7 @@ void smokeScreen()
   }
 }
 
-void drawLine(int x1, int y1, int x2, int y2, LayerBit color, int width, LayerBit *buf)
+void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Canvas::Pixel *buf)
 {
   int lx, ly, ax, ay, x, y, ptr, i, j;
   int xMax, yMax;
@@ -449,7 +503,7 @@ void drawLine(int x1, int y1, int x2, int y2, LayerBit color, int width, LayerBi
 }
 
 void drawThickLine(int x1, int y1, int x2, int y2,
-                   LayerBit color1, LayerBit color2, int width)
+                   Canvas::Pixel color1, Canvas::Pixel color2, int width)
 {
   int lx, ly, ax, ay, x, y, ptr, i, j;
   int xMax, yMax;
@@ -582,10 +636,10 @@ void drawThickLine(int x1, int y1, int x2, int y2,
 }
 
 void drawBox(int x, int y, int width, int height,
-             LayerBit color1, LayerBit color2, LayerBit *buf)
+             Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
   int i, j;
-  LayerBit cl;
+  Canvas::Pixel cl;
   int ptr;
 
   x -= width >> 1;
@@ -630,10 +684,10 @@ void drawBox(int x, int y, int width, int height,
 }
 
 void drawBoxPanel(int x, int y, int width, int height,
-                  LayerBit color1, LayerBit color2, LayerBit *buf)
+                  Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
   int i, j;
-  LayerBit cl;
+  Canvas::Pixel cl;
   int ptr;
 
   x -= width >> 1;

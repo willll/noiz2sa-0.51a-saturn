@@ -14,9 +14,6 @@
 
 #include "SDL.h"
 
-extern SRL::CRAM::Palette * palette;
 extern SRL::Types::HighColor color[256];
 extern Uint8 colorDfs[256];
 extern Uint8 colorAlp[256][256];
-
-int32_t initPalette();
