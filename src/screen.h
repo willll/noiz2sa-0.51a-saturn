@@ -44,6 +44,9 @@ using namespace SRL::Input;
 
 #define DEFAULT_BRIGHTNESS 224
 
+#define pitch LAYER_WIDTH
+#define lyrSize (LAYER_WIDTH * LAYER_HEIGHT)
+
 extern Canvas::Pixel *l1buf, *l2buf;
 extern Canvas::Pixel *buf;
 extern Canvas::Pixel *lpbuf, *rpbuf;

@@ -13,7 +13,7 @@
 #include <math.h>
 #include <srl.hpp>
 #include <srl_log.hpp> // for logging
-// #include <srl_memory.hpp>  // for malloc/free
+#include <srl_memory.hpp> // for LowWorkRam frame buffer allocation
 #include <srl_string.hpp> // for string and memory functions
 #include <srl_system.hpp> // for exit
 #include <srl_bitmap.hpp> // for TGA loading
@@ -39,22 +39,17 @@ static SRL_Surface layerSurface;
 static SRL_Surface lpanelSurface;
 static SRL_Surface rpanelSurface;
 
-static Canvas::Pixel **smokeBuf;
-static Canvas::Pixel *pbuf;
-Canvas::Pixel *l1buf, *l2buf;
-Canvas::Pixel *buf;
-Canvas::Pixel *lpbuf, *rpbuf;
-static Canvas *layerCanvas = nullptr;
-static Canvas *leftPanelCanvas = nullptr;
-static Canvas *rightPanelCanvas = nullptr;
-static Canvas *smokeCanvas = nullptr;
-static Canvas *layer1Canvas = nullptr;
-static Canvas *layer2Canvas = nullptr;
-static Palette *canvasPalette = nullptr;
+static Canvas::Pixel **smokeBuf = nullptr;
+// Frame buffers allocated from LWRAM (0x00200000, 1MB) to preserve main RAM heap for BLB parsers
+static Canvas::Pixel *pbuf  = nullptr;
+Canvas::Pixel *l1buf = nullptr;
+Canvas::Pixel *l2buf = nullptr;
+Canvas::Pixel *buf   = nullptr;
+Canvas::Pixel *lpbuf = nullptr;
+Canvas::Pixel *rpbuf = nullptr;
 static Canvas::Pixel smokeFallback = 0;
 static SDL_Rect layerRect, layerClearRect;
 static SDL_Rect lpanelRect, rpanelRect, panelClearRect;
-static int pitch;
 
 // Handle TGA images in ISO 8:3 format
 #define SPRITE_NUM 7
@@ -172,57 +167,15 @@ static void loadSprites()
 
 void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
 {
-  SRL::Math::Types::Vector3D pos(Fxp::Convert(x), Fxp::Convert(y), 500.0);
+  // SRL::Scene2D::DrawSprite uses sprite center; GP32 reference uses top-left.
+  // Sprites are 40×40, so offset by -20 to convert top-left to center coordinates.
+  SRL::Math::Types::Vector3D pos(Fxp::Convert(x - 20), Fxp::Convert(y - 20), 500.0);
   SRL::Scene2D::DrawSprite(sprite[n].textureIndex, pos);
 }
-
-static int lyrSize;
 
 static void makeSmokeBuf()
 {
   int x, y, mx, my;
-
-  if (canvasPalette == nullptr)
-  {
-    canvasPalette = new Palette(256);
-    if (canvasPalette == nullptr)
-    {
-      SRL::Logger::LogFatal("Couldn't allocate canvas palette.");
-      SRL::System::Exit(1);
-    }
-    canvasPalette->Init();
-  }
-
-  if (smokeCanvas == nullptr)
-  {
-    smokeCanvas = new Canvas(pitch, LAYER_HEIGHT, *canvasPalette);
-  }
-  if (layer1Canvas == nullptr)
-  {
-    layer1Canvas = new Canvas(pitch, LAYER_HEIGHT, *canvasPalette);
-  }
-  if (layer2Canvas == nullptr)
-  {
-    layer2Canvas = new Canvas(pitch, LAYER_HEIGHT, *canvasPalette);
-  }
-
-  if (smokeCanvas == nullptr || layer1Canvas == nullptr || layer2Canvas == nullptr)
-  {
-    SRL::Logger::LogFatal("Couldn't allocate Canvas buffers.");
-    SRL::System::Exit(1);
-  }
-
-  pbuf = smokeCanvas->GetData();
-  l1buf = layer1Canvas->GetData();
-  l2buf = layer2Canvas->GetData();
-
-  if (pbuf == nullptr || l1buf == nullptr || l2buf == nullptr)
-  {
-    SRL::Logger::LogFatal("Couldn't access Canvas pixel buffers.");
-    SRL::System::Exit(1);
-  }
-
-  lyrSize = sizeof(Canvas::Pixel) * pitch * LAYER_HEIGHT;
 
   if (smokeBuf != nullptr)
   {
@@ -268,35 +221,23 @@ void initSDL()
   lpanel = &lpanelSurface;
   rpanel = &rpanelSurface;
 
-  if (canvasPalette == nullptr)
-  {
-    canvasPalette = new Palette(256);
-    if (canvasPalette == nullptr)
-    {
-      SRL::Logger::LogFatal("Couldn't allocate canvas palette.");
-      SRL::System::Exit(1);
-    }
-    canvasPalette->Init();
-  }
-
-  if (layerCanvas == nullptr)
-  {
-    layerCanvas = new Canvas(LAYER_WIDTH, LAYER_HEIGHT, *canvasPalette);
-  }
-  if (leftPanelCanvas == nullptr)
-  {
-    leftPanelCanvas = new Canvas(PANEL_WIDTH, PANEL_HEIGHT, *canvasPalette);
-  }
-  if (rightPanelCanvas == nullptr)
-  {
-    rightPanelCanvas = new Canvas(PANEL_WIDTH, PANEL_HEIGHT, *canvasPalette);
-  }
-
-  if (layerCanvas == nullptr || leftPanelCanvas == nullptr || rightPanelCanvas == nullptr)
-  {
-    SRL::Logger::LogFatal("Couldn't allocate render Canvas objects.");
+  // Allocate frame buffers from LWRAM (1MB at 0x00200000), preserving main RAM heap for BLB parsers
+  pbuf  = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
+  l1buf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
+  l2buf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
+  buf   = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
+  lpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
+  rpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
+  if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf) {
+    SRL::Logger::LogFatal("[SCREEN] Failed to allocate frame buffers in LWRAM");
     SRL::System::Exit(1);
   }
+  memset(pbuf,  0, lyrSize);
+  memset(l1buf, 0, lyrSize);
+  memset(l2buf, 0, lyrSize);
+  memset(buf,   0, lyrSize);
+  memset(lpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
+  memset(rpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
 
   layerRect.x = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
   layerRect.y = (SCREEN_HEIGHT - LAYER_HEIGHT) / 2;
@@ -314,11 +255,6 @@ void initSDL()
   panelClearRect.x = panelClearRect.y = 0;
   panelClearRect.w = PANEL_WIDTH;
   panelClearRect.h = PANEL_HEIGHT;
-
-  pitch = LAYER_WIDTH;
-  buf = layerCanvas->GetData();
-  lpbuf = leftPanelCanvas->GetData();
-  rpbuf = rightPanelCanvas->GetData();
 
   Palette::initPalette();
   makeSmokeBuf();
