@@ -66,6 +66,58 @@ static const char *spriteFile[SPRITE_NUM] = {
     "TITLEA.TGA",
 };
 
+static int32_t loadSpriteTextureRGB555(SRL::Bitmap::BitmapInfo &info, const uint8_t *srcPixels)
+{
+  if (srcPixels == nullptr || info.Width == 0 || info.Height == 0)
+  {
+    return -1;
+  }
+
+  int32_t textureIndex = SRL::VDP1::TryAllocateTexture(
+      info.Width,
+      info.Height,
+      SRL::CRAM::TextureColorMode::RGB555,
+      0);
+  if (textureIndex < 0)
+  {
+    return -1;
+  }
+
+  uint16_t *dstPixels = (uint16_t *)SRL::VDP1::Textures[textureIndex].GetData();
+  if (dstPixels == nullptr)
+  {
+    return -1;
+  }
+
+  const uint32_t pixelCount = (uint32_t)info.Width * (uint32_t)info.Height;
+
+  if (info.Palette != nullptr && info.Palette->Colors != nullptr)
+  {
+    for (uint32_t p = 0; p < pixelCount; p++)
+    {
+      const uint8_t idx = srcPixels[p];
+      if (idx >= info.Palette->Count)
+      {
+        dstPixels[p] = 0;
+      }
+      else
+      {
+        dstPixels[p] = ((uint16_t)info.Palette->Colors[idx]) | 0x8000;
+      }
+    }
+  }
+  else
+  {
+    const uint16_t *srcRgb = (const uint16_t *)srcPixels;
+    for (uint32_t p = 0; p < pixelCount; p++)
+    {
+      dstPixels[p] = srcRgb[p] | 0x8000;
+    }
+  }
+
+  return textureIndex;
+}
+
 // SDL_Joystick *stick = nullptr;
 // SDL_GameController *gamepad = nullptr;
 Digital *gamepad = nullptr;
@@ -121,15 +173,8 @@ static void loadSprites()
 
     int32_t textureIndex = -1;
 
-    if (info.ColorMode == SRL::CRAM::TextureColorMode::RGB555) // RGBA texture
-    {
-      textureIndex = SRL::VDP1::TryLoadTexture(tga); // Loads TGA into VDP1
-    }
-    else
-    {
-      // assume is pallet texture
-      textureIndex = SRL::VDP1::TryLoadTexture(tga, Palette::LoadPalette);
-    }
+    // Always convert title TGAs to RGB555 so each image keeps its own palette colors.
+    textureIndex = loadSpriteTextureRGB555(info, (const uint8_t *)tga->GetData());
 
     if (textureIndex < 0)
     {
@@ -196,46 +241,26 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
     return;
   }
 
-  // GP32-compatible software blit into the 160x240 layer buffer.
-  int srcX = 0;
-  int srcY = 0;
-  int dstX = x;
-  int dstY = y;
-  int width = 20;
-  int height = 20;
+  // Draw directly from the loaded 40x40 title texture and scale to GP32-like 20x20.
+  const int16_t screenX = (int16_t)(layerRect.x + x - (SCREEN_WIDTH / 2));
+  const int16_t screenY = (int16_t)(layerRect.y + y - (SCREEN_HEIGHT / 2));
 
-  if (dstX < 0)
-  {
-    srcX = -dstX;
-    width -= srcX;
-    dstX = 0;
-  }
-  if (dstY < 0)
-  {
-    srcY = -dstY;
-    height -= srcY;
-    dstY = 0;
-  }
-  if (dstX + width > LAYER_WIDTH)
-  {
-    width = LAYER_WIDTH - dstX;
-  }
-  if (dstY + height > LAYER_HEIGHT)
-  {
-    height = LAYER_HEIGHT - dstY;
-  }
+  const Vector3D pos(
+      Fxp::Convert(screenX),
+      Fxp::Convert(screenY),
+      100.0);
 
-  if (width <= 0 || height <= 0)
-  {
-    return;
-  }
+    const int32_t previousEndCode = SRL::Scene2D::GetEffect(SRL::Scene2D::SpriteEffect::EnableECD);
+    SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, 0);
 
-  for (int row = 0; row < height; row++)
-  {
-    memcpy(&buf[(dstY + row) * LAYER_WIDTH + dstX],
-           &titleSprite[n][(srcY + row) * 20 + srcX],
-           width);
-  }
+  SRL::Scene2D::DrawSprite(
+      (uint16_t)sprite[n].textureIndex,
+      pos,
+      Angle::Zero(),
+      Vector2D(0.5, 0.5),
+      SRL::Scene2D::ZoomPoint::UpperLeft);
+
+    SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, previousEndCode == 1 ? 1 : 0);
 }
 
 static void makeSmokeBuf()
@@ -354,13 +379,13 @@ void blendScreen()
 
 void flipScreen()
 {
+  SDL_BlitSurface(layer, nullptr, video, &layerRect);
+  SDL_BlitSurface(lpanel, nullptr, video, &lpanelRect);
+  SDL_BlitSurface(rpanel, nullptr, video, &rpanelRect);
   if (status == TITLE)
   {
     drawTitle();
   }
-  SDL_BlitSurface(layer, nullptr, video, &layerRect);
-  SDL_BlitSurface(lpanel, nullptr, video, &lpanelRect);
-  SDL_BlitSurface(rpanel, nullptr, video, &rpanelRect);
   SDL_Flip(video);
 }
 
