@@ -52,5 +52,6 @@ void initTitle();
 void initGame(int stg);
 void initGameover();
 void initStageClear();
+void updateLoadingProgress(const char *step, int percent);
 
 #endif // NOIZ2SA_H_

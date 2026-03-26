@@ -10,6 +10,7 @@
  * @version $Revision: 1.8 $
  */
 #include "SDL.h"
+#include <stdio.h>
 #include <srl.hpp> // for malloc/free, atoi
 #include <srl_log.hpp>    // for logging
 #include <srl_system.hpp> // for exit
@@ -34,6 +35,59 @@
 
 static int noSound = 0;
 
+static void renderLoadingScreen(const char *step, int percent)
+{
+  if (percent < 0)
+  {
+    percent = 0;
+  }
+  else if (percent > 100)
+  {
+    percent = 100;
+  }
+
+  char bar[21];
+  char percentLine[32];
+  char barLine[32];
+  char stepLine[48];
+  const int filled = (percent * 20) / 100;
+  for (int i = 0; i < 20; i++)
+  {
+    bar[i] = (i < filled) ? '#' : '-';
+  }
+  bar[20] = '\0';
+
+  snprintf(percentLine, sizeof(percentLine), "Loading... %d%%", percent);
+  snprintf(barLine, sizeof(barLine), "[%s]", bar);
+  if (step != nullptr)
+  {
+    snprintf(stepLine, sizeof(stepLine), "%s", step);
+  }
+  else
+  {
+    stepLine[0] = '\0';
+  }
+
+  SRL::Debug::PrintColorSet(1);
+  SRL::Debug::PrintClearScreen();
+  SRL::Debug::Print(1, 1, "NOIZ2SA");
+  SRL::Debug::Print(1, 3, percentLine);
+  SRL::Debug::Print(1, 4, barLine);
+  SRL::Debug::Print(1, 6, stepLine);
+  SRL::Core::Synchronize();
+}
+
+void updateLoadingProgress(const char *step, int percent)
+{
+  renderLoadingScreen(step, percent);
+}
+
+static void clearLoadingOverlay()
+{
+  SRL::Debug::PrintClearScreen();
+  SRL::Debug::PrintColorRestore();
+}
+
 // Global random number generator (using SRL::Math namespace which is aliased to SaturnMath)
 RandomGenerator *g_random = nullptr;
 
@@ -41,6 +95,7 @@ RandomGenerator *g_random = nullptr;
 static void initFirst()
 {
   SRL::Logger::LogInfo("[INIT] First initialization starting");
+  updateLoadingProgress("Loading preferences", 30);
 
   loadPreference();
   SRL::Logger::LogDebug("[INIT] Preferences loaded");
@@ -51,11 +106,14 @@ static void initFirst()
   g_random = new SRL::Math::Random<unsigned int>(seed);
   SRL::Logger::LogDebug("[INIT] Random generator initialized with seed: %u", seed);
 
+  updateLoadingProgress("Loading barrages", 35);
   initBarragemanager();
   SRL::Logger::LogDebug("[INIT] Barrage manager initialized");
 
+  updateLoadingProgress("Loading attract manager", 96);
   initAttractManager();
   SRL::Logger::LogDebug("[INIT] Attract manager initialized");
+  updateLoadingProgress("Initialization complete", 100);
   SRL::Logger::LogInfo("[INIT] First initialization complete");
 }
 
@@ -384,7 +442,7 @@ int main()
 
   // Initialize the SRL core (graphics/video setup?)
   // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
-  SRL::Core::Initialize(SRL::Types::HighColor::Colors::White);
+  SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
 
   // SRL::CRAM::Palette palette(SRL::CRAM::TextureColorMode::Paletted16, 1);
 
@@ -401,26 +459,33 @@ int main()
   // SRL::Core::Synchronize();
 
   SRL::Logger::LogDebug("[MAIN] Initializing game config");
+  updateLoadingProgress("Initializing game config", 2);
   initGameConfig();
 
   SRL::Logger::LogDebug("[MAIN] Initializing degree utilities");
+  updateLoadingProgress("Initializing math utilities", 5);
   initDegutil();
 
   SRL::Logger::LogDebug("[MAIN] Initializing SDL");
+  updateLoadingProgress("Initializing screen", 10);
   initSDL();
 
   if (!noSound)
   {
     SRL::Logger::LogDebug("[MAIN] Initializing sound");
+    updateLoadingProgress("Initializing sound", 26);
     initSound();
   }
   else
   {
     SRL::Logger::LogInfo("[MAIN] Sound disabled");
+    updateLoadingProgress("Sound disabled", 26);
   }
 
   initFirst();
+  updateLoadingProgress("Entering title", 100);
   initTitle();
+  clearLoadingOverlay();
 
   initGamepad();
   SRL::Logger::LogDebug("[MAIN] Gamepad initialized");
