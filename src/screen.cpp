@@ -681,8 +681,6 @@ void drawThickLine(int x1, int y1, int x2, int y2,
 void drawBox(int x, int y, int width, int height,
              Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
-  (void)buf;
-
   x -= width >> 1;
   y -= height >> 1;
   if (x < 0) { width += x; x = 0; }
@@ -692,8 +690,13 @@ void drawBox(int x, int y, int width, int height,
   if (y + height > LAYER_HEIGHT) { height = LAYER_HEIGHT - y; }
   if (height <= 1) return;
 
+  // Clear the pixel buffer region so smokeScreen trails don't linger.
+  if (buf != nullptr) {
+    for (int row = 0; row < height; row++)
+      memset(&buf[(y + row) * LAYER_WIDTH + x], 0, (size_t)width);
+  }
+
   // Convert layer-local coords to VDP1 center-based screen coords.
-  // layerRect: x=80, y=0; VDP1 screen center=160,120
   const int offX = layerRect.x - SCREEN_WIDTH / 2;
   const int offY = layerRect.y - SCREEN_HEIGHT / 2;
 
@@ -719,6 +722,12 @@ void drawBoxPanel(int x, int y, int width, int height,
   if (y < 0) { height += y; y = 0; }
   if (y + height > PANEL_HEIGHT) { height = PANEL_HEIGHT - y; }
   if (height <= 1) return;
+
+  // Clear the pixel buffer region so smokeScreen trails don't linger.
+  if (buf != nullptr) {
+    for (int row = 0; row < height; row++)
+      memset(&buf[(y + row) * PANEL_WIDTH + x], 0, (size_t)width);
+  }
 
   // Determine which panel this buffer belongs to for screen offset.
   const int panelScreenX = (buf == rpbuf) ? rpanelRect.x : lpanelRect.x;
@@ -788,8 +797,6 @@ int drawNumCenter(int n, int x, int y, int s, int c1, int c2)
   }
   return y;
 }
-
-#define JOYSTICK_AXIS 16384
 
 int getPadState()
 {
