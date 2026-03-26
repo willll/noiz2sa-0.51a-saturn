@@ -95,14 +95,24 @@ static int32_t loadSpriteTextureRGB555(SRL::Bitmap::BitmapInfo &info, const uint
   {
     for (uint32_t p = 0; p < pixelCount; p++)
     {
-      const uint8_t idx = srcPixels[p];
+      uint8_t idx = 0;
+      if (info.ColorMode == SRL::CRAM::TextureColorMode::Paletted16)
+      {
+        const uint8_t packed = srcPixels[p >> 1];
+        idx = ((p & 1u) == 0u) ? (uint8_t)((packed >> 4) & 0x0f) : (uint8_t)(packed & 0x0f);
+      }
+      else
+      {
+        idx = srcPixels[p];
+      }
+
       if (idx >= info.Palette->Count)
       {
         dstPixels[p] = 0;
       }
       else
       {
-        dstPixels[p] = ((uint16_t)info.Palette->Colors[idx]) | 0x8000;
+        dstPixels[p] = (uint16_t)info.Palette->Colors[idx];
       }
     }
   }
@@ -111,7 +121,7 @@ static int32_t loadSpriteTextureRGB555(SRL::Bitmap::BitmapInfo &info, const uint
     const uint16_t *srcRgb = (const uint16_t *)srcPixels;
     for (uint32_t p = 0; p < pixelCount; p++)
     {
-      dstPixels[p] = srcRgb[p] | 0x8000;
+      dstPixels[p] = srcRgb[p];
     }
   }
 
