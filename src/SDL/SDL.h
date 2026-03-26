@@ -87,6 +87,15 @@ static volatile uint16_t sdl_previousmillis = 0;
 static volatile int sdl_initialized = 0;
 static volatile int16_t sdl_blitPaletteBank = 0;
 
+static inline void SDL_CopyBytes(void* dst, const void* src, uint32_t byteCount)
+{
+    uint8_t* d8 = (uint8_t*)dst;
+    const uint8_t* s8 = (const uint8_t*)src;
+    while (byteCount-- > 0) {
+        *d8++ = *s8++;
+    }
+}
+
 // SDL initialization and system
 static inline int SDL_Init(uint32_t flags) { 
     (void)flags;
@@ -126,8 +135,7 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
             return -1;
         }
 
-        const SRL::CRAM::TextureColorMode blitMode =
-            (src->pixels != nullptr) ? SRL::CRAM::TextureColorMode::RGB555 : SRL::CRAM::TextureColorMode::Paletted256;
+        const SRL::CRAM::TextureColorMode blitMode = SRL::CRAM::TextureColorMode::Paletted256;
 
         src->textureIndex = SRL::VDP1::TryAllocateTexture(
             (uint16_t)src->w,
@@ -142,20 +150,8 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
 
     // Upload source pixels if this is a software-backed surface.
     if (src->pixels != nullptr) {
-        const uint8_t* srcIndices = (const uint8_t*)src->pixels;
-        uint16_t* dstPixels = (uint16_t*)SRL::VDP1::Textures[src->textureIndex].GetData();
-        SRL::CRAM::Palette activePalette(SRL::CRAM::TextureColorMode::Paletted256, (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
-        SRL::Types::HighColor* paletteData = activePalette.GetData();
-
-        if (paletteData == nullptr) {
-            return -1;
-        }
-
-        const uint32_t pixelCount = (uint32_t)(src->w * src->h);
-        for (uint32_t i = 0; i < pixelCount; i++) {
-            // Write raw ABGR1555 value directly to avoid bitfield packing differences.
-            dstPixels[i] = ((uint16_t)paletteData[srcIndices[i]]) | 0x8000;
-        }
+        const uint32_t dataSize = (uint32_t)(src->w * src->h);
+        SDL_CopyBytes(SRL::VDP1::Textures[src->textureIndex].GetData(), src->pixels, dataSize);
     }
 
     SDL_Rect resolvedRect;
@@ -183,8 +179,13 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
         SRL::Math::Types::Fxp::Convert(sceneY),
         500.0);
 
+    SRL::CRAM::Palette blitPalette(
+        SRL::CRAM::TextureColorMode::Paletted256,
+        (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
+
     return SRL::Scene2D::DrawSprite(
                (uint16_t)src->textureIndex,
+               &blitPalette,
                pos,
                SRL::Math::Types::Angle::Zero(),
                SRL::Math::Types::Vector2D(1.0, 1.0),
