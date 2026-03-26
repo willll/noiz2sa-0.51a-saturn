@@ -55,6 +55,7 @@ static SDL_Rect lpanelRect, rpanelRect, panelClearRect;
 #define SPRITE_NUM 7
 
 static SRL_Surface sprite[SPRITE_NUM];
+static Canvas::Pixel titleSprite[SPRITE_NUM][20 * 20];
 static const char *spriteFile[SPRITE_NUM] = {
     "TITLEN.TGA",
     "TITLEO.TGA",
@@ -90,6 +91,10 @@ static void loadSprites()
 
   for (i = 0; i < SPRITE_NUM; i++)
   {
+    char step[64];
+    snprintf(step, sizeof(step), "Loading sprite %d/%d", i + 1, SPRITE_NUM);
+    updateLoadingProgress(step, 10 + ((i + 1) * 14) / SPRITE_NUM);
+
     SRL::Logger::LogInfo("[SPRITE] Loading sprite %d: %s", i, spriteFile[i]);
 
     // Load TGA file directly from IMAGES directory (already changed via ChangeDir above)
@@ -138,12 +143,31 @@ static void loadSprites()
       //SRL::Logger::LogTrace("[SPRITE] TGA loaded into VDP1 with texture index: %d", textureIndex);
     }
 
-    //SRL::Logger::LogTrace("[SPRITE] TGA object created for: %s", spriteFile[i]);
+    // Cache a GP32-compatible 20x20 software sprite before releasing TGA data.
+    const uint8_t *srcPixels = reinterpret_cast<const uint8_t *>(tga->GetData());
+    if (srcPixels != nullptr && info.Width >= 40 && info.Height >= 40)
+    {
+      for (int sy = 0; sy < 20; sy++)
+      {
+        for (int sx = 0; sx < 20; sx++)
+        {
+          const int srcX = sx * 2;
+          const int srcY = sy * 2;
+          titleSprite[i][sy * 20 + sx] = srcPixels[srcY * info.Width + srcX];
+        }
+      }
+    }
+    else
+    {
+      memset(titleSprite[i], 0, sizeof(titleSprite[i]));
+    }
 
-    delete tga;
+    //SRL::Logger::LogTrace("[SPRITE] TGA object created for: %s", spriteFile[i]);
 
     sprite[i] = SRL_Surface(textureIndex, info.Width, info.Height);
     SRL::Logger::LogTrace("[SPRITE] SDL surface created for sprite %d", i);
+
+    delete tga;
 
     // SDL_ConvertSurface(img,
     // 		   video->format,
@@ -167,10 +191,51 @@ static void loadSprites()
 
 void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
 {
-  // SRL::Scene2D::DrawSprite uses sprite center; GP32 reference uses top-left.
-  // Sprites are 40×40, so offset by -20 to convert top-left to center coordinates.
-  SRL::Math::Types::Vector3D pos(Fxp::Convert(x - 20), Fxp::Convert(y - 20), 500.0);
-  SRL::Scene2D::DrawSprite(sprite[n].textureIndex, pos);
+  if (n >= SPRITE_NUM)
+  {
+    return;
+  }
+
+  // GP32-compatible software blit into the 160x240 layer buffer.
+  int srcX = 0;
+  int srcY = 0;
+  int dstX = x;
+  int dstY = y;
+  int width = 20;
+  int height = 20;
+
+  if (dstX < 0)
+  {
+    srcX = -dstX;
+    width -= srcX;
+    dstX = 0;
+  }
+  if (dstY < 0)
+  {
+    srcY = -dstY;
+    height -= srcY;
+    dstY = 0;
+  }
+  if (dstX + width > LAYER_WIDTH)
+  {
+    width = LAYER_WIDTH - dstX;
+  }
+  if (dstY + height > LAYER_HEIGHT)
+  {
+    height = LAYER_HEIGHT - dstY;
+  }
+
+  if (width <= 0 || height <= 0)
+  {
+    return;
+  }
+
+  for (int row = 0; row < height; row++)
+  {
+    memcpy(&buf[(dstY + row) * LAYER_WIDTH + dstX],
+           &titleSprite[n][(srcY + row) * 20 + srcX],
+           width);
+  }
 }
 
 static void makeSmokeBuf()
@@ -239,6 +304,12 @@ void initSDL()
   memset(lpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
   memset(rpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
 
+  // Bind SDL surface wrappers to software pixel buffers for SDL_BlitSurface uploads.
+  layer->pixels = buf;
+  lpanel->pixels = lpbuf;
+  rpanel->pixels = rpbuf;
+  video->pixels = nullptr;
+
   layerRect.x = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
   layerRect.y = (SCREEN_HEIGHT - LAYER_HEIGHT) / 2;
   layerRect.w = LAYER_WIDTH;
@@ -256,7 +327,8 @@ void initSDL()
   panelClearRect.w = PANEL_WIDTH;
   panelClearRect.h = PANEL_HEIGHT;
 
-  Palette::initPalette();
+  const int32_t mainPaletteBank = Palette::initPalette();
+  SDL_SetBlitPaletteBank((int16_t)mainPaletteBank);
   makeSmokeBuf();
   clearLPanel();
   clearRPanel();
@@ -282,13 +354,13 @@ void blendScreen()
 
 void flipScreen()
 {
-  SDL_BlitSurface(layer, nullptr, video, &layerRect);
-  SDL_BlitSurface(lpanel, nullptr, video, &lpanelRect);
-  SDL_BlitSurface(rpanel, nullptr, video, &rpanelRect);
   if (status == TITLE)
   {
     drawTitle();
   }
+  SDL_BlitSurface(layer, nullptr, video, &layerRect);
+  SDL_BlitSurface(lpanel, nullptr, video, &lpanelRect);
+  SDL_BlitSurface(rpanel, nullptr, video, &rpanelRect);
   SDL_Flip(video);
 }
 
