@@ -681,97 +681,62 @@ void drawThickLine(int x1, int y1, int x2, int y2,
 void drawBox(int x, int y, int width, int height,
              Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
-  int i, j;
-  Canvas::Pixel cl;
-  int ptr;
+  (void)buf;
 
   x -= width >> 1;
   y -= height >> 1;
-  if (x < 0)
-  {
-    width += x;
-    x = 0;
-  }
-  if (x + width >= LAYER_WIDTH)
-  {
-    width = LAYER_WIDTH - x;
-  }
-  if (width <= 1)
-    return;
-  if (y < 0)
-  {
-    height += y;
-    y = 0;
-  }
-  if (y + height > LAYER_HEIGHT)
-  {
-    height = LAYER_HEIGHT - y;
-  }
-  if (height <= 1)
-    return;
+  if (x < 0) { width += x; x = 0; }
+  if (x + width >= LAYER_WIDTH) { width = LAYER_WIDTH - x; }
+  if (width <= 1) return;
+  if (y < 0) { height += y; y = 0; }
+  if (y + height > LAYER_HEIGHT) { height = LAYER_HEIGHT - y; }
+  if (height <= 1) return;
 
-  ptr = x + y * LAYER_WIDTH;
-  memset(&(buf[ptr]), color2, width);
-  y++;
-  for (i = 0; i < height - 2; i++, y++)
-  {
-    ptr = x + y * LAYER_WIDTH;
-    buf[ptr] = color2;
-    ptr++;
-    memset(&(buf[ptr]), color1, width - 2);
-    ptr += width - 2;
-    buf[ptr] = color2;
-  }
-  ptr = x + y * LAYER_WIDTH;
-  memset(&(buf[ptr]), color2, width);
+  // Convert layer-local coords to VDP1 center-based screen coords.
+  // layerRect: x=80, y=0; VDP1 screen center=160,120
+  const int offX = layerRect.x - SCREEN_WIDTH / 2;
+  const int offY = layerRect.y - SCREEN_HEIGHT / 2;
+
+  Vector2D points[4] = {
+    Vector2D(Fxp::Convert(x + offX),         Fxp::Convert(y + offY)),
+    Vector2D(Fxp::Convert(x + width + offX), Fxp::Convert(y + offY)),
+    Vector2D(Fxp::Convert(x + width + offX), Fxp::Convert(y + height + offY)),
+    Vector2D(Fxp::Convert(x + offX),         Fxp::Convert(y + height + offY)),
+  };
+
+  SRL::Scene2D::DrawPolygon(points, true,  color[color1], Fxp(500.0));
+  SRL::Scene2D::DrawPolygon(points, false, color[color2], Fxp(499.0));
 }
 
 void drawBoxPanel(int x, int y, int width, int height,
                   Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
-  int i, j;
-  Canvas::Pixel cl;
-  int ptr;
-
   x -= width >> 1;
   y -= height >> 1;
-  if (x < 0)
-  {
-    width += x;
-    x = 0;
-  }
-  if (x + width >= PANEL_WIDTH)
-  {
-    width = PANEL_WIDTH - x;
-  }
-  if (width <= 1)
-    return;
-  if (y < 0)
-  {
-    height += y;
-    y = 0;
-  }
-  if (y + height > PANEL_HEIGHT)
-  {
-    height = PANEL_HEIGHT - y;
-  }
-  if (height <= 1)
-    return;
+  if (x < 0) { width += x; x = 0; }
+  if (x + width >= PANEL_WIDTH) { width = PANEL_WIDTH - x; }
+  if (width <= 1) return;
+  if (y < 0) { height += y; y = 0; }
+  if (y + height > PANEL_HEIGHT) { height = PANEL_HEIGHT - y; }
+  if (height <= 1) return;
 
-  ptr = x + y * PANEL_WIDTH;
-  memset(&(buf[ptr]), color2, width);
-  y++;
-  for (i = 0; i < height - 2; i++, y++)
-  {
-    ptr = x + y * PANEL_WIDTH;
-    buf[ptr] = color2;
-    ptr++;
-    memset(&(buf[ptr]), color1, width - 2);
-    ptr += width - 2;
-    buf[ptr] = color2;
-  }
-  ptr = x + y * PANEL_WIDTH;
-  memset(&(buf[ptr]), color2, width);
+  // Determine which panel this buffer belongs to for screen offset.
+  const int panelScreenX = (buf == rpbuf) ? rpanelRect.x : lpanelRect.x;
+  const int panelScreenY = (buf == rpbuf) ? rpanelRect.y : lpanelRect.y;
+
+  // Convert panel-local coords to VDP1 center-based screen coords.
+  const int offX = panelScreenX - SCREEN_WIDTH / 2;
+  const int offY = panelScreenY - SCREEN_HEIGHT / 2;
+
+  Vector2D points[4] = {
+    Vector2D(Fxp::Convert(x + offX),         Fxp::Convert(y + offY)),
+    Vector2D(Fxp::Convert(x + width + offX), Fxp::Convert(y + offY)),
+    Vector2D(Fxp::Convert(x + width + offX), Fxp::Convert(y + height + offY)),
+    Vector2D(Fxp::Convert(x + offX),         Fxp::Convert(y + height + offY)),
+  };
+
+  SRL::Scene2D::DrawPolygon(points, true,  color[color1], Fxp(500.0));
+  SRL::Scene2D::DrawPolygon(points, false, color[color2], Fxp(499.0));
 }
 
 // Draw the numbers.
