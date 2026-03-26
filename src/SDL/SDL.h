@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <limits.h>
+#include <srl.hpp>
+#include <srl_vdp1.hpp>
+#include <srl_scene2d.hpp>
 
 // SDL type stubs for Saturn noiz2sa - Hybrid approach
 // These stubs allow compilation now, can be replaced with SRL incrementally later
@@ -46,12 +49,13 @@ typedef struct SDL_PixelFormat {
 struct SRL_Surface {
     int32_t textureIndex;
     int w, h;
+    const void* pixels;
     
     // Constructor for proper initialization
-    SRL_Surface() : textureIndex(-1), w(0), h(0) {}
+    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr) {}
     
     // Constructor with dimensions
-    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height) {}
+    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr) {}
 };
 
 // SDL Event type - needs 'type' field for the main event loop
@@ -81,6 +85,7 @@ typedef struct {
 static volatile uint32_t sdl_previouscount = 0;
 static volatile uint16_t sdl_previousmillis = 0;
 static volatile int sdl_initialized = 0;
+static volatile int16_t sdl_blitPaletteBank = 0;
 
 // SDL initialization and system
 static inline int SDL_Init(uint32_t flags) { 
@@ -101,12 +106,75 @@ static inline int SDL_Init(uint32_t flags) {
 static inline int SDL_InitSubSystem(uint32_t flags) { (void)flags; return 0; }
 static inline const char* SDL_GetError(void) { return "SDL stub"; }
 
+static inline void SDL_SetBlitPaletteBank(int16_t paletteBank)
+{
+    sdl_blitPaletteBank = paletteBank;
+}
+
 static inline int SDL_SetColors(SRL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
     (void)surface; (void)colors; (void)firstcolor; (void)ncolors; return 0;
 }
 
 static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surface* dst, SDL_Rect* dstrect) {
-    (void)src; (void)srcrect; (void)dst; (void)dstrect; return 0;
+    if (src == nullptr || dst == nullptr) {
+        return -1;
+    }
+
+    // Create a dynamic texture for software surfaces on first use.
+    if (src->textureIndex < 0) {
+        if (src->pixels == nullptr || src->w <= 0 || src->h <= 0) {
+            return -1;
+        }
+
+        src->textureIndex = SRL::VDP1::TryAllocateTexture(
+            (uint16_t)src->w,
+            (uint16_t)src->h,
+            SRL::CRAM::TextureColorMode::Paletted256,
+            (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
+
+        if (src->textureIndex < 0) {
+            return -1;
+        }
+    }
+
+    // Upload source pixels if this is a software-backed surface.
+    if (src->pixels != nullptr) {
+        const uint32_t dataSize = (uint32_t)(src->w * src->h);
+        slDMACopy((void*)src->pixels, SRL::VDP1::Textures[src->textureIndex].GetData(), dataSize);
+        slDMAWait();
+    }
+
+    SDL_Rect resolvedRect;
+    if (dstrect != nullptr) {
+        resolvedRect = *dstrect;
+    } else {
+        resolvedRect.x = 0;
+        resolvedRect.y = 0;
+        resolvedRect.w = (uint16_t)src->w;
+        resolvedRect.h = (uint16_t)src->h;
+    }
+
+    // Partial source rectangle support is not implemented in this wrapper yet.
+    if (srcrect != nullptr) {
+        if (srcrect->x != 0 || srcrect->y != 0 || srcrect->w != src->w || srcrect->h != src->h) {
+            return -1;
+        }
+    }
+
+    const int16_t sceneX = (int16_t)(resolvedRect.x - (dst->w / 2));
+    const int16_t sceneY = (int16_t)(resolvedRect.y - (dst->h / 2));
+
+    const SRL::Math::Types::Vector3D pos(
+        SRL::Math::Types::Fxp::Convert(sceneX),
+        SRL::Math::Types::Fxp::Convert(sceneY),
+        500.0);
+
+    return SRL::Scene2D::DrawSprite(
+               (uint16_t)src->textureIndex,
+               pos,
+               SRL::Math::Types::Angle::Zero(),
+               SRL::Math::Types::Vector2D(1.0, 1.0),
+               SRL::Scene2D::ZoomPoint::UpperLeft) ? 0 : -1;
 }
 
 static inline int SDL_FillRect(SRL_Surface* dst, SDL_Rect* dstrect, uint32_t color) {
