@@ -133,6 +133,22 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     
     SRL::Logger::LogTrace("[BARRAGE] Processing file from LIST: %s", line);
     listEntries++;
+
+    int phaseBase = 35;
+    int phaseSpan = 60;
+    if (strcmp(dirPath, "ZAKO") == 0) {
+      phaseBase = 35;
+      phaseSpan = 20;
+    } else if (strcmp(dirPath, "MIDDLE") == 0) {
+      phaseBase = 55;
+      phaseSpan = 20;
+    } else if (strcmp(dirPath, "BOSS") == 0) {
+      phaseBase = 75;
+      phaseSpan = 20;
+    }
+    char step[64];
+    snprintf(step, sizeof(step), "Loading %s %d/%d", dirPath, listEntries, BARRAGE_PATTERN_MAX);
+    updateLoadingProgress(step, phaseBase + (listEntries * phaseSpan) / BARRAGE_PATTERN_MAX);
     
     // Load the file directly by name (we're already in the correct directory)
     SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-start: %s", dirPath, listEntries, line);

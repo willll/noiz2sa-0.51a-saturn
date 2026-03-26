@@ -329,7 +329,7 @@ void drawTitle()
   int i;
   for (i = 0; i < 7; i++)
   {
-    // drawSprite(i, 162+i*46, 16);
+    // Match GP32 v4 placement in the 160x240 game layer.
     drawSprite(i, (2 + i * 46) / SCREEN_DIVISOR, 16 / SCREEN_DIVISOR);
   }
 }
