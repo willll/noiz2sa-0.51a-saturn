@@ -122,14 +122,17 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
 
     // Create a dynamic texture for software surfaces on first use.
     if (src->textureIndex < 0) {
-        if (src->pixels == nullptr || src->w <= 0 || src->h <= 0) {
+        if (src->w <= 0 || src->h <= 0) {
             return -1;
         }
+
+        const SRL::CRAM::TextureColorMode blitMode =
+            (src->pixels != nullptr) ? SRL::CRAM::TextureColorMode::RGB555 : SRL::CRAM::TextureColorMode::Paletted256;
 
         src->textureIndex = SRL::VDP1::TryAllocateTexture(
             (uint16_t)src->w,
             (uint16_t)src->h,
-            SRL::CRAM::TextureColorMode::Paletted256,
+            blitMode,
             (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
 
         if (src->textureIndex < 0) {
@@ -139,9 +142,20 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
 
     // Upload source pixels if this is a software-backed surface.
     if (src->pixels != nullptr) {
-        const uint32_t dataSize = (uint32_t)(src->w * src->h);
-        slDMACopy((void*)src->pixels, SRL::VDP1::Textures[src->textureIndex].GetData(), dataSize);
-        slDMAWait();
+        const uint8_t* srcIndices = (const uint8_t*)src->pixels;
+        uint16_t* dstPixels = (uint16_t*)SRL::VDP1::Textures[src->textureIndex].GetData();
+        SRL::CRAM::Palette activePalette(SRL::CRAM::TextureColorMode::Paletted256, (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
+        SRL::Types::HighColor* paletteData = activePalette.GetData();
+
+        if (paletteData == nullptr) {
+            return -1;
+        }
+
+        const uint32_t pixelCount = (uint32_t)(src->w * src->h);
+        for (uint32_t i = 0; i < pixelCount; i++) {
+            // Write raw ABGR1555 value directly to avoid bitfield packing differences.
+            dstPixels[i] = ((uint16_t)paletteData[srcIndices[i]]) | 0x8000;
+        }
     }
 
     SDL_Rect resolvedRect;
