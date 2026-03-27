@@ -344,6 +344,9 @@ void initSDL()
   lpanel->pixels = lpbuf;
   rpanel->pixels = rpbuf;
   video->pixels = nullptr;
+  layer->preferRGB555 = true;
+  lpanel->preferRGB555 = false;
+  rpanel->preferRGB555 = false;
   layer->dirty = true;
   lpanel->dirty = true;
   rpanel->dirty = true;

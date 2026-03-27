@@ -74,7 +74,7 @@ set(SRL_MAX_TEXTURES "100" CACHE STRING "Maximum textures")
 
 # Debug configuration
 option(DEBUG "Enable debug mode" OFF)
-set(SRL_LOG_LEVEL "TRACE" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
+set(SRL_LOG_LEVEL "WARNING" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
 set(SRL_LOG_OUTPUT "EMULATOR" CACHE STRING "Log output method")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")

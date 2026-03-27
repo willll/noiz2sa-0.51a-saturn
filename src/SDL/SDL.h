@@ -51,12 +51,13 @@ struct SRL_Surface {
     int w, h;
     const void* pixels;
     bool dirty;
+    bool preferRGB555;
     
     // Constructor for proper initialization
-    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr), dirty(true) {}
+    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr), dirty(true), preferRGB555(false) {}
     
     // Constructor with dimensions
-    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr), dirty(true) {}
+    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr), dirty(true), preferRGB555(false) {}
 };
 
 // SDL Event type - needs 'type' field for the main event loop
@@ -87,6 +88,8 @@ static volatile uint16_t sdl_previousRawCount = 0;
 static volatile uint32_t sdl_elapsedMicros = 0;
 static volatile int sdl_initialized = 0;
 static volatile int16_t sdl_blitPaletteBank = 0;
+static int16_t sdl_blitPaletteCacheBank = INT16_MIN;
+static uint16_t sdl_blitPalette555[256] = { 0 };
 static uint32_t sdl_blitCalls = 0;
 static uint32_t sdl_blitUploads = 0;
 static uint32_t sdl_blitUploadPixels = 0;
@@ -95,12 +98,25 @@ static uint32_t sdl_blitDrawMs = 0;
 
 static inline uint32_t SDL_GetTicks(void);
 
+static inline void SDL_CopyBytes(void* dst, const void* src, uint32_t byteCount)
+{
+    uint8_t* d8 = (uint8_t*)dst;
+    const uint8_t* s8 = (const uint8_t*)src;
+
+    while (byteCount-- > 0)
+    {
+        *d8++ = *s8++;
+    }
+}
+
 // SDL initialization and system
 static inline int SDL_Init(uint32_t flags) { 
     (void)flags;
     
     // Initialize the FRT once and keep it running continuously.
-    TIM_FRT_INIT(TIM_CKS_8);
+    // Use divider 128 so 16-bit counter wraps much less frequently,
+    // keeping SDL_GetTicks stable even when frame rate is low.
+    TIM_FRT_INIT(TIM_CKS_128);
     TIM_FRT_SET_16(0);
     
     sdl_previousRawCount = 0;
@@ -115,6 +131,7 @@ static inline const char* SDL_GetError(void) { return "SDL stub"; }
 static inline void SDL_SetBlitPaletteBank(int16_t paletteBank)
 {
     sdl_blitPaletteBank = paletteBank;
+    sdl_blitPaletteCacheBank = INT16_MIN;
 }
 
 static inline void SDL_ResetBlitStats()
@@ -140,6 +157,31 @@ static inline void SDL_GetBlitStats(
     if (drawMs != nullptr) *drawMs = sdl_blitDrawMs;
 }
 
+static inline bool SDL_RefreshBlitPaletteCache()
+{
+    if (sdl_blitPaletteCacheBank == sdl_blitPaletteBank)
+    {
+        return true;
+    }
+
+    SRL::CRAM::Palette blitPalette(
+        SRL::CRAM::TextureColorMode::Paletted256,
+        (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
+    SRL::Types::HighColor* paletteData = blitPalette.GetData();
+    if (paletteData == nullptr)
+    {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < 256; i++)
+    {
+        sdl_blitPalette555[i] = (uint16_t)paletteData[i];
+    }
+
+    sdl_blitPaletteCacheBank = sdl_blitPaletteBank;
+    return true;
+}
+
 static inline int SDL_SetColors(SRL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
     (void)surface; (void)colors; (void)firstcolor; (void)ncolors; return 0;
 }
@@ -157,8 +199,12 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
             return -1;
         }
 
-        const SRL::CRAM::TextureColorMode blitMode = SRL::CRAM::TextureColorMode::Paletted256;
-        const uint16_t paletteId = (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank);
+        const SRL::CRAM::TextureColorMode blitMode = src->preferRGB555
+            ? SRL::CRAM::TextureColorMode::RGB555
+            : SRL::CRAM::TextureColorMode::Paletted256;
+        const uint16_t paletteId = src->preferRGB555
+            ? 0
+            : (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank);
 
         src->textureIndex = SRL::VDP1::TryAllocateTexture(
             (uint16_t)src->w,
@@ -182,8 +228,24 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
             return -1;
         }
 
-        slDMACopy((void*)src->pixels, dstData, pixelCount);
-        slDMAWait();
+        if (SRL::VDP1::Metadata[src->textureIndex].ColorMode == SRL::CRAM::TextureColorMode::RGB555)
+        {
+            if (!SDL_RefreshBlitPaletteCache())
+            {
+                return -1;
+            }
+
+            const uint8_t* src8 = (const uint8_t*)src->pixels;
+            uint16_t* dst16 = (uint16_t*)dstData;
+            for (uint32_t i = 0; i < pixelCount; i++)
+            {
+                dst16[i] = sdl_blitPalette555[src8[i]];
+            }
+        }
+        else
+        {
+            SDL_CopyBytes(dstData, src->pixels, pixelCount);
+        }
 
         src->dirty = false;
         sdl_blitUploads++;
