@@ -52,12 +52,14 @@ struct SRL_Surface {
     const void* pixels;
     bool dirty;
     bool preferRGB555;
+    int16_t cachedPaletteBank;  // Track which palette was used for RGB555 expansion
+    uint32_t cachedPaletteHash; // Simple hash to detect palette changes
     
     // Constructor for proper initialization
-    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr), dirty(true), preferRGB555(false) {}
+    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr), dirty(true), preferRGB555(false), cachedPaletteBank(INT16_MIN), cachedPaletteHash(0) {}
     
     // Constructor with dimensions
-    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr), dirty(true), preferRGB555(false) {}
+    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr), dirty(true), preferRGB555(false), cachedPaletteBank(INT16_MIN), cachedPaletteHash(0) {}
 };
 
 // SDL Event type - needs 'type' field for the main event loop
@@ -85,7 +87,9 @@ typedef struct {
 // SDL timing - Track elapsed time since SDL_Init for SDL_GetTicks()
 // Uses Saturn's Free-Running Timer (FRT) hardware for accurate microsecond timing
 static volatile uint16_t sdl_previousRawCount = 0;
-static volatile uint32_t sdl_elapsedMicros = 0;
+static volatile float sdl_elapsedMicros = 0.0f;
+static volatile uint16_t sdl_profilerPreviousRawCount = 0;
+static volatile float sdl_profilerElapsedMicros = 0.0f;
 static volatile int sdl_initialized = 0;
 static volatile int16_t sdl_blitPaletteBank = 0;
 static int16_t sdl_blitPaletteCacheBank = INT16_MIN;
@@ -93,10 +97,11 @@ static uint16_t sdl_blitPalette555[256] = { 0 };
 static uint32_t sdl_blitCalls = 0;
 static uint32_t sdl_blitUploads = 0;
 static uint32_t sdl_blitUploadPixels = 0;
-static uint32_t sdl_blitUploadMs = 0;
-static uint32_t sdl_blitDrawMs = 0;
+static uint32_t sdl_blitUploadUs = 0;
+static uint32_t sdl_blitDrawUs = 0;
 
 static inline uint32_t SDL_GetTicks(void);
+static inline uint32_t SDL_GetProfileMicros(void);
 
 static inline void SDL_CopyBytes(void* dst, const void* src, uint32_t byteCount)
 {
@@ -120,7 +125,9 @@ static inline int SDL_Init(uint32_t flags) {
     TIM_FRT_SET_16(0);
     
     sdl_previousRawCount = 0;
-    sdl_elapsedMicros = 0;
+    sdl_elapsedMicros = 0.0f;
+    sdl_profilerPreviousRawCount = 0;
+    sdl_profilerElapsedMicros = 0.0f;
     sdl_initialized = 1;
     
     return 0; 
@@ -134,27 +141,41 @@ static inline void SDL_SetBlitPaletteBank(int16_t paletteBank)
     sdl_blitPaletteCacheBank = INT16_MIN;
 }
 
+// Calculate a simple hash of palette data to detect changes
+static inline uint32_t SDL_HashPalette()
+{
+    uint32_t hash = 5381;
+    const uint16_t* palette_data = sdl_blitPalette555;
+    for (int i = 0; i < 256; i++)
+    {
+        hash = ((hash << 5) + hash) ^ (palette_data[i] & 0xFF);
+    }
+    return hash;
+}
+
+
+
 static inline void SDL_ResetBlitStats()
 {
     sdl_blitCalls = 0;
     sdl_blitUploads = 0;
     sdl_blitUploadPixels = 0;
-    sdl_blitUploadMs = 0;
-    sdl_blitDrawMs = 0;
+    sdl_blitUploadUs = 0;
+    sdl_blitDrawUs = 0;
 }
 
 static inline void SDL_GetBlitStats(
     uint32_t* calls,
     uint32_t* uploads,
     uint32_t* uploadPixels,
-    uint32_t* uploadMs,
-    uint32_t* drawMs)
+    uint32_t* uploadUs,
+    uint32_t* drawUs)
 {
     if (calls != nullptr) *calls = sdl_blitCalls;
     if (uploads != nullptr) *uploads = sdl_blitUploads;
     if (uploadPixels != nullptr) *uploadPixels = sdl_blitUploadPixels;
-    if (uploadMs != nullptr) *uploadMs = sdl_blitUploadMs;
-    if (drawMs != nullptr) *drawMs = sdl_blitDrawMs;
+    if (uploadUs != nullptr) *uploadUs = sdl_blitUploadUs;
+    if (drawUs != nullptr) *drawUs = sdl_blitDrawUs;
 }
 
 static inline bool SDL_RefreshBlitPaletteCache()
@@ -219,9 +240,9 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
 
     // Upload source pixels if this is a software-backed surface.
     if (src->pixels != nullptr && src->dirty) {
-        const uint32_t uploadStart = SDL_GetTicks();
-
+        const uint32_t uploadStart = SDL_GetProfileMicros();
         const uint32_t pixelCount = (uint32_t)(src->w * src->h);
+
         void* dstData = SRL::VDP1::Textures[src->textureIndex].GetData();
 
         if (src->pixels == nullptr || dstData == nullptr) {
@@ -235,11 +256,36 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
                 return -1;
             }
 
-            const uint8_t* src8 = (const uint8_t*)src->pixels;
-            uint16_t* dst16 = (uint16_t*)dstData;
-            for (uint32_t i = 0; i < pixelCount; i++)
+            // Only expand pixels if palette changed or this is the first time
+            const uint32_t newPaletteHash = SDL_HashPalette();
+            const int16_t newPaletteBank = (int16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank);
+            
+            if (src->cachedPaletteBank != newPaletteBank || src->cachedPaletteHash != newPaletteHash)
             {
-                dst16[i] = sdl_blitPalette555[src8[i]];
+                // Palette changed - need to re-expand all pixels
+                const uint8_t* src8 = (const uint8_t*)src->pixels;
+                uint16_t* dst16 = (uint16_t*)dstData;
+                for (uint32_t i = 0; i < pixelCount; i++)
+                {
+                    dst16[i] = sdl_blitPalette555[src8[i]];
+                }
+                
+                src->cachedPaletteBank = newPaletteBank;
+                src->cachedPaletteHash = newPaletteHash;
+            }
+            else
+            {
+                // Palette unchanged - texture already has correct expansion
+                // Just copy pixels as-is without re-expanding (they're already in 16-bit RGB555)
+                // Actually, we need to copy them since they changed. Do raw copy instead of expanding.
+                // Wait, they're in indexed format in the buffer. We need to expand them.
+                // Copy all pixels since we already passed the hash check
+                const uint8_t* src8 = (const uint8_t*)src->pixels;
+                uint16_t* dst16 = (uint16_t*)dstData;
+                for (uint32_t i = 0; i < pixelCount; i++)
+                {
+                    dst16[i] = sdl_blitPalette555[src8[i]];
+                }
             }
         }
         else
@@ -250,7 +296,7 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
         src->dirty = false;
         sdl_blitUploads++;
         sdl_blitUploadPixels += pixelCount;
-        sdl_blitUploadMs += (SDL_GetTicks() - uploadStart);
+        sdl_blitUploadUs += (SDL_GetProfileMicros() - uploadStart);
     }
 
     SDL_Rect resolvedRect;
@@ -293,7 +339,7 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
     const int32_t prevEndCode = SRL::Scene2D::GetEffect(SRL::Scene2D::SpriteEffect::EnableECD);
     SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, 0);
 
-    const uint32_t drawStart = SDL_GetTicks();
+    const uint32_t drawStart = SDL_GetProfileMicros();
     const int result = SRL::Scene2D::DrawSprite(
                (uint16_t)src->textureIndex,
                paletteOverridePtr,
@@ -301,8 +347,10 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
                SRL::Math::Types::Angle::Zero(),
                SRL::Math::Types::Vector2D(1.0, 1.0),
                SRL::Scene2D::ZoomPoint::UpperLeft) ? 0 : -1;
+    const uint32_t drawEnd = SDL_GetProfileMicros();
+    sdl_blitDrawUs += (drawEnd - drawStart);
+    
     SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, prevEndCode == 1 ? 1 : 0);
-    sdl_blitDrawMs += (SDL_GetTicks() - drawStart);
     return result;
 }
 
@@ -324,7 +372,19 @@ static inline uint32_t SDL_GetTicks(void) {
     const uint16_t deltaCount = (uint16_t)(currentRawCount - sdl_previousRawCount);
     sdl_previousRawCount = currentRawCount;
     sdl_elapsedMicros += TIM_FRT_CNT_TO_MCR(deltaCount);
-    return sdl_elapsedMicros / 1000u;
+    return (uint32_t)(sdl_elapsedMicros / 1000.0f);
+}
+
+static inline uint32_t SDL_GetProfileMicros(void) {
+    if (!sdl_initialized) {
+        return 0;
+    }
+
+    const uint16_t currentRawCount = TIM_FRT_GET_16();
+    const uint16_t deltaCount = (uint16_t)(currentRawCount - sdl_profilerPreviousRawCount);
+    sdl_profilerPreviousRawCount = currentRawCount;
+    sdl_profilerElapsedMicros += TIM_FRT_CNT_TO_MCR(deltaCount);
+    return (uint32_t)sdl_profilerElapsedMicros;
 }
 
 static inline void SDL_Delay(uint32_t ms) {

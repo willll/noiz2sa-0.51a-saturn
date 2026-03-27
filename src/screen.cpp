@@ -344,9 +344,10 @@ void initSDL()
   lpanel->pixels = lpbuf;
   rpanel->pixels = rpbuf;
   video->pixels = nullptr;
+  // Correctness-first path: keep all surfaces in RGB555 to avoid paletted artifacts.
   layer->preferRGB555 = true;
-  lpanel->preferRGB555 = false;
-  rpanel->preferRGB555 = false;
+  lpanel->preferRGB555 = true;
+  rpanel->preferRGB555 = true;
   layer->dirty = true;
   lpanel->dirty = true;
   rpanel->dirty = true;
@@ -400,9 +401,18 @@ void flipScreen()
   // Main layer is rebuilt every frame.
   layer->dirty = true;
 
+  uint32_t blitStartUs = SDL_GetProfileMicros();
   SDL_BlitSurface(layer, nullptr, video, &layerRect);
+  uint32_t timeLayerUs = SDL_GetProfileMicros() - blitStartUs;
+  
+  blitStartUs = SDL_GetProfileMicros();
   SDL_BlitSurface(lpanel, nullptr, video, &lpanelRect);
+  uint32_t timeLpanelUs = SDL_GetProfileMicros() - blitStartUs;
+  
+  blitStartUs = SDL_GetProfileMicros();
   SDL_BlitSurface(rpanel, nullptr, video, &rpanelRect);
+  uint32_t timeRpanelUs = SDL_GetProfileMicros() - blitStartUs;
+  
   if (status == TITLE)
   {
     drawTitle();
@@ -410,22 +420,24 @@ void flipScreen()
   SDL_Flip(video);
 
   flipCounter++;
-  if ((flipCounter % 300u) == 0u)
+  if ((flipCounter % 60u) == 0u)
   {
     uint32_t calls = 0;
     uint32_t uploads = 0;
     uint32_t uploadPixels = 0;
-    uint32_t uploadMs = 0;
-    uint32_t drawMs = 0;
-    SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadMs, &drawMs);
-    SRL::Logger::LogDebug(
-        "[PERF][BLIT] frame=%lu calls=%lu uploads=%lu pixels=%lu up_ms=%lu draw_ms=%lu",
+    uint32_t uploadUs = 0;
+    uint32_t drawUs = 0;
+    SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadUs, &drawUs);
+    SRL::Logger::LogWarning(
+      "[BLIT_US] frame=%lu layer=%lu lpanel=%lu rpanel=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
         (unsigned long)flipCounter,
+      (unsigned long)timeLayerUs,
+      (unsigned long)timeLpanelUs,
+      (unsigned long)timeRpanelUs,
         (unsigned long)calls,
         (unsigned long)uploads,
-        (unsigned long)uploadPixels,
-        (unsigned long)uploadMs,
-        (unsigned long)drawMs);
+      (unsigned long)uploadUs,
+      (unsigned long)drawUs);
     SDL_ResetBlitStats();
   }
 }
@@ -450,6 +462,7 @@ void clearRPanel()
 
 void smokeScreen()
 {
+#if NOIZ2SA_ENABLE_SMOKE
   // Fast path: direct decay on both layers.
   // Avoids smokeBuf pointer indirection and per-frame memcpy, which is too slow on Saturn.
   for (int i = lyrSize - 1; i >= 0; i--)
@@ -457,6 +470,9 @@ void smokeScreen()
     l1buf[i] = colorDfs[l1buf[i]];
     l2buf[i] = colorDfs[l2buf[i]];
   }
+#else
+  // Compile-time disabled smoke effect for performance builds.
+#endif
 }
 
 void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Canvas::Pixel *buf)

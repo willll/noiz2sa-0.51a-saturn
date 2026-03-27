@@ -83,6 +83,12 @@ set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 option(SRL_USE_SGL_SOUND_DRIVER "Use SGL sound driver" OFF)
 option(SRL_ENABLE_FREQ_ANALYSIS "Enable frequency analysis" OFF)
 
+# Gameplay performance toggles
+option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" ON)
+set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=half, 4=quarter)")
+set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
+option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
+
 # SGL Work Area Settings
 set(SGL_MAX_VERTICES "2500" CACHE STRING "Maximum vertices")
 set(SGL_MAX_POLYGONS "1700" CACHE STRING "Maximum polygons")
@@ -151,6 +157,21 @@ if(SRL_USE_SGL_SOUND_DRIVER)
     if(SRL_ENABLE_FREQ_ANALYSIS)
         add_compile_definitions(SRL_ENABLE_FREQ_ANALYSIS=1)
     endif()
+endif()
+
+# Gameplay performance toggles
+if(NOIZ2SA_ENABLE_SMOKE)
+    add_compile_definitions(NOIZ2SA_ENABLE_SMOKE=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_SMOKE=0)
+endif()
+
+add_compile_definitions(NOIZ2SA_SCREEN_DIVISOR=${NOIZ2SA_SCREEN_DIVISOR})
+
+if(NOIZ2SA_DISABLE_DOUBLE_BUFFER)
+    add_compile_definitions(NOIZ2SA_DISABLE_DOUBLE_BUFFER=1)
+else()
+    add_compile_definitions(NOIZ2SA_DISABLE_DOUBLE_BUFFER=0)
 endif()
 
 # SGL Work Area

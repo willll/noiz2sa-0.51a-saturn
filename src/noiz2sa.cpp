@@ -423,7 +423,7 @@ static void initGameConfig()
   // Display brightness: default value
   brightness = DEFAULT_BRIGHTNESS;
 
-  // Timing: no wait, standard framerate
+  // Timing: conservative default for stable presentation.
   nowait = 0;
   accframe = 0;
 }
@@ -431,6 +431,11 @@ static void initGameConfig()
 int interval = INTERVAL_BASE;
 int tick = 0;
 static int pPrsd = 1;
+static const uint32_t kInGameRenderDivisor = 1;
+static const uint32_t kUiRenderDivisor = 1;
+static uint32_t gInGameRenderCounter = 0;
+static uint32_t gStalledTickFrames = 0;
+static bool gUseFixedFramePacing = false;
 
 int main()
 {
@@ -522,19 +527,52 @@ int main()
 
     // Calculate frames to process based on time elapsed
     nowTick = SDL_GetTicks();
-    frame = (int)(nowTick - prvTickCount) / interval;
-    
-    if (frame <= 0)
+
+    // Some emulator paths can report a stalled SDL_GetTicks() value.
+    // Fall back to deterministic fixed-step pacing when this is detected.
+    if (nowTick <= prvTickCount)
+    {
+      gStalledTickFrames++;
+      if (gStalledTickFrames > 120u)
+      {
+        gUseFixedFramePacing = true;
+      }
+    }
+    else
+    {
+      gStalledTickFrames = 0;
+    }
+
+    if (gUseFixedFramePacing)
     {
       frame = 1;
-      SDL_Delay(prvTickCount + interval - nowTick);
-      if (accframe)
+      prvTickCount = nowTick;
+    }
+    else
+    {
+      frame = (int)(nowTick - prvTickCount) / interval;
+    }
+    
+    if (!gUseFixedFramePacing && frame <= 0)
+    {
+      frame = 1;
+
+      // In performance mode, avoid busy waiting when timer behavior is unstable.
+      if (!nowait)
       {
-        prvTickCount = SDL_GetTicks();
+        SDL_Delay(prvTickCount + interval - nowTick);
+        if (accframe)
+        {
+          prvTickCount = SDL_GetTicks();
+        }
+        else
+        {
+          prvTickCount += interval;
+        }
       }
       else
       {
-        prvTickCount += interval;
+        prvTickCount = nowTick;
       }
     }
     else if (frame > 5)
@@ -549,20 +587,81 @@ int main()
     }
 
     // Process game logic for calculated frames
+    uint32_t phaseStartUs = SDL_GetProfileMicros();
     for (i = 0; i < frame; i++)
     {
       move();
       tick++;
     }
+    uint32_t timeMoveUs = SDL_GetProfileMicros() - phaseStartUs;
 
-    smokeScreen();
+    uint32_t renderDivisor = 1;
+    if (status == IN_GAME)
+    {
+      renderDivisor = kInGameRenderDivisor;
+    }
+    else if (status == TITLE || status == GAMEOVER || status == STAGE_CLEAR)
+    {
+      renderDivisor = kUiRenderDivisor;
+    }
 
-    draw();
+    const bool renderThisLoop =
+        (renderDivisor <= 1u) || ((gInGameRenderCounter++ % renderDivisor) == 0u);
 
-    flipScreen();
-    
-    // Refresh screen
+    uint32_t timeSmokeUs = 0;
+    uint32_t timeDrawUs = 0;
+    uint32_t timeFlipUs = 0;
+    if (renderThisLoop)
+    {
+      phaseStartUs = SDL_GetProfileMicros();
+      smokeScreen();
+      timeSmokeUs = SDL_GetProfileMicros() - phaseStartUs;
+
+      phaseStartUs = SDL_GetProfileMicros();
+      draw();
+      timeDrawUs = SDL_GetProfileMicros() - phaseStartUs;
+
+      phaseStartUs = SDL_GetProfileMicros();
+      flipScreen();
+      timeFlipUs = SDL_GetProfileMicros() - phaseStartUs;
+    }
+
+    phaseStartUs = SDL_GetProfileMicros();
+  #if NOIZ2SA_DISABLE_DOUBLE_BUFFER
+    // Bypass synchronized frame swap/wait path for max throughput.
+    // Keep input polling active so controls still update.
+    SRL::Input::Management::RefreshPeripherals();
+  #else
     SRL::Core::Synchronize();
+  #endif
+    uint32_t timeSyncUs = SDL_GetProfileMicros() - phaseStartUs;
+
+    // Log timing every 60 frames (~10 sec at 6 FPS)
+    static uint32_t frameCount = 0;
+    frameCount++;
+    if ((frameCount % 60) == 0)
+    {
+      const uint32_t totalUs = timeMoveUs + timeSmokeUs + timeDrawUs + timeFlipUs + timeSyncUs;
+      const uint32_t fpsTimes100 = (totalUs > 0) ? (100000000u / totalUs) : 0u;
+      SRL::Logger::LogWarning(
+                          "[PERF_US] move=%lu smoke=%lu draw=%lu flip=%lu sync=%lu total=%lu fps=%lu.%02lu tick_ms=%lu frame=%d render=%d rdiv=%lu fixed=%d stalled=%lu status=%d dbuf_off=%d",
+          (unsigned long)timeMoveUs,
+          (unsigned long)timeSmokeUs,
+          (unsigned long)timeDrawUs,
+          (unsigned long)timeFlipUs,
+          (unsigned long)timeSyncUs,
+          (unsigned long)totalUs,
+          (unsigned long)(fpsTimes100 / 100u),
+          (unsigned long)(fpsTimes100 % 100u),
+          (unsigned long)nowTick,
+                    frame,
+              renderThisLoop ? 1 : 0,
+              (unsigned long)renderDivisor,
+              gUseFixedFramePacing ? 1 : 0,
+              (unsigned long)gStalledTickFrames,
+                  status,
+                  NOIZ2SA_DISABLE_DOUBLE_BUFFER);
+    }
 
     // Periodic logging for frame rate monitoring
     if ((tick % 300) == 0)  // Every ~5 seconds at 60Hz
