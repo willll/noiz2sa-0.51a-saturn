@@ -416,7 +416,7 @@ void drawTitleMenu()
     if (i == slcStg)
     {
       int sz = STG_BOX_SIZE + (6 + sctbl[(titleCnt * 16) & (DIV - 1)] / 24) / SCREEN_DIVISOR;
-      drawStringBuf(stgChr, 180 / SCREEN_DIVISOR, 80 / SCREEN_DIVISOR, 12, 2, 16 * 1 - 14, 16 * 1 - 2, buf, 0);
+      drawBox(stageX[i], stageY[i], sz, sz, 16 * 2 - 14, 16 * 2 - 3, buf);
       if (i < STAGE_NUM)
       {
         drawStringBuf(stgChr, 180 / SCREEN_DIVISOR, 80 / SCREEN_DIVISOR, 12, 2, 16 * 1 - 14, 16 * 1 - 2, buf, 0);

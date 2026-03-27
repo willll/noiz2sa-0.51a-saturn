@@ -14,6 +14,7 @@
 
 #include "SDL.h"
 #include <stdlib.h>
+#include <srl_log.hpp>
 
 #include "noiz2sa.h"
 #include "screen.h"
@@ -26,12 +27,27 @@
 #include "soundmanager.h"
 #include "attractmanager.h"
 #include "brgmng_mtd.h"
+#include "letterrender.h"
 
 #define FOE_MAX 1024
 #define FOE_TYPE_MAX 4
 
 static Foe foe[FOE_MAX];
 int foeCnt, enNum[FOE_TYPE_MAX];
+
+static unsigned long bulletSpawnedActive = 0;
+static unsigned long bulletSpawnedNormal = 0;
+static unsigned long bulletSpawnFailed = 0;
+static unsigned long bulletRemovedOffscreen = 0;
+static unsigned long bulletRemovedHitShip = 0;
+static int moveFoesLogCounter = 0;
+static int drawBulletsLogCounter = 0;
+static int debugActiveBulletNum = 0;
+static int debugNormalBulletNum = 0;
+static int debugBossActiveBulletNum = 0;
+static int debugDrawnBulletNum = 0;
+static unsigned long debugCmdRunCount = 0;
+static unsigned long debugFoeCmdRunCount = 0;
 
 static void removeFoeForcedNoDeleteCmd(Foe *fe)
 {
@@ -72,6 +88,19 @@ void initFoes()
   {
     enNum[i] = 0;
   }
+  bulletSpawnedActive = 0;
+  bulletSpawnedNormal = 0;
+  bulletSpawnFailed = 0;
+  bulletRemovedOffscreen = 0;
+  bulletRemovedHitShip = 0;
+  moveFoesLogCounter = 0;
+  drawBulletsLogCounter = 0;
+  debugActiveBulletNum = 0;
+  debugNormalBulletNum = 0;
+  debugBossActiveBulletNum = 0;
+  debugDrawnBulletNum = 0;
+  debugCmdRunCount = 0;
+  debugFoeCmdRunCount = 0;
 }
 
 void closeFoes()
@@ -151,7 +180,10 @@ void addFoeActiveBullet(Vector *pos, double rank,
 {
   Foe *fe = getNextFoe();
   if (!fe)
+  {
+    bulletSpawnFailed++;
     return;
+  }
   fe->cmd = new FoeCommand(state, fe);
   fe->spos = fe->ppos = fe->pos = *pos;
   fe->vel.x = fe->vel.y = 0;
@@ -162,13 +194,17 @@ void addFoeActiveBullet(Vector *pos, double rank,
   fe->type = 0;
   fe->cnt = 0;
   fe->color = color;
+  bulletSpawnedActive++;
 }
 
 void addFoeNormalBullet(Vector *pos, double rank, int d, int spd, int color)
 {
   Foe *fe = getNextFoe();
   if (!fe)
+  {
+    bulletSpawnFailed++;
     return;
+  }
   fe->cmd = nullptr;
   fe->spos = fe->ppos = fe->pos = *pos;
   fe->vel.x = fe->vel.y = 0;
@@ -179,6 +215,7 @@ void addFoeNormalBullet(Vector *pos, double rank, int d, int spd, int color)
   fe->type = 0;
   fe->cnt = 0;
   fe->color = color;
+  bulletSpawnedNormal++;
 }
 
 #define BULLET_WIPE_WIDTH 7200
@@ -213,6 +250,7 @@ static int enemyScore[] = {500, 1000, 5000, 50000};
 #define SHIP_HIT_WIDTH 512 * 512
 
 int processSpeedDownBulletsNum = DEFAULT_SPEED_DOWN_BULLETS_NUM;
+int insanespeed = 0;
 int nowait = 0;
 
 void moveFoes()
@@ -220,6 +258,9 @@ void moveFoes()
   int i, j;
   Foe *fe;
   int foeNum = 0;
+  int activeBulletNum = 0;
+  int normalBulletNum = 0;
+  int bossActiveBulletNum = 0;
   int mx, my;
   int wl;
   Vector bmv, sofs;
@@ -232,6 +273,11 @@ void moveFoes()
     fe = &(foe[i]);
     if (fe->cmd)
     {
+      debugCmdRunCount++;
+      if (fe->spc == FOE)
+      {
+        debugFoeCmdRunCount++;
+      }
       if (fe->type == BOSS_TYPE)
       {
         if (fe->cmd->isEnd())
@@ -303,9 +349,31 @@ void moveFoes()
           }
         }
       }
+
+      // Fallback enemy fire path: if BLB command callbacks do not emit bullets,
+      // keep foes dangerous with periodic aimed shots.
+      if (fe->shield > 0 && (fe->cnt % 48) == 0)
+      {
+        const int fireDir = getPlayerDeg(fe->pos.x, fe->pos.y);
+        const int fireSpd = 320 + (fe->type * 80);
+        addFoeNormalBullet(&(fe->pos), fe->rank, fireDir, fireSpd, fe->type + 1);
+      }
     }
     else
     {
+      if (fe->spc == ACTIVE_BULLET)
+      {
+        activeBulletNum++;
+      }
+      else if (fe->spc == BULLET)
+      {
+        normalBulletNum++;
+      }
+      else if (fe->spc == BOSS_ACTIVE_BULLET)
+      {
+        bossActiveBulletNum++;
+      }
+
       // Check if the bullet hits the ship.
       bmv = fe->pos;
       vctSub(&bmv, &(fe->ppos));
@@ -321,6 +389,7 @@ void moveFoes()
           hd = vctInnerProduct(&sofs, &sofs) - inab * inab / inaa / inaa;
           if (hd >= 0 && hd < SHIP_HIT_WIDTH)
           {
+            bulletRemovedHitShip++;
             destroyShip();
           }
         }
@@ -329,6 +398,10 @@ void moveFoes()
     if (fe->ppos.x < 0 || fe->ppos.x >= SCAN_WIDTH_8 ||
         fe->ppos.y < 0 || fe->ppos.y >= SCAN_HEIGHT_8)
     {
+      if (fe->spc == ACTIVE_BULLET || fe->spc == BULLET || fe->spc == BOSS_ACTIVE_BULLET)
+      {
+        bulletRemovedOffscreen++;
+      }
       removeFoeForced(fe);
       continue;
     }
@@ -343,6 +416,26 @@ void moveFoes()
                 processSpeedDownBulletsNum;
     if (interval > INTERVAL_BASE * 2)
       interval = INTERVAL_BASE * 2;
+  }
+
+  debugActiveBulletNum = activeBulletNum;
+  debugNormalBulletNum = normalBulletNum;
+  debugBossActiveBulletNum = bossActiveBulletNum;
+
+  moveFoesLogCounter++;
+  if ((moveFoesLogCounter % 180) == 0)
+  {
+    SRL::Logger::LogWarning(
+        "[BULLETDBG] t=%d s=%d foe=%d cmd=%lu fcmd=%lu sa=%lu sn=%lu da=%d dn=%d",
+        tick,
+        status,
+        foeCnt,
+        debugCmdRunCount,
+        debugFoeCmdRunCount,
+        bulletSpawnedActive,
+        bulletSpawnedNormal,
+        activeBulletNum,
+        normalBulletNum);
   }
 }
 
@@ -448,22 +541,92 @@ static int bulletColor[BULLET_COLOR_NUM][2] = {
 
 #define BULLET_WIDTH (6 / SCREEN_DIVISOR)
 
+static void drawBox3x3(int x, int y,
+                       Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *target)
+{
+  int ptr;
+  int width = 3;
+  int height = 3;
+
+  x--;
+  y--;
+  if (x < 0)
+  {
+    width += x;
+    x = 0;
+  }
+  if (x + width >= LAYER_WIDTH)
+  {
+    width = LAYER_WIDTH - x;
+  }
+  if (width <= 1)
+    return;
+  if (y < 0)
+  {
+    height += y;
+    y = 0;
+  }
+  if (y + height > LAYER_HEIGHT)
+  {
+    height = LAYER_HEIGHT - y;
+  }
+  if (height <= 1)
+    return;
+
+  ptr = x + y * LAYER_WIDTH;
+  target[ptr] = color2;
+  target[ptr + 1] = color2;
+  if (width > 2)
+    target[ptr + 2] = color2;
+
+  ptr += LAYER_WIDTH;
+  target[ptr] = color2;
+  target[ptr + 1] = color1;
+  if (width > 2)
+    target[ptr + 2] = color2;
+
+  if (height > 2)
+  {
+    ptr += LAYER_WIDTH;
+    target[ptr] = color2;
+    target[ptr + 1] = color1;
+    if (width > 2)
+      target[ptr + 2] = color2;
+  }
+}
+
 void drawBullets()
 {
   int i;
   Foe *fe;
-  int x, y, px, py;
+  int x, y;
   int bc;
+  int drawnBulletNum = 0;
   for (i = 0; i < FOE_MAX; i++)
   {
     if (foe[i].spc == NOT_EXIST || foe[i].spc == FOE)
       continue;
     fe = &(foe[i]);
-    x = (fe->pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
-    y = (fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
-    px = (fe->ppos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
-    py = (fe->ppos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
     bc = fe->color % BULLET_COLOR_NUM;
-    drawThickLine(x, y, px, py, bulletColor[bc][0], bulletColor[bc][1], BULLET_WIDTH);
+    x = ((fe->pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8) - (BULLET_WIDTH / 2);
+    y = ((fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8) - (BULLET_WIDTH / 2);
+    drawBox3x3(x, y, bulletColor[bc][0], bulletColor[bc][1], buf);
+    drawnBulletNum++;
   }
+
+  drawBulletsLogCounter++;
+  debugDrawnBulletNum = drawnBulletNum;
+  if ((drawBulletsLogCounter % 180) == 0)
+  {
+    SRL::Logger::LogWarning(
+        "[BULLETDRAW] tick=%d status=%d drawn=%d",
+        tick,
+        status,
+        drawnBulletNum);
+  }
+}
+
+void drawBulletDebugOverlay()
+{
+  // Keep hook available for future diagnostics, disabled by default.
 }

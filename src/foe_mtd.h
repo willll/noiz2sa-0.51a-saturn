@@ -16,6 +16,7 @@
 #define HARD_SPEED_DOWN_BULLETS_NUM 120
 
 extern int processSpeedDownBulletsNum;
+extern int insanespeed;
 extern int nowait;
 
 void initFoes();
@@ -26,3 +27,4 @@ void clearFoesZako();
 void drawBulletsWake();
 void drawFoes();
 void drawBullets();
+void drawBulletDebugOverlay();

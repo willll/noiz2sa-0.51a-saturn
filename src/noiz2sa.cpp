@@ -348,6 +348,7 @@ static void draw()
     blendScreen();
     // Draw forground.
     drawBullets();
+    drawBulletDebugOverlay();
     drawScore();
     drawTitleMenu();
     break;
@@ -363,6 +364,7 @@ static void draw()
     drawShots();
     drawShip();
     drawBullets();
+    drawBulletDebugOverlay();
     drawScore();
     break;
   case GAMEOVER:
@@ -375,6 +377,7 @@ static void draw()
     // Draw forground.
     drawShots();
     drawBullets();
+    drawBulletDebugOverlay();
     drawScore();
     drawGameover();
     break;
@@ -402,6 +405,7 @@ static void draw()
     drawShots();
     drawShip();
     drawBullets();
+    drawBulletDebugOverlay();
     drawScore();
     drawPause();
     break;
