@@ -37,6 +37,9 @@ static int noSound = 0;
 
 static void renderLoadingScreen(const char *step, int percent)
 {
+  // Force loading backdrop to blue even if gameplay uses a different clear color.
+  SRL::VDP2::SetBackColor(SRL::Types::HighColor(20, 10, 50));
+
   if (percent < 0)
   {
     percent = 0;
@@ -86,6 +89,9 @@ static void clearLoadingOverlay()
 {
   SRL::Debug::PrintClearScreen();
   SRL::Debug::PrintColorRestore();
+
+  // Switch to configured background color once loading is complete.
+  SRL::VDP2::SetBackColor(SRL::Types::HighColor(NOIZ2SA_POST_LOAD_BG_R, NOIZ2SA_POST_LOAD_BG_G, NOIZ2SA_POST_LOAD_BG_B));
 }
 
 // Global random number generator (using SRL::Math namespace which is aliased to SaturnMath)
@@ -435,7 +441,7 @@ static void initGameConfig()
 int interval = INTERVAL_BASE;
 int tick = 0;
 static int pPrsd = 1;
-static const uint32_t kInGameRenderDivisor = 1;
+static const uint32_t kInGameRenderDivisor = 2;
 static const uint32_t kUiRenderDivisor = 1;
 static uint32_t gInGameRenderCounter = 0;
 static uint32_t gStalledTickFrames = 0;
