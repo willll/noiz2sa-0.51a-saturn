@@ -83,12 +83,10 @@ typedef struct {
 
 // SDL timing - Track elapsed time since SDL_Init for SDL_GetTicks()
 // Uses Saturn's Free-Running Timer (FRT) hardware for accurate microsecond timing
-static volatile uint32_t sdl_previouscount = 0;
-static volatile uint16_t sdl_previousmillis = 0;
+static volatile uint16_t sdl_previousRawCount = 0;
+static volatile uint32_t sdl_elapsedMicros = 0;
 static volatile int sdl_initialized = 0;
 static volatile int16_t sdl_blitPaletteBank = 0;
-static int16_t sdl_blitPaletteCacheBank = INT16_MIN;
-static uint16_t sdl_blitPalette555[256] = { 0 };
 static uint32_t sdl_blitCalls = 0;
 static uint32_t sdl_blitUploads = 0;
 static uint32_t sdl_blitUploadPixels = 0;
@@ -97,27 +95,16 @@ static uint32_t sdl_blitDrawMs = 0;
 
 static inline uint32_t SDL_GetTicks(void);
 
-static inline void SDL_CopyBytes(void* dst, const void* src, uint32_t byteCount)
-{
-    uint8_t* d8 = (uint8_t*)dst;
-    const uint8_t* s8 = (const uint8_t*)src;
-    while (byteCount-- > 0) {
-        *d8++ = *s8++;
-    }
-}
-
 // SDL initialization and system
 static inline int SDL_Init(uint32_t flags) { 
     (void)flags;
     
-    // Initialize the FRT with clock divider of 8
-    // This gives us microsecond-level precision
+    // Initialize the FRT once and keep it running continuously.
     TIM_FRT_INIT(TIM_CKS_8);
     TIM_FRT_SET_16(0);
     
-    // Reset timing accumulators
-    sdl_previouscount = 0;
-    sdl_previousmillis = 0;
+    sdl_previousRawCount = 0;
+    sdl_elapsedMicros = 0;
     sdl_initialized = 1;
     
     return 0; 
@@ -128,7 +115,6 @@ static inline const char* SDL_GetError(void) { return "SDL stub"; }
 static inline void SDL_SetBlitPaletteBank(int16_t paletteBank)
 {
     sdl_blitPaletteBank = paletteBank;
-    sdl_blitPaletteCacheBank = INT16_MIN;
 }
 
 static inline void SDL_ResetBlitStats()
@@ -154,31 +140,6 @@ static inline void SDL_GetBlitStats(
     if (drawMs != nullptr) *drawMs = sdl_blitDrawMs;
 }
 
-static inline bool SDL_RefreshBlitPaletteCache()
-{
-    if (sdl_blitPaletteCacheBank == sdl_blitPaletteBank)
-    {
-        return true;
-    }
-
-    SRL::CRAM::Palette blitPalette(
-        SRL::CRAM::TextureColorMode::Paletted256,
-        (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
-    SRL::Types::HighColor* paletteData = blitPalette.GetData();
-    if (paletteData == nullptr)
-    {
-        return false;
-    }
-
-    for (uint32_t i = 0; i < 256; i++)
-    {
-        sdl_blitPalette555[i] = (uint16_t)paletteData[i];
-    }
-
-    sdl_blitPaletteCacheBank = sdl_blitPaletteBank;
-    return true;
-}
-
 static inline int SDL_SetColors(SRL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
     (void)surface; (void)colors; (void)firstcolor; (void)ncolors; return 0;
 }
@@ -196,13 +157,14 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
             return -1;
         }
 
-        const SRL::CRAM::TextureColorMode blitMode = SRL::CRAM::TextureColorMode::RGB555;
+        const SRL::CRAM::TextureColorMode blitMode = SRL::CRAM::TextureColorMode::Paletted256;
+        const uint16_t paletteId = (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank);
 
         src->textureIndex = SRL::VDP1::TryAllocateTexture(
             (uint16_t)src->w,
             (uint16_t)src->h,
             blitMode,
-            0);
+            paletteId);
 
         if (src->textureIndex < 0) {
             return -1;
@@ -210,25 +172,18 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
     }
 
     // Upload source pixels if this is a software-backed surface.
-    // Expand indexed 8-bit pixels to RGB555 explicitly to avoid paletted VDP1 artifacts.
     if (src->pixels != nullptr && src->dirty) {
         const uint32_t uploadStart = SDL_GetTicks();
 
-        if (!SDL_RefreshBlitPaletteCache()) {
-            return -1;
-        }
-
         const uint32_t pixelCount = (uint32_t)(src->w * src->h);
-        const uint8_t* src8 = (const uint8_t*)src->pixels;
-        uint16_t* dst16 = (uint16_t*)SRL::VDP1::Textures[src->textureIndex].GetData();
+        void* dstData = SRL::VDP1::Textures[src->textureIndex].GetData();
 
-        if (src8 == nullptr || dst16 == nullptr) {
+        if (src->pixels == nullptr || dstData == nullptr) {
             return -1;
         }
 
-        for (uint32_t i = 0; i < pixelCount; i++) {
-            dst16[i] = sdl_blitPalette555[src8[i]];
-        }
+        slDMACopy((void*)src->pixels, dstData, pixelCount);
+        slDMAWait();
 
         src->dirty = false;
         sdl_blitUploads++;
@@ -261,14 +216,30 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
         SRL::Math::Types::Fxp::Convert(sceneY),
         500.0);
 
+    SRL::CRAM::Palette paletteOverride;
+    SRL::CRAM::Palette* paletteOverridePtr = nullptr;
+    const uint16_t paletteId = (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank);
+    if (src->textureIndex >= 0 &&
+        SRL::VDP1::Metadata[src->textureIndex].ColorMode == SRL::CRAM::TextureColorMode::Paletted256 &&
+        SRL::VDP1::Metadata[src->textureIndex].PaletteId != paletteId) {
+        paletteOverride = SRL::CRAM::Palette(SRL::CRAM::TextureColorMode::Paletted256, paletteId);
+        paletteOverridePtr = &paletteOverride;
+    }
+
+    // In paletted modes, index 0xFF is a valid color for this game data.
+    // Keep ECD disabled here so 0xFF does not terminate scanline drawing.
+    const int32_t prevEndCode = SRL::Scene2D::GetEffect(SRL::Scene2D::SpriteEffect::EnableECD);
+    SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, 0);
+
     const uint32_t drawStart = SDL_GetTicks();
     const int result = SRL::Scene2D::DrawSprite(
                (uint16_t)src->textureIndex,
-               nullptr,
+               paletteOverridePtr,
                pos,
                SRL::Math::Types::Angle::Zero(),
                SRL::Math::Types::Vector2D(1.0, 1.0),
                SRL::Scene2D::ZoomPoint::UpperLeft) ? 0 : -1;
+    SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, prevEndCode == 1 ? 1 : 0);
     sdl_blitDrawMs += (SDL_GetTicks() - drawStart);
     return result;
 }
@@ -283,59 +254,25 @@ static inline int SDL_Flip(SRL_Surface* screen) { (void)screen; return 0; }
 // Hardware timer-based timing using the FRT (Free-Running Timer)
 
 static inline uint32_t SDL_GetTicks(void) {
-    // Return the number of milliseconds since SDL_Init() was called
-    // Uses Saturn's FRT hardware timer for accurate microsecond timing
-    // Based on SDL_Saturn implementation by BERO
-    
     if (!sdl_initialized) {
         return 0;
     }
-    
-    // Read the current FRT counter value and convert to microseconds
-    uint32_t tmp = TIM_FRT_CNT_TO_MCR(TIM_FRT_GET_16()) + sdl_previousmillis;
-    
-    // Convert microseconds to milliseconds
-    uint32_t tmp2 = tmp / 1000;
-    
-    // Accumulate whole milliseconds
-    sdl_previouscount += tmp2;
-    
-    // Reset the counter to prevent overflow
-    TIM_FRT_SET_16(0);
-    
-    // Keep the remaining microseconds for next call
-    sdl_previousmillis = (tmp - (tmp2 * 1000));
-    
-    return sdl_previouscount;
+
+    const uint16_t currentRawCount = TIM_FRT_GET_16();
+    const uint16_t deltaCount = (uint16_t)(currentRawCount - sdl_previousRawCount);
+    sdl_previousRawCount = currentRawCount;
+    sdl_elapsedMicros += TIM_FRT_CNT_TO_MCR(deltaCount);
+    return sdl_elapsedMicros / 1000u;
 }
 
 static inline void SDL_Delay(uint32_t ms) {
-    // Delay for the specified number of milliseconds
-    // Uses Saturn's FRT hardware timer for accurate timing
-    // Based on SDL_Saturn implementation by BERO
-    
-    if (ms == 0) return;
-    
-    // Initialize FRT with clock divider of 8
-    TIM_FRT_INIT(TIM_CKS_8);
-    
-    // Convert milliseconds to FRT counter value (microseconds -> counter)
-    uint32_t count = TIM_FRT_MCR_TO_CNT(ms * 1000);
-    
-    // Handle counter values larger than 16-bit max
-    uint16_t trucount = count / USHRT_MAX;
-    uint16_t remaining = count - (trucount * USHRT_MAX);
-    
-    // Wait for full 16-bit cycles
-    while (trucount) {
-        TIM_FRT_SET_16(0);
-        TIM_FRT_DELAY_16(USHRT_MAX);
-        --trucount;
+    if (ms == 0 || !sdl_initialized) {
+        return;
     }
-    
-    // Wait for remaining count
-    TIM_FRT_SET_16(0);
-    while (remaining > TIM_FRT_GET_16());
+
+    const uint32_t start = SDL_GetTicks();
+    while ((SDL_GetTicks() - start) < ms) {
+    }
 }
 
 // SDL_GameControllerOpen is defined in gamepad.cpp, declared in gamepad.h
