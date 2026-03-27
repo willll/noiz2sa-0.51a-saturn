@@ -320,74 +320,33 @@ void moveFoes()
           if (absN(fe->pos.x - shot[j].pos.x) < foeScanSize[foeType] &&
               absN(fe->pos.y - shot[j].pos.y) < foeScanSize[foeType] + SHOT_SCAN_HEIGHT)
           {
-              SRL::Logger::LogWarning(
-                  "[TRACE_COLL] hit-start foeIdx=%d shotIdx=%d foeType=%d shield=%d foePos=(%d,%d) shotPos=(%d,%d)",
-                  i,
-                  j,
-                  foeType,
-                  fe->shield,
-                  fe->pos.x,
-                  fe->pos.y,
-                  shot[j].pos.x,
-                  shot[j].pos.y);
-
             Vector shotPos = shot[j].pos;
             shot[j].cnt = NOT_EXIST;
             fe->shield--;
             fe->hit = 1;
-
-              SRL::Logger::LogWarning(
-                  "[TRACE_COLL] post-hit foeIdx=%d shotIdx=%d shield_now=%d",
-                  i,
-                  j,
-                  fe->shield);
-
-              SRL::Logger::LogWarning("[TRACE_COLL] addShotFrag-before foeIdx=%d", i);
             addShotFrag(&shotPos);
-              SRL::Logger::LogWarning("[TRACE_COLL] addShotFrag-after foeIdx=%d", i);
 
             if (fe->shield <= 0)
             {
-                SRL::Logger::LogWarning(
-                    "[TRACE_COLL] foe-death-start foeIdx=%d foeType=%d mx=%d my=%d",
-                    i,
-                    foeType,
-                    mx,
-                    my);
-
-                SRL::Logger::LogWarning("[TRACE_COLL] addScore-before foeIdx=%d score=%d", i, enemyScore[foeType]);
               addScore(enemyScore[foeType]);
-                SRL::Logger::LogWarning("[TRACE_COLL] addScore-after foeIdx=%d", i);
-
-                SRL::Logger::LogWarning("[TRACE_COLL] wipeBullets-before foeIdx=%d width=%d", i, BULLET_WIPE_WIDTH * (foeType + 1));
               wipeBullets(&(fe->pos), BULLET_WIPE_WIDTH * (foeType + 1));
-                SRL::Logger::LogWarning("[TRACE_COLL] wipeBullets-after foeIdx=%d", i);
-
-                SRL::Logger::LogWarning("[TRACE_COLL] addEnemyFrag-before foeIdx=%d", i);
               addEnemyFrag(&(fe->pos), mx, my, foeType);
-                SRL::Logger::LogWarning("[TRACE_COLL] addEnemyFrag-after foeIdx=%d", i);
 
               if (foeType == BOSS_TYPE)
               {
-                  SRL::Logger::LogWarning("[TRACE_COLL] bossDestroied-before foeIdx=%d", i);
                 bossDestroied();
-                  SRL::Logger::LogWarning("[TRACE_COLL] bossDestroied-after foeIdx=%d", i);
                 playChunk(3);
               }
               else
               {
-                  SRL::Logger::LogWarning("[TRACE_COLL] removeFoeForced-before foeIdx=%d", i);
                 playChunk(2);
-                  SRL::Logger::LogWarning("[TRACE_COLL] removeFoeForced-after foeIdx=%d", i);
                 removeFoeForced(fe);
               }
 
-                SRL::Logger::LogWarning("[TRACE_COLL] foe-death-end foeIdx=%d", i);
               foeRemovedByShot = true;
               break;
             }
 
-              SRL::Logger::LogWarning("[TRACE_COLL] non-lethal-hit foeIdx=%d shield_now=%d", i, fe->shield);
             playChunk(1);
           }
         }
