@@ -344,6 +344,9 @@ void initSDL()
   lpanel->pixels = lpbuf;
   rpanel->pixels = rpbuf;
   video->pixels = nullptr;
+  layer->dirty = true;
+  lpanel->dirty = true;
+  rpanel->dirty = true;
 
   layerRect.x = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
   layerRect.y = (SCREEN_HEIGHT - LAYER_HEIGHT) / 2;
@@ -389,6 +392,11 @@ void blendScreen()
 
 void flipScreen()
 {
+  static uint32_t flipCounter = 0;
+
+  // Main layer is rebuilt every frame.
+  layer->dirty = true;
+
   SDL_BlitSurface(layer, nullptr, video, &layerRect);
   SDL_BlitSurface(lpanel, nullptr, video, &lpanelRect);
   SDL_BlitSurface(rpanel, nullptr, video, &rpanelRect);
@@ -397,43 +405,54 @@ void flipScreen()
     drawTitle();
   }
   SDL_Flip(video);
+
+  flipCounter++;
+  if (flipCounter <= 20u || (flipCounter % 10u) == 0u)
+  {
+    uint32_t calls = 0;
+    uint32_t uploads = 0;
+    uint32_t uploadPixels = 0;
+    uint32_t uploadMs = 0;
+    uint32_t drawMs = 0;
+    SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadMs, &drawMs);
+    SRL::Logger::LogInfo(
+        "[PERF][BLIT] frame=%lu calls=%lu uploads=%lu pixels=%lu up_ms=%lu draw_ms=%lu",
+        (unsigned long)flipCounter,
+        (unsigned long)calls,
+        (unsigned long)uploads,
+        (unsigned long)uploadPixels,
+        (unsigned long)uploadMs,
+        (unsigned long)drawMs);
+    SDL_ResetBlitStats();
+  }
 }
 
 void clearScreen()
 {
   memset(buf, 0, LAYER_WIDTH * LAYER_HEIGHT);
+  layer->dirty = true;
 }
 
 void clearLPanel()
 {
   memset(lpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
+  lpanel->dirty = true;
 }
 
 void clearRPanel()
 {
   memset(rpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
+  rpanel->dirty = true;
 }
 
 void smokeScreen()
 {
-  int i;
-  smokeFallback = 0;
-  memcpy(pbuf, l2buf, lyrSize);
-
-  if (smokeBuf == nullptr)
-  {
-    for (i = lyrSize - 1; i >= 0; i--)
-    {
-      l1buf[i] = colorDfs[l1buf[i]];
-      l2buf[i] = colorDfs[pbuf[i]];
-    }
-    return;
-  }
-
-  for (i = lyrSize - 1; i >= 0; i--)
+  // Fast path: direct decay on both layers.
+  // Avoids smokeBuf pointer indirection and per-frame memcpy, which is too slow on Saturn.
+  for (int i = lyrSize - 1; i >= 0; i--)
   {
     l1buf[i] = colorDfs[l1buf[i]];
-    l2buf[i] = colorDfs[*(smokeBuf[i])];
+    l2buf[i] = colorDfs[l2buf[i]];
   }
 }
 

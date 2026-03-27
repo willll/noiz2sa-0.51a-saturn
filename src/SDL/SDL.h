@@ -50,12 +50,13 @@ struct SRL_Surface {
     int32_t textureIndex;
     int w, h;
     const void* pixels;
+    bool dirty;
     
     // Constructor for proper initialization
-    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr) {}
+    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr), dirty(true) {}
     
     // Constructor with dimensions
-    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr) {}
+    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr), dirty(true) {}
 };
 
 // SDL Event type - needs 'type' field for the main event loop
@@ -86,6 +87,15 @@ static volatile uint32_t sdl_previouscount = 0;
 static volatile uint16_t sdl_previousmillis = 0;
 static volatile int sdl_initialized = 0;
 static volatile int16_t sdl_blitPaletteBank = 0;
+static int16_t sdl_blitPaletteCacheBank = INT16_MIN;
+static uint16_t sdl_blitPalette555[256] = { 0 };
+static uint32_t sdl_blitCalls = 0;
+static uint32_t sdl_blitUploads = 0;
+static uint32_t sdl_blitUploadPixels = 0;
+static uint32_t sdl_blitUploadMs = 0;
+static uint32_t sdl_blitDrawMs = 0;
+
+static inline uint32_t SDL_GetTicks(void);
 
 static inline void SDL_CopyBytes(void* dst, const void* src, uint32_t byteCount)
 {
@@ -118,6 +128,55 @@ static inline const char* SDL_GetError(void) { return "SDL stub"; }
 static inline void SDL_SetBlitPaletteBank(int16_t paletteBank)
 {
     sdl_blitPaletteBank = paletteBank;
+    sdl_blitPaletteCacheBank = INT16_MIN;
+}
+
+static inline void SDL_ResetBlitStats()
+{
+    sdl_blitCalls = 0;
+    sdl_blitUploads = 0;
+    sdl_blitUploadPixels = 0;
+    sdl_blitUploadMs = 0;
+    sdl_blitDrawMs = 0;
+}
+
+static inline void SDL_GetBlitStats(
+    uint32_t* calls,
+    uint32_t* uploads,
+    uint32_t* uploadPixels,
+    uint32_t* uploadMs,
+    uint32_t* drawMs)
+{
+    if (calls != nullptr) *calls = sdl_blitCalls;
+    if (uploads != nullptr) *uploads = sdl_blitUploads;
+    if (uploadPixels != nullptr) *uploadPixels = sdl_blitUploadPixels;
+    if (uploadMs != nullptr) *uploadMs = sdl_blitUploadMs;
+    if (drawMs != nullptr) *drawMs = sdl_blitDrawMs;
+}
+
+static inline bool SDL_RefreshBlitPaletteCache()
+{
+    if (sdl_blitPaletteCacheBank == sdl_blitPaletteBank)
+    {
+        return true;
+    }
+
+    SRL::CRAM::Palette blitPalette(
+        SRL::CRAM::TextureColorMode::Paletted256,
+        (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
+    SRL::Types::HighColor* paletteData = blitPalette.GetData();
+    if (paletteData == nullptr)
+    {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < 256; i++)
+    {
+        sdl_blitPalette555[i] = (uint16_t)paletteData[i];
+    }
+
+    sdl_blitPaletteCacheBank = sdl_blitPaletteBank;
+    return true;
 }
 
 static inline int SDL_SetColors(SRL_Surface* surface, SRL::Types::HighColor* colors, int firstcolor, int ncolors) {
@@ -128,6 +187,8 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
     if (src == nullptr || dst == nullptr) {
         return -1;
     }
+
+    sdl_blitCalls++;
 
     // Create a dynamic texture for software surfaces on first use.
     if (src->textureIndex < 0) {
@@ -150,23 +211,29 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
 
     // Upload source pixels if this is a software-backed surface.
     // Expand indexed 8-bit pixels to RGB555 explicitly to avoid paletted VDP1 artifacts.
-    if (src->pixels != nullptr) {
+    if (src->pixels != nullptr && src->dirty) {
+        const uint32_t uploadStart = SDL_GetTicks();
+
+        if (!SDL_RefreshBlitPaletteCache()) {
+            return -1;
+        }
+
         const uint32_t pixelCount = (uint32_t)(src->w * src->h);
         const uint8_t* src8 = (const uint8_t*)src->pixels;
         uint16_t* dst16 = (uint16_t*)SRL::VDP1::Textures[src->textureIndex].GetData();
 
-        SRL::CRAM::Palette blitPalette(
-            SRL::CRAM::TextureColorMode::Paletted256,
-            (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
-        SRL::Types::HighColor* paletteData = blitPalette.GetData();
-
-        if (src8 == nullptr || dst16 == nullptr || paletteData == nullptr) {
+        if (src8 == nullptr || dst16 == nullptr) {
             return -1;
         }
 
         for (uint32_t i = 0; i < pixelCount; i++) {
-            dst16[i] = (uint16_t)paletteData[src8[i]];
+            dst16[i] = sdl_blitPalette555[src8[i]];
         }
+
+        src->dirty = false;
+        sdl_blitUploads++;
+        sdl_blitUploadPixels += pixelCount;
+        sdl_blitUploadMs += (SDL_GetTicks() - uploadStart);
     }
 
     SDL_Rect resolvedRect;
@@ -194,13 +261,16 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
         SRL::Math::Types::Fxp::Convert(sceneY),
         500.0);
 
-    return SRL::Scene2D::DrawSprite(
+    const uint32_t drawStart = SDL_GetTicks();
+    const int result = SRL::Scene2D::DrawSprite(
                (uint16_t)src->textureIndex,
                nullptr,
                pos,
                SRL::Math::Types::Angle::Zero(),
                SRL::Math::Types::Vector2D(1.0, 1.0),
                SRL::Scene2D::ZoomPoint::UpperLeft) ? 0 : -1;
+    sdl_blitDrawMs += (SDL_GetTicks() - drawStart);
+    return result;
 }
 
 static inline int SDL_FillRect(SRL_Surface* dst, SDL_Rect* dstrect, uint32_t color) {

@@ -497,6 +497,19 @@ int main()
 
   while (!done)
   {
+    static int perfProbe = 0;
+    const bool doProbe = perfProbe < 3;
+
+    if ((tick % 5) == 0)
+    {
+      SRL::Logger::LogInfo("[PERF][HEARTBEAT] tick=%d status=%d", tick, status);
+    }
+
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] loop-start probe=%d tick=%d", perfProbe, tick);
+    }
+
     // Handle pause/unpause input
     if (gamepad && gamepad->IsConnected() && gamepad->WasPressed(SRL::Input::Digital::Button::START))
     {
@@ -548,19 +561,83 @@ int main()
       prvTickCount += frame * interval;
     }
     
+    const uint32_t perfStart = SDL_GetTicks();
+
     // Process game logic for calculated frames
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] before-move probe=%d frameStep=%d", perfProbe, frame);
+    }
     for (i = 0; i < frame; i++)
     {
       move();
       tick++;
     }
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] after-move probe=%d tick=%d", perfProbe, tick);
+    }
+    const uint32_t perfAfterMove = SDL_GetTicks();
     
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] before-smoke probe=%d", perfProbe);
+    }
     smokeScreen();
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] after-smoke probe=%d", perfProbe);
+    }
+    const uint32_t perfAfterSmoke = SDL_GetTicks();
+
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] before-draw probe=%d", perfProbe);
+    }
     draw();
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] after-draw probe=%d", perfProbe);
+    }
+    const uint32_t perfAfterDraw = SDL_GetTicks();
+
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] before-flip probe=%d", perfProbe);
+    }
     flipScreen();
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] after-flip probe=%d", perfProbe);
+    }
+    const uint32_t perfAfterFlip = SDL_GetTicks();
     
     // Refresh screen
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] before-sync probe=%d", perfProbe);
+    }
     SRL::Core::Synchronize();
+    if (doProbe)
+    {
+      SRL::Logger::LogInfo("[PERF][PROBE] after-sync probe=%d", perfProbe);
+      perfProbe++;
+    }
+    const uint32_t perfAfterSync = SDL_GetTicks();
+
+    if (tick <= 20 || (tick % 10) == 0)
+    {
+      SRL::Logger::LogInfo(
+          "[PERF][FRAME] tick=%d logic=%lums smoke=%lums draw=%lums flip=%lums sync=%lums total=%lums frameStep=%d",
+          tick,
+          (unsigned long)(perfAfterMove - perfStart),
+          (unsigned long)(perfAfterSmoke - perfAfterMove),
+          (unsigned long)(perfAfterDraw - perfAfterSmoke),
+          (unsigned long)(perfAfterFlip - perfAfterDraw),
+          (unsigned long)(perfAfterSync - perfAfterFlip),
+          (unsigned long)(perfAfterSync - perfStart),
+          frame);
+    }
 
     // Periodic logging for frame rate monitoring
     if ((tick % 300) == 0)  // Every ~5 seconds at 60Hz
