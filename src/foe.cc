@@ -40,14 +40,6 @@ static unsigned long bulletSpawnedNormal = 0;
 static unsigned long bulletSpawnFailed = 0;
 static unsigned long bulletRemovedOffscreen = 0;
 static unsigned long bulletRemovedHitShip = 0;
-static int moveFoesLogCounter = 0;
-static int drawBulletsLogCounter = 0;
-static int debugActiveBulletNum = 0;
-static int debugNormalBulletNum = 0;
-static int debugBossActiveBulletNum = 0;
-static int debugDrawnBulletNum = 0;
-static unsigned long debugCmdRunCount = 0;
-static unsigned long debugFoeCmdRunCount = 0;
 
 static void removeFoeForcedNoDeleteCmd(Foe *fe)
 {
@@ -93,14 +85,6 @@ void initFoes()
   bulletSpawnFailed = 0;
   bulletRemovedOffscreen = 0;
   bulletRemovedHitShip = 0;
-  moveFoesLogCounter = 0;
-  drawBulletsLogCounter = 0;
-  debugActiveBulletNum = 0;
-  debugNormalBulletNum = 0;
-  debugBossActiveBulletNum = 0;
-  debugDrawnBulletNum = 0;
-  debugCmdRunCount = 0;
-  debugFoeCmdRunCount = 0;
 }
 
 void closeFoes()
@@ -273,11 +257,6 @@ void moveFoes()
     fe = &(foe[i]);
     if (fe->cmd)
     {
-      debugCmdRunCount++;
-      if (fe->spc == FOE)
-      {
-        debugFoeCmdRunCount++;
-      }
       if (fe->type == BOSS_TYPE)
       {
         if (fe->cmd->isEnd())
@@ -418,25 +397,7 @@ void moveFoes()
       interval = INTERVAL_BASE * 2;
   }
 
-  debugActiveBulletNum = activeBulletNum;
-  debugNormalBulletNum = normalBulletNum;
-  debugBossActiveBulletNum = bossActiveBulletNum;
 
-  moveFoesLogCounter++;
-  if ((moveFoesLogCounter % 180) == 0)
-  {
-    SRL::Logger::LogWarning(
-        "[BULLETDBG] t=%d s=%d foe=%d cmd=%lu fcmd=%lu sa=%lu sn=%lu da=%d dn=%d",
-        tick,
-        status,
-        foeCnt,
-        debugCmdRunCount,
-        debugFoeCmdRunCount,
-        bulletSpawnedActive,
-        bulletSpawnedNormal,
-        activeBulletNum,
-        normalBulletNum);
-  }
 }
 
 void clearFoes()
@@ -612,17 +573,6 @@ void drawBullets()
     y = ((fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8) - (BULLET_WIDTH / 2);
     drawBox3x3(x, y, bulletColor[bc][0], bulletColor[bc][1], buf);
     drawnBulletNum++;
-  }
-
-  drawBulletsLogCounter++;
-  debugDrawnBulletNum = drawnBulletNum;
-  if ((drawBulletsLogCounter % 180) == 0)
-  {
-    SRL::Logger::LogWarning(
-        "[BULLETDRAW] tick=%d status=%d drawn=%d",
-        tick,
-        status,
-        drawnBulletNum);
   }
 }
 

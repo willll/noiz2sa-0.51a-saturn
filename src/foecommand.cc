@@ -20,37 +20,16 @@
 #define COMMAND_SCREEN_SPD_RATE (insanespeed ? 800 : (800 / 2))
 #define COMMAND_SCREEN_VEL_RATE (insanespeed ? 800 : (800 / 2))
 
-static unsigned long gCommandCreatedFromParser = 0;
-static unsigned long gCommandCreatedFromState = 0;
-static unsigned long gCreateSimpleBulletCalls = 0;
-static unsigned long gCreateActiveBulletCalls = 0;
+
 
 FoeCommand::FoeCommand(BulletMLParserBLB *parser, Foe *f)
   : BulletMLRunner(parser) {
   foe = f;
-  gCommandCreatedFromParser++;
-  if (gCommandCreatedFromParser <= 5 || (gCommandCreatedFromParser % 30) == 0)
-  {
-    SRL::Logger::LogWarning("[CMDDBG] parser_cmd=%lu state_cmd=%lu simple=%lu active=%lu",
-                            gCommandCreatedFromParser,
-                            gCommandCreatedFromState,
-                            gCreateSimpleBulletCalls,
-                            gCreateActiveBulletCalls);
-  }
 }
 
 FoeCommand::FoeCommand(BulletMLState *state, Foe *f)
   : BulletMLRunner(state) {
   foe = f;
-  gCommandCreatedFromState++;
-  if (gCommandCreatedFromState <= 5 || (gCommandCreatedFromState % 30) == 0)
-  {
-    SRL::Logger::LogWarning("[CMDDBG] parser_cmd=%lu state_cmd=%lu simple=%lu active=%lu",
-                            gCommandCreatedFromParser,
-                            gCommandCreatedFromState,
-                            gCreateSimpleBulletCalls,
-                            gCreateActiveBulletCalls);
-  }
 }
 
 FoeCommand::~FoeCommand() {}
@@ -77,30 +56,12 @@ double FoeCommand::getRank() {
 
 void FoeCommand::createSimpleBullet(double direction, double speed) {
   int d = (int)(direction*DIV/360); d &= (DIV-1);
-  gCreateSimpleBulletCalls++;
-  if (gCreateSimpleBulletCalls <= 5 || (gCreateSimpleBulletCalls % 30) == 0)
-  {
-    SRL::Logger::LogWarning("[CMDDBG] parser_cmd=%lu state_cmd=%lu simple=%lu active=%lu",
-                            gCommandCreatedFromParser,
-                            gCommandCreatedFromState,
-                            gCreateSimpleBulletCalls,
-                            gCreateActiveBulletCalls);
-  }
   addFoeNormalBullet(&(foe->pos), foe->rank, 
 		     d, (int)(speed*COMMAND_SCREEN_SPD_RATE), foe->color+1);
 }
 
 void FoeCommand::createBullet(BulletMLState* state, double direction, double speed) {
   int d = (int)(direction*DIV/360); d &= (DIV-1);
-  gCreateActiveBulletCalls++;
-  if (gCreateActiveBulletCalls <= 5 || (gCreateActiveBulletCalls % 30) == 0)
-  {
-    SRL::Logger::LogWarning("[CMDDBG] parser_cmd=%lu state_cmd=%lu simple=%lu active=%lu",
-                            gCommandCreatedFromParser,
-                            gCommandCreatedFromState,
-                            gCreateSimpleBulletCalls,
-                            gCreateActiveBulletCalls);
-  }
   addFoeActiveBullet(&(foe->pos), foe->rank, 
 		     d, (int)(speed*COMMAND_SCREEN_SPD_RATE), foe->color+1, state);
 }
