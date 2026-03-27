@@ -46,6 +46,12 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   const char * listPath = "LIST.TXT";
   char line[32];
 
+  // On-screen debug: show BLB loading start
+  char onscreenMsg[64];
+  snprintf(onscreenMsg, sizeof(onscreenMsg), "BLB LOAD: %s...", dirPath);
+  SRL::Debug::Print(1, 8, onscreenMsg);
+  SRL::Core::Synchronize();
+
   SRL::Logger::LogDebug("[BARRAGE] Reading BulletML files from directory: %s", dirPath);
 
   // Change to the specified directory on CD
@@ -89,36 +95,26 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   
   while (bytesRead < bufferSize && i < BARRAGE_PATTERN_MAX) {
     int lineLen = 0;
-    
     // Extract one line (ensure we stay within buffer bounds)
     while (bytesRead < bufferSize && buffer[bytesRead] != '\n' && buffer[bytesRead] != '\r' && lineLen < 31) {
-      // Additional safety: check for valid printable characters or stop at garbage data
       if (buffer[bytesRead] < 0x20 || buffer[bytesRead] > 0x7E) {
         SRL::Logger::LogTrace("[BARRAGE] Encountered non-printable character 0x%02X at offset %d, stopping line extraction", buffer[bytesRead], bytesRead);
-        bytesRead++; // Consume byte to avoid getting stuck on same offset
+        bytesRead++;
         break;
       }
       line[lineLen++] = buffer[bytesRead++];
     }
     line[lineLen] = '\0';
-    
-    // Skip newline characters
     while (bytesRead < bufferSize && (buffer[bytesRead] == '\n' || buffer[bytesRead] == '\r')) {
       bytesRead++;
     }
-    
-    // Trim trailing whitespace
     while (lineLen > 0 && (line[lineLen-1] == ' ' || line[lineLen-1] == '\t')) {
       lineLen--;
       line[lineLen] = '\0';
     }
-    
-    // Skip empty lines or lines with only whitespace
     if (lineLen == 0) {
       continue;
     }
-    
-    // Skip lines that don't look like filenames (must contain at least one alphanumeric character)
     bool hasContent = false;
     for (int j = 0; j < lineLen; j++) {
       if ((line[j] >= 'A' && line[j] <= 'Z') || (line[j] >= 'a' && line[j] <= 'z') || (line[j] >= '0' && line[j] <= '9')) {
@@ -130,9 +126,13 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
       SRL::Logger::LogTrace("[BARRAGE] Skipping invalid line from LIST (no alphanumeric characters)");
       continue;
     }
-    
-    SRL::Logger::LogTrace("[BARRAGE] Processing file from LIST: %s", line);
     listEntries++;
+
+    // On-screen trace: show which BLB is being loaded
+    char onscreenTrace[64];
+    snprintf(onscreenTrace, sizeof(onscreenTrace), "BLB %s %d: %s", dirPath, listEntries, line);
+    SRL::Debug::Print(1, 10, onscreenTrace);
+    SRL::Core::Synchronize();
 
     int phaseBase = 35;
     int phaseSpan = 60;
@@ -149,22 +149,29 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     char step[64];
     snprintf(step, sizeof(step), "Loading %s %d/%d", dirPath, listEntries, BARRAGE_PATTERN_MAX);
     updateLoadingProgress(step, phaseBase + (listEntries * phaseSpan) / BARRAGE_PATTERN_MAX);
-    
-    // Load the file directly by name (we're already in the correct directory)
+
+    // Log and show start of BLB load
     SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-start: %s", dirPath, listEntries, line);
     SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s/%s", dirPath, line);
+
     brg[i].bulletml = new BulletMLParserBLB(line);
     if (!brg[i].bulletml->build()) {
       parseFailures++;
+      // On-screen trace: show failure
+      snprintf(onscreenTrace, sizeof(onscreenTrace), "BLB FAIL %s %d", dirPath, listEntries);
+      SRL::Debug::Print(1, 11, onscreenTrace);
+      SRL::Core::Synchronize();
       SRL::Logger::LogFatal("[BLB-TRACE] [%s] #%d build-failed: %s", dirPath, listEntries, line);
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
       delete brg[i].bulletml;
       brg[i].bulletml = nullptr;
-      //continue;
-      SRL::System::Exit(1);
+      continue;
     } else {
+      // On-screen trace: show success
+      snprintf(onscreenTrace, sizeof(onscreenTrace), "BLB OK %s %d", dirPath, listEntries);
+      SRL::Debug::Print(1, 11, onscreenTrace);
+      SRL::Core::Synchronize();
       SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-ok: %s", dirPath, listEntries, line);
-      //SRL::Logger::LogDebug("[BARRAGE] Successfully loaded BulletML file: %s/%s", dirPath, line);
     }
     i++;
   }
@@ -175,6 +182,17 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   
   SRL::Logger::LogInfo("[BLB-TRACE] End directory scan: %s (list_entries=%d, loaded=%d, failures=%d)",
                        dirPath, listEntries, i, parseFailures);
+  // On-screen debug: show BLB loading end/result
+  snprintf(onscreenMsg, sizeof(onscreenMsg), "BLB DONE: %s %d/%d", dirPath, i, listEntries);
+  SRL::Debug::Print(1, 9, onscreenMsg);
+  SRL::Core::Synchronize();
+  if (i <= 0) {
+    SRL::Logger::LogFatal("[BARRAGE] No valid BLB patterns loaded from %s; aborting startup", dirPath);
+    SRL::System::Exit(1);
+  }
+  if (parseFailures > 0) {
+    SRL::Logger::LogWarning("[BARRAGE] %s loaded with %d parse failures (%d valid patterns)", dirPath, parseFailures, i);
+  }
   //SRL::Logger::LogDebug("[BARRAGE] Successfully loaded %d BulletML patterns from %s", i, dirPath);
   return i;
 }

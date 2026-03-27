@@ -104,7 +104,6 @@ void initSound() {
 #endif
 
   useAudio = 1;
-  SRL::Sound::Cdda::SetVolume(7, 7);
   loadSounds();
 #endif
 }
