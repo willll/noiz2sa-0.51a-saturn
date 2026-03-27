@@ -24,9 +24,9 @@ typedef SRL::Math::Random<unsigned int> RandomGenerator;
 extern RandomGenerator* g_random;
 
 // Random number generation macros
-#define randN(N) (g_random->GetNumber(0, (N)-1))
-#define randNS(N) (g_random->GetNumber(-(N), (N)-1))
-#define randNS2(N) ((g_random->GetNumber(0, (N)-1) - ((N)>>1)) + (g_random->GetNumber(0, (N)-1) - ((N)>>1)))
+#define randN(N) (((N) > 0) ? (int)g_random->GetNumber(0u, (unsigned int)((N) - 1)) : 0)
+#define randNS(N) (((N) > 0) ? ((int)g_random->GetNumber(0u, (unsigned int)((N) * 2 - 1)) - (N)) : 0)
+#define randNS2(N) ((randNS((N)) + randNS((N))))
 #define absN(a) ((a) < 0 ? - (a) : (a))
 
 #define INTERVAL_BASE 16

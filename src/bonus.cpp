@@ -161,8 +161,8 @@ void drawBonuses()
     d = (bn->cnt * 8) & (DIV - 1);
     x = (bn->pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
     y = (bn->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
-    ox = sctbl[d] >> 5 / SCREEN_DIVISOR;
-    oy = sctbl[d + DIV / 4] >> 5 / SCREEN_DIVISOR;
+    ox = (sctbl[d] >> 5) / SCREEN_DIVISOR;
+    oy = (sctbl[d + DIV / 4] >> 5) / SCREEN_DIVISOR;
     drawBox(x + ox, y + oy, BONUS_DRAW_WIDTH, BONUS_DRAW_WIDTH,
             BONUS_COLOR_1, BONUS_COLOR_2, l1buf);
     drawBox(x - ox, y - oy, BONUS_DRAW_WIDTH, BONUS_DRAW_WIDTH,
