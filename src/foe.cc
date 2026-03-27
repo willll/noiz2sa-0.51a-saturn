@@ -294,25 +294,43 @@ void moveFoes()
 
     if (fe->spc == FOE)
     {
+      const int foeType = fe->type;
+      if (foeType < 0 || foeType >= FOE_TYPE_MAX)
+      {
+        removeFoeForced(fe);
+        continue;
+      }
+      if (fe->shield <= 0)
+      {
+        removeFoeForced(fe);
+        continue;
+      }
+
       fe->hit = 0;
+      bool foeRemovedByShot = false;
       // Check if the shot hits the foe.
       for (j = 0; j < SHOT_MAX; j++)
       {
+        if (fe->spc != FOE)
+        {
+          break;
+        }
         if (shot[j].cnt != NOT_EXIST)
         {
-          if (absN(fe->pos.x - shot[j].pos.x) < foeScanSize[fe->type] &&
-              absN(fe->pos.y - shot[j].pos.y) < foeScanSize[fe->type] + SHOT_SCAN_HEIGHT)
+          if (absN(fe->pos.x - shot[j].pos.x) < foeScanSize[foeType] &&
+              absN(fe->pos.y - shot[j].pos.y) < foeScanSize[foeType] + SHOT_SCAN_HEIGHT)
           {
+            Vector shotPos = shot[j].pos;
             shot[j].cnt = NOT_EXIST;
             fe->shield--;
             fe->hit = 1;
-            addShotFrag(&shot[j].pos);
+            addShotFrag(&shotPos);
             if (fe->shield <= 0)
             {
-              addScore(enemyScore[fe->type]);
-              wipeBullets(&(fe->pos), BULLET_WIPE_WIDTH * (fe->type + 1));
-              addEnemyFrag(&(fe->pos), mx, my, fe->type);
-              if (fe->type == BOSS_TYPE)
+              addScore(enemyScore[foeType]);
+              wipeBullets(&(fe->pos), BULLET_WIPE_WIDTH * (foeType + 1));
+              addEnemyFrag(&(fe->pos), mx, my, foeType);
+              if (foeType == BOSS_TYPE)
               {
                 bossDestroied();
                 playChunk(3);
@@ -320,13 +338,19 @@ void moveFoes()
               else
               {
                 playChunk(2);
+                removeFoeForced(fe);
               }
-              removeFoeForced(fe);
-              continue;
+              foeRemovedByShot = true;
+              break;
             }
             playChunk(1);
           }
         }
+      }
+
+      if (foeRemovedByShot)
+      {
+        continue;
       }
 
       // Fallback enemy fire path: if BLB command callbacks do not emit bullets,
@@ -334,8 +358,8 @@ void moveFoes()
       if (fe->shield > 0 && (fe->cnt % 48) == 0)
       {
         const int fireDir = getPlayerDeg(fe->pos.x, fe->pos.y);
-        const int fireSpd = 320 + (fe->type * 80);
-        addFoeNormalBullet(&(fe->pos), fe->rank, fireDir, fireSpd, fe->type + 1);
+        const int fireSpd = 320 + (foeType * 80);
+        addFoeNormalBullet(&(fe->pos), fe->rank, fireDir, fireSpd, foeType + 1);
       }
     }
     else

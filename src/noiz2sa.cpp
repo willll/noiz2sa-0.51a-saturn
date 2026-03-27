@@ -285,8 +285,6 @@ static void move()
   case TITLE:
     moveTitleMenu();
     moveBackground();
-    addBullets();
-    moveFoes();
     break;
   case IN_GAME:
     moveBackground();
@@ -349,12 +347,8 @@ static void draw()
   case TITLE:
     // Draw background.
     drawBackground();
-    drawFoes();
-    drawBulletsWake();
     blendScreen();
     // Draw forground.
-    drawBullets();
-    drawBulletDebugOverlay();
     drawScore();
     drawTitleMenu();
     break;
@@ -441,7 +435,7 @@ static void initGameConfig()
 int interval = INTERVAL_BASE;
 int tick = 0;
 static int pPrsd = 1;
-static const uint32_t kInGameRenderDivisor = 2;
+static const uint32_t kInGameRenderDivisor = 1;
 static const uint32_t kUiRenderDivisor = 1;
 static uint32_t gInGameRenderCounter = 0;
 static uint32_t gStalledTickFrames = 0;

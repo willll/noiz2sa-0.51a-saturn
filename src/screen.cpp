@@ -17,7 +17,6 @@
 #include <srl_string.hpp> // for string and memory functions
 #include <srl_system.hpp> // for exit
 #include <srl_bitmap.hpp> // for TGA loading
-#include <srl_vdp2.hpp>   // for VDP2 NBG1 bitmap layer
 #include "SDL.h"
 
 #include "noiz2sa.h"
@@ -51,11 +50,6 @@ Canvas::Pixel *rpbuf = nullptr;
 static Canvas::Pixel smokeFallback = 0;
 static SDL_Rect layerRect, layerClearRect;
 static SDL_Rect lpanelRect, rpanelRect, panelClearRect;
-
-// VDP2 NBG1 bitmap layer – main game layer displayed via VDP2 instead of VDP1
-// This eliminates the 38,400-pixel/frame VDP1 fill cost and uncached VRAM upload.
-static void*    gNbg1VramAddr  = nullptr;
-static int32_t  gMainPaletteBank = -1;
 
 // Handle TGA images in ISO 8:3 format
 #define SPRITE_NUM 7
@@ -376,39 +370,12 @@ void initSDL()
   panelClearRect.h = PANEL_HEIGHT;
 
   const int32_t mainPaletteBank = Palette::initPalette();
-  gMainPaletteBank = mainPaletteBank;
   SDL_SetBlitPaletteBank((int16_t)mainPaletteBank);
   makeSmokeBuf();
   clearLPanel();
   clearRPanel();
 
   loadSprites();
-
-  // Set up VDP2 NBG1 as a bitmap display layer for the main game layer.
-  // This moves the 160x240 framebuffer blit off VDP1 entirely, saving
-  // ~38,400 pixels/frame of VDP1 fill budget and eliminating the uncached
-  // VDP1 VRAM texture upload that caused VDP1 bus contention.
-  {
-    SRL::Bitmap::BitmapInfo nbg1Info(LAYER_WIDTH, LAYER_HEIGHT);
-    nbg1Info.ColorMode = SRL::CRAM::TextureColorMode::Paletted256;
-    int nbg1VramSize = 0;
-    gNbg1VramAddr = SRL::VDP2::VRAM::AutoAllocateBmp(nbg1Info, scnNBG1, &nbg1VramSize);
-    if (gNbg1VramAddr != nullptr)
-    {
-      SRL::VDP2::VRAM::Blank(gNbg1VramAddr, nbg1VramSize);
-      SRL::VDP2::NBG1::SetCellAddress(gNbg1VramAddr, nbg1VramSize);
-      SRL::VDP2::NBG1::TilePalette = SRL::CRAM::Palette(
-          SRL::CRAM::TextureColorMode::Paletted256,
-          (uint16_t)mainPaletteBank);
-      SRL::VDP2::NBG1::Init(nbg1Info);
-      SRL::VDP2::NBG1::ScrollEnable();
-      SRL::Logger::LogInfo("[SCREEN] VDP2 NBG1 bitmap layer initialized at %p (%d bytes)", gNbg1VramAddr, nbg1VramSize);
-    }
-    else
-    {
-      SRL::Logger::LogWarning("[SCREEN] VDP2 NBG1 allocation failed, falling back to VDP1 layer blit");
-    }
-  }
   // if (joystickMode == 1) {
   // stick = SDL_JoystickOpen(0);
   // SDL_GameControllerAddMappingsFromFile(SHARE_LOC "gamecontrollerdb.txt", 1);
@@ -431,31 +398,11 @@ void flipScreen()
 {
   static uint32_t flipCounter = 0;
 
+  // Main layer is rebuilt every frame.
+  layer->dirty = true;
+
   uint32_t blitStartUs = SDL_GetProfileMicros();
-
-  // Main layer: copy 8-bit palette-indexed buf directly to VDP2 NBG1 VRAM.
-  // VDP2 displays it for free (no VDP1 rasterization cost).
-  // Each VDP2 bitmap line is 512 bytes wide; our content starts at x=layerRect.x.
-  if (gNbg1VramAddr != nullptr && layer->pixels != nullptr)
-  {
-    const uint8_t* src    = (const uint8_t*)layer->pixels;
-    uint8_t*       dstBase = (uint8_t*)gNbg1VramAddr + (int)layerRect.x;
-    const int      words  = LAYER_WIDTH / 4;  // 32-bit transfers per line
-    for (int y = 0; y < LAYER_HEIGHT; y++)
-    {
-      const uint32_t* s = (const uint32_t*)(src    + y * LAYER_WIDTH);
-            uint32_t* d = (uint32_t*)      (dstBase + y * 512);
-      for (int x = 0; x < words; x++)
-        d[x] = s[x];
-    }
-  }
-  else
-  {
-    // Fallback: VDP1 sprite blit (slow path, used if VDP2 init failed)
-    layer->dirty = true;
-    SDL_BlitSurface(layer, nullptr, video, &layerRect);
-  }
-
+  SDL_BlitSurface(layer, nullptr, video, &layerRect);
   uint32_t timeLayerUs = SDL_GetProfileMicros() - blitStartUs;
   
   blitStartUs = SDL_GetProfileMicros();
