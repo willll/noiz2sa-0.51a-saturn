@@ -407,7 +407,7 @@ void flipScreen()
   SDL_Flip(video);
 
   flipCounter++;
-  if (flipCounter <= 20u || (flipCounter % 10u) == 0u)
+  if ((flipCounter % 300u) == 0u)
   {
     uint32_t calls = 0;
     uint32_t uploads = 0;
@@ -415,7 +415,7 @@ void flipScreen()
     uint32_t uploadMs = 0;
     uint32_t drawMs = 0;
     SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadMs, &drawMs);
-    SRL::Logger::LogInfo(
+    SRL::Logger::LogDebug(
         "[PERF][BLIT] frame=%lu calls=%lu uploads=%lu pixels=%lu up_ms=%lu draw_ms=%lu",
         (unsigned long)flipCounter,
         (unsigned long)calls,
