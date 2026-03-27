@@ -419,7 +419,11 @@ static int accframe = 0;
 static void initGameConfig()
 {
   // Sound: enabled by default (Saturn has good audio capabilities)
+#if NOIZ2SA_ENABLE_SOUND
+  noSound = 0;
+#else
   noSound = 1;
+#endif
 
   // Input: standard button configuration
   buttonReversed = 0;
