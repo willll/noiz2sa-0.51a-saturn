@@ -135,13 +135,13 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
             return -1;
         }
 
-        const SRL::CRAM::TextureColorMode blitMode = SRL::CRAM::TextureColorMode::Paletted256;
+        const SRL::CRAM::TextureColorMode blitMode = SRL::CRAM::TextureColorMode::RGB555;
 
         src->textureIndex = SRL::VDP1::TryAllocateTexture(
             (uint16_t)src->w,
             (uint16_t)src->h,
             blitMode,
-            (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
+            0);
 
         if (src->textureIndex < 0) {
             return -1;
@@ -149,9 +149,24 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
     }
 
     // Upload source pixels if this is a software-backed surface.
+    // Expand indexed 8-bit pixels to RGB555 explicitly to avoid paletted VDP1 artifacts.
     if (src->pixels != nullptr) {
-        const uint32_t dataSize = (uint32_t)(src->w * src->h);
-        SDL_CopyBytes(SRL::VDP1::Textures[src->textureIndex].GetData(), src->pixels, dataSize);
+        const uint32_t pixelCount = (uint32_t)(src->w * src->h);
+        const uint8_t* src8 = (const uint8_t*)src->pixels;
+        uint16_t* dst16 = (uint16_t*)SRL::VDP1::Textures[src->textureIndex].GetData();
+
+        SRL::CRAM::Palette blitPalette(
+            SRL::CRAM::TextureColorMode::Paletted256,
+            (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
+        SRL::Types::HighColor* paletteData = blitPalette.GetData();
+
+        if (src8 == nullptr || dst16 == nullptr || paletteData == nullptr) {
+            return -1;
+        }
+
+        for (uint32_t i = 0; i < pixelCount; i++) {
+            dst16[i] = (uint16_t)paletteData[src8[i]];
+        }
     }
 
     SDL_Rect resolvedRect;
@@ -179,13 +194,9 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
         SRL::Math::Types::Fxp::Convert(sceneY),
         500.0);
 
-    SRL::CRAM::Palette blitPalette(
-        SRL::CRAM::TextureColorMode::Paletted256,
-        (uint16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank));
-
     return SRL::Scene2D::DrawSprite(
                (uint16_t)src->textureIndex,
-               &blitPalette,
+               nullptr,
                pos,
                SRL::Math::Types::Angle::Zero(),
                SRL::Math::Types::Vector2D(1.0, 1.0),

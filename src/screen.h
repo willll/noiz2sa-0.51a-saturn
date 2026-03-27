@@ -66,6 +66,8 @@ void drawThickLine(int x1, int y1, int x2, int y2, Canvas::Pixel color1, Canvas:
 void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Canvas::Pixel *buf);
 void drawBox(int x, int y, int width, int height,
 	     Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf);
+void drawBoxHardware(int x, int y, int width, int height,
+		     Canvas::Pixel color1, Canvas::Pixel color2);
 void drawBoxPanel(int x, int y, int width, int height,
 		  Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf);
 int drawNum(int n, int x ,int y, int s, int c1, int c2);

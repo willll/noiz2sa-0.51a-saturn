@@ -315,6 +315,9 @@ static void move()
 
 static void draw()
 {
+  memset(l1buf, 0, lyrSize);
+  memset(l2buf, 0, lyrSize);
+
   // Periodic debug logging to track rendering execution
   // Log every 180 frames (~3 seconds at 60Hz) to avoid spam
   static int draw_frame_counter = 0;

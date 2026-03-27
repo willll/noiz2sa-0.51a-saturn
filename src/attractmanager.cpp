@@ -451,7 +451,7 @@ void drawTitleMenu()
         drawNumCenter(hiScore.stageScore[i], 308 / SCREEN_DIVISOR, 112 / SCREEN_DIVISOR, 12, 16 * 1 - 14, 16 * 1 - 2);
       }
     }
-    drawBox(stageX[i], stageY[i], STG_BOX_SIZE, STG_BOX_SIZE, 16 * 1 - 14, 16 * 1 - 3, buf);
+    drawBoxHardware(stageX[i], stageY[i], STG_BOX_SIZE, STG_BOX_SIZE, 16 * 1 - 14, 16 * 1 - 3);
     if (i < 9)
     {
       drawNumCenter(i + 1, stageX[i], stageY[i], 12, 16 * 1 - 16, 16 * 1 - 1);
