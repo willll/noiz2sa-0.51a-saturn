@@ -89,9 +89,13 @@ set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=ha
 set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
 option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
 
+# Background color after loading
+set(NOIZ2SA_POST_LOAD_BG_COLOR "BLUE" CACHE STRING "Background color after loading completes")
+set_property(CACHE NOIZ2SA_POST_LOAD_BG_COLOR PROPERTY STRINGS BLUE WHITE BLACK)
+
 # SGL Work Area Settings
-set(SGL_MAX_VERTICES "2500" CACHE STRING "Maximum vertices")
-set(SGL_MAX_POLYGONS "1700" CACHE STRING "Maximum polygons")
+set(SGL_MAX_VERTICES "1800" CACHE STRING "Maximum vertices")
+set(SGL_MAX_POLYGONS "1200" CACHE STRING "Maximum polygons")
 set(SGL_MAX_EVENTS "64" CACHE STRING "Maximum events")
 set(SGL_MAX_WORKS "256" CACHE STRING "Maximum work units")
 
@@ -131,6 +135,7 @@ else()
 endif()
 
 # Memory
+set(SRL_MAX_TEXTURES "75" CACHE STRING "Maximum textures" FORCE)
 add_compile_definitions(SRL_MAX_TEXTURES=${SRL_MAX_TEXTURES})
 
 # Debug
@@ -150,6 +155,27 @@ add_compile_definitions(
     SRL_DEBUG_MAX_PRINT_LENGTH=${SRL_DEBUG_MAX_PRINT_LENGTH}
     SRL_DEBUG_MAX_LOG_LENGTH=${SRL_DEBUG_MAX_LOG_LENGTH}
 )
+
+# Gameplay colors
+if(NOIZ2SA_POST_LOAD_BG_COLOR STREQUAL "BLUE")
+    add_compile_definitions(
+        NOIZ2SA_POST_LOAD_BG_R=20
+        NOIZ2SA_POST_LOAD_BG_G=10
+        NOIZ2SA_POST_LOAD_BG_B=50
+    )
+elseif(NOIZ2SA_POST_LOAD_BG_COLOR STREQUAL "WHITE")
+    add_compile_definitions(
+        NOIZ2SA_POST_LOAD_BG_R=255
+        NOIZ2SA_POST_LOAD_BG_G=255
+        NOIZ2SA_POST_LOAD_BG_B=255
+    )
+elseif(NOIZ2SA_POST_LOAD_BG_COLOR STREQUAL "BLACK")
+    add_compile_definitions(
+        NOIZ2SA_POST_LOAD_BG_R=0
+        NOIZ2SA_POST_LOAD_BG_G=0
+        NOIZ2SA_POST_LOAD_BG_B=0
+    )
+endif()
 
 # Sound
 if(SRL_USE_SGL_SOUND_DRIVER)
@@ -192,7 +218,7 @@ set(c_flags
     -W
     -m2
     -c
-    -O2
+    -O3
     -Wno-strict-aliasing
     -std=c2x
 )
@@ -202,7 +228,7 @@ set(cxx_flags
     -W
     -m2
     -c
-    -O2
+    -O3
     -Wno-strict-aliasing
     -fpermissive
     -fno-exceptions
