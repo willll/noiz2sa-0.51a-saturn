@@ -43,9 +43,9 @@ typedef unsigned int size_t;
 // Maximum limits used for dynamic allocation and validation
 #define BULLETML_MAX_CHILDREN 32
 #define BULLETML_MAX_FILENAME 32
-#define BULLETML_MAX_STRINGS 1000
-#define BULLETML_MAX_STRING_TABLE_SIZE 65536
-#define BULLETML_MAX_NODES 2000
+#define BULLETML_MAX_STRINGS 128
+#define BULLETML_MAX_STRING_TABLE_SIZE 4096
+#define BULLETML_MAX_NODES 512
 #define BULLETML_MAX_REFS 500
 
 /// Minimal BulletMLNode definition - embedded for standalone use
@@ -251,15 +251,14 @@ public:
                     actionMap_(nullptr), actionMap_count_(0),
                     fireMap_(nullptr), fireMap_count_(0),
                     topActions_(nullptr), topActions_count_(0),
-                    name_(nullptr), filename_(nullptr), error_message_(nullptr),
+                    filename_(nullptr),
                     string_table_count_(0),
                     bullet_refs_count_(0),
                     action_refs_count_(0),
                     fire_refs_count_(0)
     {
         allocateMetadataBuffers();
-        setName(filename);
-        if (error_message_) error_message_[0] = '\0';
+        setFilename(filename);
         if (filename_) filename_[0] = '\0';
     }
     
@@ -278,15 +277,14 @@ public:
                     actionMap_(nullptr), actionMap_count_(0),
                     fireMap_(nullptr), fireMap_count_(0),
                     topActions_(nullptr), topActions_count_(0),
-                    name_(nullptr), filename_(nullptr), error_message_(nullptr),
+                    filename_(nullptr),
                     string_table_count_(0),
                     bullet_refs_count_(0),
                     action_refs_count_(0),
                     fire_refs_count_(0)
     {
         allocateMetadataBuffers();
-        setName("(memory)");
-        if (error_message_) error_message_[0] = '\0';
+        setFilename("(memory)");
         if (filename_) filename_[0] = '\0';
     }
 
@@ -305,23 +303,16 @@ public:
                     actionMap_(nullptr), actionMap_count_(0),
                     fireMap_(nullptr), fireMap_count_(0),
                     topActions_(nullptr), topActions_count_(0),
-                    name_(nullptr), filename_(nullptr), error_message_(nullptr),
+                    filename_(nullptr),
                     string_table_count_(0),
                     bullet_refs_count_(0),
                     action_refs_count_(0),
                     fire_refs_count_(0)
     {
+        SRL::Logger::LogInfo("[BLB-LOAD] BulletMLParserBLB: constructing for file '%s'", filename ? filename : "(null)");
         allocateMetadataBuffers();
-        setName(filename);
-        if (error_message_) error_message_[0] = '\0';
-
-        uint32_t i = 0;
-        if (filename_ && filename) {
-            for (; i < BULLETML_MAX_FILENAME - 1 && filename[i] != '\0'; ++i) {
-                filename_[i] = filename[i];
-            }
-        }
-        if (filename_) filename_[i] = '\0';
+        setFilename(filename);
+        SRL::Logger::LogInfo("[BLB-LOAD] BulletMLParserBLB: filename set to '%s'", filename_ ? filename_ : "(null)");
     }
     
     virtual ~BulletMLParserBLB() {
@@ -340,10 +331,6 @@ public:
             data_size_ = 0;
             flags_ &= ~0x01;  // clear owns_data_ bit
         }
-        delete[] error_message_;
-        error_message_ = nullptr;
-        delete[] name_;
-        name_ = nullptr;
         delete[] filename_;
         filename_ = nullptr;
     }
@@ -382,7 +369,7 @@ public:
     bool isHorizontal() const { return (flags_ & 0x02) != 0; }  // bit 1 = is_horizontal_
     
     /// Get parser name
-    const char* getName() const { return name_; }
+    const char* getName() const { return filename_; }
 
     /// Parse the binary file (called by build())
     /// Returns true on success, false on failure
@@ -397,14 +384,16 @@ public:
         freeParseScratch();
 
         if ((!data_ || data_size_ == 0) && filename_ && filename_[0] != '\0') {
+            SRL::Logger::LogInfo("[BLB-LOAD] Attempting to load BLB file: '%s'", filename_);
             if (!loadFromFile(filename_)) {
                 SRL::Logger::LogFatal("[BulletML] Failed to load file: %s", filename_);
                 return false;
             }
+            SRL::Logger::LogInfo("[BLB-LOAD] Successfully loaded BLB file: '%s'", filename_);
         }
 
         if (!data_ || data_size_ == 0) {
-            SRL::Logger::LogFatal("[BulletML] No data to parse for '%s'", name_ ? name_ : "(null)");
+            SRL::Logger::LogFatal("[BulletML] No data to parse for '%s'", filename_ ? filename_ : "(null)");
             return false;
         }
 
@@ -421,17 +410,22 @@ public:
         fire_refs_count_ = 0;
 
         if (!verifyHeader()) {
-            SRL::Logger::LogFatal("[BulletML] Header verification failed for '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] Header verification failed for '%s'", filename_);
+            if ((flags_ & 0x01) && data_) {
+                delete[] data_;
+                data_ = nullptr;
+                flags_ &= ~0x01;
+            }
             return false;
         }
 
         uint32_t string_count = 0;
         if (!peekStringCount(string_count)) {
-            SRL::Logger::LogFatal("[BulletML] Failed to read string table count for '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] Failed to read string table count for '%s'", filename_);
             return false;
         }
         if (!allocateStringTableStorage(string_count)) {
-            SRL::Logger::LogFatal("[BulletML] Failed to allocate string table storage for '%s'", name_ ? name_ : "(null)");
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate string table storage for '%s'", filename_ ? filename_ : "(null)");
             return false;
         }
 
@@ -439,19 +433,19 @@ public:
         uint32_t action_ref_count = 0;
         uint32_t fire_ref_count = 0;
         if (!peekReferenceCounts(bullet_ref_count, action_ref_count, fire_ref_count)) {
-            SRL::Logger::LogFatal("[BulletML] Failed to read reference counts for '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] Failed to read reference counts for '%s'", filename_ ? filename_ : "(null)");
             freeStringTableStorage();
             return false;
         }
         if (!allocateReferenceScratch(bullet_ref_count, action_ref_count, fire_ref_count)) {
-            SRL::Logger::LogFatal("[BulletML] Failed to allocate parse scratch for '%s'", name_ ? name_ : "(null)");
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate parse scratch for '%s'", filename_ ? filename_ : "(null)");
             freeStringTableStorage();
             return false;
         }
 
         uint32_t actual_node_count = countNodesInTree();
         if (actual_node_count == 0 || actual_node_count > BULLETML_MAX_NODES) {
-            SRL::Logger::LogFatal("[BulletML] Invalid node count %u for '%s'", actual_node_count, name_);
+            SRL::Logger::LogFatal("[BulletML] Invalid node count %u for '%s'", actual_node_count, filename_ ? filename_ : "(null)");
             freeStringTableStorage();
             freeParseScratch();
             return false;
@@ -466,14 +460,14 @@ public:
         }
 
         if (!loadStringTable()) {
-            SRL::Logger::LogFatal("[BulletML] Failed to load string table for '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] Failed to load string table for '%s'", filename_ ? filename_ : "(null)");
             freeStringTableStorage();
             freeParseScratch();
             return false;
         }
 
         if (!loadReferenceMaps()) {
-            SRL::Logger::LogFatal("[BulletML] Failed to load reference maps for '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] Failed to load reference maps for '%s'", filename_ ? filename_ : "(null)");
             freeStringTableStorage();
             freeParseScratch();
             return false;
@@ -482,7 +476,7 @@ public:
         offset_ = header_.tree_offset;
         bulletml_ = parseNode();
         if (!bulletml_) {
-            SRL::Logger::LogFatal("[BulletML] Failed to parse tree for '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] Failed to parse tree for '%s'", filename_ ? filename_ : "(null)");
             freeStringTableStorage();
             freeParseScratch();
             return false;
@@ -526,7 +520,7 @@ public:
         }
 
         if (!allocateRuntimeMaps(bullet_valid_count, action_valid_count, fire_valid_count, top_valid_count)) {
-            SRL::Logger::LogFatal("[BulletML] Failed to allocate runtime maps for '%s'", name_ ? name_ : "(null)");
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate runtime maps for '%s'", filename_ ? filename_ : "(null)");
             delete bulletml_;
             bulletml_ = nullptr;
             freeStringTableStorage();
@@ -574,13 +568,9 @@ public:
         return true;
     }
     
-    /// Get last error message (deprecated, use SRL logging instead)
-    const char* getErrorMessage() const { return error_message_; }
 
 private:
     inline void allocateMetadataBuffers() {
-        error_message_ = new char[256];
-        name_ = new char[BULLETML_MAX_FILENAME];
         filename_ = new char[BULLETML_MAX_FILENAME];
     }
 
@@ -763,7 +753,7 @@ private:
         }
         node_map_ = new BulletMLNode*[node_count];
         if (!node_map_) {
-            SRL::Logger::LogFatal("[BulletML] Failed to allocate node_map for %u nodes in '%s'", node_count, name_ ? name_ : "(null)");
+            SRL::Logger::LogFatal("[BulletML] Failed to allocate node_map for %u nodes in '%s'", node_count, filename_ ? filename_ : "(null)");
             return false;
         }
         node_map_capacity_ = node_count;
@@ -922,15 +912,15 @@ private:
         return true;
     }
 
-    inline void setName(const char* name) {
-        if (!name_) {
+    inline void setFilename(const char* name) {
+        if (!filename_) {
             return;
         }
         uint32_t i = 0;
         for (; i < BULLETML_MAX_FILENAME - 1 && name && name[i] != '\0'; ++i) {
-            name_[i] = name[i];
+            filename_[i] = name[i];
         }
-        name_[i] = '\0';
+        filename_[i] = '\0';
     }
     
     inline void setHorizontal() {
@@ -940,13 +930,13 @@ private:
     // Helper macros for bounds checking
     #define CHECK_BOUNDS(size) \
         if (offset_ + (size) > data_size_) { \
-            SRL::Logger::LogFatal("[BulletML] Unexpected end of file in '%s' at offset %u (need %u bytes, have %u)", name_, offset_, (size), data_size_); \
+            SRL::Logger::LogFatal("[BulletML] Unexpected end of file in '%s' at offset %u (need %u bytes, have %u)", filename_, (size), data_size_); \
             return false; \
         }
 
     #define CHECK_BOUNDS_PTR(size) \
         if (offset_ + (size) > data_size_) { \
-            SRL::Logger::LogFatal("[BulletML] Unexpected end of file in '%s' at offset %u (need %u bytes, have %u)", name_, offset_, (size), data_size_); \
+            SRL::Logger::LogFatal("[BulletML] Unexpected end of file in '%s' at offset %u (need %u bytes, have %u)", filename_, (size), data_size_); \
             return nullptr; \
         }
 
@@ -1039,7 +1029,7 @@ inline const char* readStringAt(uint32_t index) {
 
         // Verify magic number
         if (header_.magic[0] != 'B' || header_.magic[1] != 'L' || header_.magic[2] != 'B' || header_.magic[3] != '\0') {
-            SRL::Logger::LogFatal("[BulletML] Invalid magic number in '%s': %02X %02X %02X %02X", name_,
+            SRL::Logger::LogFatal("[BulletML] Invalid magic number in '%s': %02X %02X %02X %02X", filename_,
                                   (unsigned int)(uint8_t)header_.magic[0],
                                   (unsigned int)(uint8_t)header_.magic[1],
                                   (unsigned int)(uint8_t)header_.magic[2],
@@ -1049,30 +1039,30 @@ inline const char* readStringAt(uint32_t index) {
         
         // Check version
         if (header_.version != 1) {
-            SRL::Logger::LogFatal("[BulletML] Unsupported version %u in '%s'", header_.version, name_);
+            SRL::Logger::LogFatal("[BulletML] Unsupported version %u in '%s'", header_.version, filename_);
             return false;
         }
         
         // Verify file size
         if (header_.file_size != data_size_) {
-            SRL::Logger::LogFatal("[BulletML] File size mismatch in '%s': header says %u, actual is %u", name_, header_.file_size, data_size_);
+            SRL::Logger::LogFatal("[BulletML] File size mismatch in '%s': header says %u, actual is %u", filename_, header_.file_size, data_size_);
             return false;
         }
 
         // Validate section offsets to prevent out-of-range tree parsing.
         if (header_.string_table_offset < sizeof(BulletMLBinaryHeader) || header_.string_table_offset >= data_size_) {
             SRL::Logger::LogFatal("[BulletML] Invalid string table offset in '%s': %u (size=%u)",
-                                  name_, header_.string_table_offset, data_size_);
+                                  filename_, header_.string_table_offset, data_size_);
             return false;
         }
         if (header_.refmap_offset < sizeof(BulletMLBinaryHeader) || header_.refmap_offset >= data_size_) {
             SRL::Logger::LogFatal("[BulletML] Invalid reference map offset in '%s': %u (size=%u)",
-                                  name_, header_.refmap_offset, data_size_);
+                                  filename_, header_.refmap_offset, data_size_);
             return false;
         }
         if (header_.tree_offset < sizeof(BulletMLBinaryHeader) || header_.tree_offset >= data_size_) {
             SRL::Logger::LogFatal("[BulletML] Invalid tree offset in '%s': %u (size=%u)",
-                                  name_, header_.tree_offset, data_size_);
+                                  filename_, header_.tree_offset, data_size_);
             return false;
         }
         
@@ -1093,12 +1083,12 @@ inline const char* readStringAt(uint32_t index) {
 
         if (string_count > string_table_capacity_) {
             SRL::Logger::LogFatal("[BulletML] String table count %u exceeds capacity %u in '%s'",
-                                  string_count, string_table_capacity_, name_);
+                                  string_count, string_table_capacity_, filename_ ? filename_ : "(null)");
             return false;
         }
         for (uint32_t i = 0; i < string_count; ++i) {
             if (!readString()) {
-                SRL::Logger::LogFatal("[BulletML] Failed to load string %u in '%s'", i, name_);
+                SRL::Logger::LogFatal("[BulletML] Failed to load string %u in '%s'", i, filename_ ? filename_ : "(null)");
                 return false;
             }
         }
@@ -1115,7 +1105,7 @@ inline const char* readStringAt(uint32_t index) {
         uint32_t bullet_count = readUInt32();
         if (bullet_count > bullet_refs_capacity_) {
             SRL::Logger::LogFatal("[BulletML] Bullet ref count %u exceeds capacity %u in '%s'",
-                                  bullet_count, bullet_refs_capacity_, name_);
+                                  bullet_count, bullet_refs_capacity_, filename_);
             return false;
         }
         bullet_refs_count_ = 0;
@@ -1134,7 +1124,7 @@ inline const char* readStringAt(uint32_t index) {
         uint32_t action_count = readUInt32();
         if (action_count > action_refs_capacity_) {
             SRL::Logger::LogFatal("[BulletML] Action ref count %u exceeds capacity %u in '%s'",
-                                  action_count, action_refs_capacity_, name_);
+                                  action_count, action_refs_capacity_, filename_ ? filename_ : "(null)");
             return false;
         }
         action_refs_count_ = 0;
@@ -1153,7 +1143,7 @@ inline const char* readStringAt(uint32_t index) {
         uint32_t fire_count = readUInt32();
         if (fire_count > fire_refs_capacity_) {
             SRL::Logger::LogFatal("[BulletML] Fire ref count %u exceeds capacity %u in '%s'",
-                                  fire_count, fire_refs_capacity_, name_);
+                                  fire_count, fire_refs_capacity_, filename_ ? filename_ : "(null)");
             return false;
         }
         fire_refs_count_ = 0;
@@ -1201,19 +1191,19 @@ inline const char* readStringAt(uint32_t index) {
     /// Parse node tree recursively
     inline BulletMLNode* parseNode(uint32_t depth = 0) {
         if (depth > BULLETML_MAX_NODES) {
-            SRL::Logger::LogFatal("[BulletML] Parse depth limit exceeded in '%s'", name_);
+            SRL::Logger::LogFatal("[BulletML] Parse depth limit exceeded in '%s'", filename_);
             return nullptr;
         }
 
         if (current_node_id_ >= node_map_capacity_) {
-            SRL::Logger::LogFatal("[BulletML] Node count limit exceeded in '%s' (max=%u)", name_, node_map_capacity_);
+            SRL::Logger::LogFatal("[BulletML] Node count limit exceeded in '%s' (max=%u)", filename_, node_map_capacity_);
             return nullptr;
         }
 
         parse_step_count_++;
         if (parse_step_count_ > parse_step_budget_) {
             SRL::Logger::LogFatal("[BulletML] Parse step budget exceeded in '%s' (steps=%u, budget=%u)",
-                                  name_, parse_step_count_, parse_step_budget_);
+                                  filename_, parse_step_count_, parse_step_budget_);
             return nullptr;
         }
 
@@ -1230,19 +1220,19 @@ inline const char* readStringAt(uint32_t index) {
 
         if (node_header.node_type >= 20) {
             SRL::Logger::LogFatal("[BulletML] Invalid node type %u in '%s' at depth %u (offset=%u)",
-                                  node_header.node_type, name_, depth, offset_);
+                                  node_header.node_type, filename_, offset_);
             return nullptr;
         }
 
         if (node_header.value_type >= 5) {
             SRL::Logger::LogFatal("[BulletML] Invalid value type %u in '%s' at depth %u (offset=%u)",
-                                  node_header.value_type, name_, depth, offset_);
+                                  node_header.value_type, filename_, offset_);
             return nullptr;
         }
 
         if (node_header.child_count > BULLETML_MAX_CHILDREN) {
             SRL::Logger::LogFatal("[BulletML] Child count %u exceeds max %u in '%s' at depth %u",
-                                  node_header.child_count, BULLETML_MAX_CHILDREN, name_, depth);
+                                  node_header.child_count, BULLETML_MAX_CHILDREN, filename_, depth);
             return nullptr;
         }
         
@@ -1351,10 +1341,8 @@ protected:
     BulletMLNode** topActions_;
     uint16_t topActions_count_;
     
-    // Metadata pointers (12 bytes)
-    char* name_;
+    // Metadata pointer
     char* filename_;
-    char* error_message_;
     
     // Parse scratch counts (8 bytes - optimized from 16)
     // Max string_table_count_: BULLETML_MAX_STRINGS = 1000
