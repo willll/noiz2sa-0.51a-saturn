@@ -46,12 +46,6 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   const char * listPath = "LIST.TXT";
   char line[32];
 
-  // On-screen debug: show BLB loading start
-  char onscreenMsg[64];
-  snprintf(onscreenMsg, sizeof(onscreenMsg), "BLB LOAD: %s...", dirPath);
-  SRL::Debug::Print(1, 8, onscreenMsg);
-  SRL::Core::Synchronize();
-
   SRL::Logger::LogDebug("[BARRAGE] Reading BulletML files from directory: %s", dirPath);
 
   // Change to the specified directory on CD
@@ -128,12 +122,6 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     }
     listEntries++;
 
-    // On-screen trace: show which BLB is being loaded
-    char onscreenTrace[64];
-    snprintf(onscreenTrace, sizeof(onscreenTrace), "BLB %s %d: %s", dirPath, listEntries, line);
-    SRL::Debug::Print(1, 10, onscreenTrace);
-    SRL::Core::Synchronize();
-
     int phaseBase = 35;
     int phaseSpan = 60;
     if (strcmp(dirPath, "ZAKO") == 0) {
@@ -157,20 +145,12 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     brg[i].bulletml = new BulletMLParserBLB(line);
     if (!brg[i].bulletml->build()) {
       parseFailures++;
-      // On-screen trace: show failure
-      snprintf(onscreenTrace, sizeof(onscreenTrace), "BLB FAIL %s %d", dirPath, listEntries);
-      SRL::Debug::Print(1, 11, onscreenTrace);
-      SRL::Core::Synchronize();
       SRL::Logger::LogFatal("[BLB-TRACE] [%s] #%d build-failed: %s", dirPath, listEntries, line);
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
       delete brg[i].bulletml;
       brg[i].bulletml = nullptr;
       continue;
     } else {
-      // On-screen trace: show success
-      snprintf(onscreenTrace, sizeof(onscreenTrace), "BLB OK %s %d", dirPath, listEntries);
-      SRL::Debug::Print(1, 11, onscreenTrace);
-      SRL::Core::Synchronize();
       SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-ok: %s", dirPath, listEntries, line);
     }
     i++;
@@ -182,10 +162,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   
   SRL::Logger::LogInfo("[BLB-TRACE] End directory scan: %s (list_entries=%d, loaded=%d, failures=%d)",
                        dirPath, listEntries, i, parseFailures);
-  // On-screen debug: show BLB loading end/result
-  snprintf(onscreenMsg, sizeof(onscreenMsg), "BLB DONE: %s %d/%d", dirPath, i, listEntries);
-  SRL::Debug::Print(1, 9, onscreenMsg);
-  SRL::Core::Synchronize();
+                       
   if (i <= 0) {
     SRL::Logger::LogFatal("[BARRAGE] No valid BLB patterns loaded from %s; aborting startup", dirPath);
     SRL::System::Exit(1);
