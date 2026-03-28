@@ -100,26 +100,41 @@ RandomGenerator *g_random = nullptr;
 // Initialize and load preference.
 static void initFirst()
 {
+  const char* steps[] = {
+    "Loading preferences",
+    "Initializing random generator",
+    "Loading barrages",
+    "Loading attract manager",
+    "Initialization complete"
+  };
+  const int numSteps = sizeof(steps) / sizeof(steps[0]);
+  int stepIdx = 0;
+
   SRL::Logger::LogInfo("[INIT] First initialization starting");
-  updateLoadingProgress("Loading preferences", 30);
+  updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
   loadPreference();
   SRL::Logger::LogDebug("[INIT] Preferences loaded");
+  stepIdx++;
+  updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
   // Initialize random number generator with current time
-  // Note: SaturnMath is #defined as SRL::Math in srl_base.hpp
   uint32_t seed = SDL_GetTicks();
   g_random = new SRL::Math::Random<unsigned int>(seed);
   SRL::Logger::LogDebug("[INIT] Random generator initialized with seed: %u", seed);
+  stepIdx++;
+  updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
-  updateLoadingProgress("Loading barrages", 35);
   initBarragemanager();
   SRL::Logger::LogDebug("[INIT] Barrage manager initialized");
+  stepIdx++;
+  updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
-  updateLoadingProgress("Loading attract manager", 96);
   initAttractManager();
   SRL::Logger::LogDebug("[INIT] Attract manager initialized");
-  updateLoadingProgress("Initialization complete", 100);
+  stepIdx++;
+  updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
+
   SRL::Logger::LogInfo("[INIT] First initialization complete");
 }
 
@@ -418,7 +433,6 @@ static int accframe = 0;
 // Saturn doesn't support command-line arguments, so we set optimal settings directly.
 static void initGameConfig()
 {
-  // Sound: enabled by default (Saturn has good audio capabilities)
 #if NOIZ2SA_ENABLE_SOUND
   noSound = 0;
 #else
@@ -460,32 +474,49 @@ int main()
   // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
   SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
 
+
+  // Define loading steps for main()
+  const char* mainSteps[] = {
+    "Initializing sound",
+    "Initializing game config",
+    "Initializing math utilities",
+    "Initializing screen",
+    "Entering title"
+  };
+  const int mainNumSteps = sizeof(mainSteps) / sizeof(mainSteps[0]);
+  int mainStepIdx = 0;
+
   SRL::Logger::LogDebug("[MAIN] Initializing game config");
-  updateLoadingProgress("Initializing game config", 2);
+  updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initGameConfig();
+  mainStepIdx++;
 
   SRL::Logger::LogDebug("[MAIN] Initializing degree utilities");
-  updateLoadingProgress("Initializing math utilities", 5);
+  updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initDegutil();
+  mainStepIdx++;
 
   SRL::Logger::LogDebug("[MAIN] Initializing SDL");
-  updateLoadingProgress("Initializing screen", 10);
+  updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initSDL();
+  mainStepIdx++;
 
   if (!noSound)
   {
     SRL::Logger::LogDebug("[MAIN] Initializing sound");
-    updateLoadingProgress("Initializing sound", 26);
+    updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
     initSound();
+    playMusic(7);
   }
   else
   {
     SRL::Logger::LogInfo("[MAIN] Sound disabled");
-    updateLoadingProgress("Sound disabled", 26);
+    updateLoadingProgress("Sound disabled", (mainStepIdx + 1) * 100 / mainNumSteps);
   }
+  mainStepIdx++;
 
   initFirst();
-  updateLoadingProgress("Entering title", 100);
+  updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initTitle();
   clearLoadingOverlay();
 
