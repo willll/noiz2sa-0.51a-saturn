@@ -221,6 +221,7 @@ void closeBarragemanager() {
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
       delete barragePattern[i][j].bulletml;
+      barragePattern[i][j].bulletml = nullptr;
     }
   }
   
