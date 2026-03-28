@@ -376,13 +376,6 @@ void initSDL()
   clearRPanel();
 
   loadSprites();
-  // if (joystickMode == 1) {
-  // stick = SDL_JoystickOpen(0);
-  // SDL_GameControllerAddMappingsFromFile(SHARE_LOC "gamecontrollerdb.txt", 1);
-
-  //}
-
-  // SDL_WM_GrabInput(SDL_GRAB_ON);
 }
 
 void blendScreen()
