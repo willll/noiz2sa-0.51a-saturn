@@ -61,7 +61,7 @@ add_subdirectory(src/bulletml_binary)
 
 # CD subsystem configuration
 set(SRL_MAX_CD_BACKGROUND_JOBS "1" CACHE STRING "Maximum CD background jobs" FORCE)
-set(SRL_MAX_CD_FILES "255" CACHE STRING "Maximum CD files" FORCE)
+set(SRL_MAX_CD_FILES "100" CACHE STRING "Maximum CD files" FORCE)
 set(SRL_MAX_CD_RETRIES "5" CACHE STRING "Maximum CD retries" FORCE)
 
 # Display configuration
@@ -74,7 +74,7 @@ set(SRL_MAX_TEXTURES "100" CACHE STRING "Maximum textures")
 
 # Debug configuration
 option(DEBUG "Enable debug mode" OFF)
-set(SRL_LOG_LEVEL "WARNING" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
+set(SRL_LOG_LEVEL "TESTING" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
 set(SRL_LOG_OUTPUT "EMULATOR" CACHE STRING "Log output method")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
@@ -101,7 +101,7 @@ set(SGL_MAX_EVENTS "64" CACHE STRING "Maximum events")
 set(SGL_MAX_WORKS "256" CACHE STRING "Maximum work units")
 
 # Memory allocator
-set(SRL_MALLOC_METHOD "" CACHE STRING "Memory allocator method (TLSF or empty)")
+set(SRL_MALLOC_METHOD "TLSF" CACHE STRING "Memory allocator method (TLSF or empty)")
 
 # Custom flags
 set(SRL_CUSTOM_CCFLAGS "" CACHE STRING "Custom C/C++ compiler flags")
