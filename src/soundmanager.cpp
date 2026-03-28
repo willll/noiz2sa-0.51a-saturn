@@ -69,7 +69,7 @@ static void loadSounds() {
   for ( i=0 ; i<CHUNK_NUM ; i++ ) {
     chunk[i] = nullptr;
     strcpy(name, chunkFileName[i]);
-    chunk[i] = new SRL::Sound::Pcm::WaveSound(name);
+    chunk[i] = lwnew SRL::Sound::Pcm::WaveSound(name);
     if ( chunk[i] == nullptr ) {
       SRL::Logger::LogWarning("[SOUND] Allocation failed for: %s", name);
       continue;
