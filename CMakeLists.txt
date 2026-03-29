@@ -486,7 +486,7 @@ add_custom_command(TARGET ${CD_NAME}.elf POST_BUILD
 
 # Copy sound driver files when SRL_USE_SGL_SOUND_DRIVER is enabled
 if(SRL_USE_SGL_SOUND_DRIVER)
-    set(SGL_DRV_DIR "${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/DRV")
+    set(SGL_DRV_DIR "${SRL_ROOT}/modules/sgl/DRV")
     if(EXISTS "${SGL_DRV_DIR}")
         add_custom_command(TARGET noiz2sa.elf POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory "${SGL_DRV_DIR}" "${CMAKE_BINARY_DIR}/cd/data"
@@ -498,7 +498,7 @@ if(SRL_USE_SGL_SOUND_DRIVER)
     
     # Copy frequency analysis DSP file if enabled
     if(SRL_ENABLE_FREQ_ANALYSIS)
-        set(SGL_DSP_FILE "${CMAKE_SOURCE_DIR}/SaturnRingLib/modules/sgl/DSP/3BANDANA.EXB")
+        set(SGL_DSP_FILE "${SRL_ROOT}/modules/sgl/DSP/3BANDANA.EXB")
         if(EXISTS "${SGL_DSP_FILE}")
             add_custom_command(TARGET noiz2sa.elf POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy "${SGL_DSP_FILE}" "${CMAKE_BINARY_DIR}/cd/data/3BANDANA.EXB"
@@ -609,6 +609,9 @@ else()
 endif()
 message(STATUS "Maximum log length: ${SRL_DEBUG_MAX_LOG_LENGTH}")
 message(STATUS "SGL sound driver: ${SRL_USE_SGL_SOUND_DRIVER}")
+if(SRL_USE_SGL_SOUND_DRIVER)
+    message(STATUS "Frequency analysis: ${SRL_ENABLE_FREQ_ANALYSIS}")
+endif()
 if(SRL_MALLOC_METHOD STREQUAL "TLSF")
     message(STATUS "Memory allocator: TLSF")
 else()
