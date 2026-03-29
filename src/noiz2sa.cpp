@@ -525,7 +525,7 @@ int main()
 
   SRL::Logger::LogInfo("[MAIN] Main game loop starting");
 
-  playMusic(7);
+  //playMusic(7);
 
   while (!done)
   {
