@@ -10,7 +10,7 @@
 include_guard(GLOBAL)
 
 option(SRL_REQUIRED "Fail configure if SaturnRingLib is missing" ON)
-option(SRL_USE_SGL_SOUND_DRIVER "Link LIBSND.A from SGL" OFF)
+#option(SRL_USE_SGL_SOUND_DRIVER "Link LIBSND.A from SGL" OFF)
 
 if(DEFINED ENV{SRL_INSTALL_ROOT})
     set(_SRL_ROOT_DEFAULT "$ENV{SRL_INSTALL_ROOT}")
@@ -55,9 +55,9 @@ set(SRL_LIBS
     "${SRL_SGL_LIB_DIR}/LIBSGL.A"
 )
 
-if(SRL_USE_SGL_SOUND_DRIVER)
+#if(SRL_USE_SGL_SOUND_DRIVER)
     list(APPEND SRL_LIBS "${SRL_SGL_LIB_DIR}/LIBSND.A")
-endif()
+#endif()
 
 foreach(_lib IN LISTS SRL_LIBS)
     if(NOT EXISTS "${_lib}")
