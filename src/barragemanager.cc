@@ -80,13 +80,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     SRL::Logger::LogFatal("[BARRAGE] Failed to read LIST file or file is empty (bytes read: %d)", bufferSize);
     SRL::System::Exit(1);
   }
-  
-  SRL::Logger::LogDebug("[BARRAGE] Read %d bytes from LIST file", bufferSize);
-  SRL::Logger::LogInfo("[BLB-TRACE] Begin directory scan: %s", dirPath);
-  
-  // Stay in the current directory to load files directly by name
-  SRL::Logger::LogTrace("[BARRAGE] Loading files from directory: %s", dirPath);
-  
+    
   while (bytesRead < bufferSize && i < BARRAGE_PATTERN_MAX) {
     int lineLen = 0;
     // Extract one line (ensure we stay within buffer bounds)
@@ -138,20 +132,15 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     snprintf(step, sizeof(step), "Loading %s %d/%d", dirPath, listEntries, BARRAGE_PATTERN_MAX);
     updateLoadingProgress(step, phaseBase + (listEntries * phaseSpan) / BARRAGE_PATTERN_MAX);
 
-    // Log and show start of BLB load
-    SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-start: %s", dirPath, listEntries, line);
     SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s/%s", dirPath, line);
 
     brg[i].bulletml = new BulletMLParserBLB(line);
     if (!brg[i].bulletml->build()) {
       parseFailures++;
-      SRL::Logger::LogFatal("[BLB-TRACE] [%s] #%d build-failed: %s", dirPath, listEntries, line);
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
       delete brg[i].bulletml;
       brg[i].bulletml = nullptr;
       continue;
-    } else {
-      SRL::Logger::LogInfo("[BLB-TRACE] [%s] #%d build-ok: %s", dirPath, listEntries, line);
     }
     i++;
   }
@@ -159,10 +148,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   // Change back to root directory after loading all files
   //SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory");
   SRL::Cd::ChangeDir((char *)nullptr);
-  
-  SRL::Logger::LogInfo("[BLB-TRACE] End directory scan: %s (list_entries=%d, loaded=%d, failures=%d)",
-                       dirPath, listEntries, i, parseFailures);
-                       
+
   if (i <= 0) {
     SRL::Logger::LogFatal("[BARRAGE] No valid BLB patterns loaded from %s; aborting startup", dirPath);
     SRL::System::Exit(1);
@@ -170,7 +156,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   if (parseFailures > 0) {
     SRL::Logger::LogWarning("[BARRAGE] %s loaded with %d parse failures (%d valid patterns)", dirPath, parseFailures, i);
   }
-  //SRL::Logger::LogDebug("[BARRAGE] Successfully loaded %d BulletML patterns from %s", i, dirPath);
+  
   return i;
 }
 

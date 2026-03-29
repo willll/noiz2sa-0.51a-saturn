@@ -11,6 +11,7 @@
  */
 void closeSound();
 void initSound();
+void loadSounds();
 void playMusic(int idx);
 void fadeMusic();
 void stopMusic();

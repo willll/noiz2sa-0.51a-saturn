@@ -309,10 +309,8 @@ public:
                     action_refs_count_(0),
                     fire_refs_count_(0)
     {
-        SRL::Logger::LogInfo("[BLB-LOAD] BulletMLParserBLB: constructing for file '%s'", filename ? filename : "(null)");
         allocateMetadataBuffers();
         setFilename(filename);
-        SRL::Logger::LogInfo("[BLB-LOAD] BulletMLParserBLB: filename set to '%s'", filename_ ? filename_ : "(null)");
     }
     
     virtual ~BulletMLParserBLB() {
@@ -384,12 +382,10 @@ public:
         freeParseScratch();
 
         if ((!data_ || data_size_ == 0) && filename_ && filename_[0] != '\0') {
-            SRL::Logger::LogInfo("[BLB-LOAD] Attempting to load BLB file: '%s'", filename_);
             if (!loadFromFile(filename_)) {
                 SRL::Logger::LogFatal("[BulletML] Failed to load file: %s", filename_);
                 return false;
             }
-            SRL::Logger::LogInfo("[BLB-LOAD] Successfully loaded BLB file: '%s'", filename_);
         }
 
         if (!data_ || data_size_ == 0) {

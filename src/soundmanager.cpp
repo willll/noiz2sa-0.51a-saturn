@@ -69,7 +69,7 @@ void closeSound() {
 
 // Initialize the sound.
 
-static void loadSounds() {
+void loadSounds() {
   SRL::Logger::LogDebug("[SOUND] loadSounds() called");
   int i;
   char name[56];
@@ -110,16 +110,15 @@ void initSound() {
   SRL::Logger::LogDebug("[SOUND] initSound() called");
   for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = nullptr;
 
-  // Ensure we are in root before loading optional SGL sound driver files.
-  SRL::Cd::ChangeDir((char *)nullptr);
+//   // Ensure we are in root before loading optional SGL sound driver files.
+//   SRL::Cd::ChangeDir((char *)nullptr);
 
-#if defined(SRL_USE_SGL_SOUND_DRIVER) && SRL_USE_SGL_SOUND_DRIVER == 1
-  SRL::Logger::LogInfo("[SOUND] Initializing SGL sound driver");
-  SRL::Sound::Hardware::Initialize();
-#endif
+// #if defined(SRL_USE_SGL_SOUND_DRIVER) && SRL_USE_SGL_SOUND_DRIVER == 1
+//   SRL::Logger::LogInfo("[SOUND] Initializing SGL sound driver");
+//   SRL::Sound::Hardware::Initialize();
+// #endif
 
   useAudio = 1;
-  loadSounds();
 #endif
 }
 

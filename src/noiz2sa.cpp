@@ -486,6 +486,20 @@ int main()
   const int mainNumSteps = sizeof(mainSteps) / sizeof(mainSteps[0]);
   int mainStepIdx = 0;
 
+  if (!noSound)
+  {
+    SRL::Logger::LogDebug("[MAIN] Initializing sound");
+    updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
+    initSound();
+    loadSounds();
+  }
+  else
+  {
+    SRL::Logger::LogInfo("[MAIN] Sound disabled");
+    updateLoadingProgress("Sound disabled", (mainStepIdx + 1) * 100 / mainNumSteps);
+  }
+  mainStepIdx++;
+
   SRL::Logger::LogDebug("[MAIN] Initializing game config");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initGameConfig();
@@ -501,20 +515,6 @@ int main()
   initSDL();
   mainStepIdx++;
 
-  if (!noSound)
-  {
-    SRL::Logger::LogDebug("[MAIN] Initializing sound");
-    updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
-    initSound();
-    playMusic(7);
-  }
-  else
-  {
-    SRL::Logger::LogInfo("[MAIN] Sound disabled");
-    updateLoadingProgress("Sound disabled", (mainStepIdx + 1) * 100 / mainNumSteps);
-  }
-  mainStepIdx++;
-
   initFirst();
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initTitle();
@@ -524,6 +524,8 @@ int main()
   SRL::Logger::LogDebug("[MAIN] Gamepad initialized");
 
   SRL::Logger::LogInfo("[MAIN] Main game loop starting");
+
+  playMusic(7);
 
   while (!done)
   {
