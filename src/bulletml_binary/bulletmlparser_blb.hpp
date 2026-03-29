@@ -70,7 +70,7 @@ public:
         }
         child_capacity_ = child_capacity;
         if (child_capacity_ > 0) {
-            children_ = new BulletMLNode*[child_capacity_];
+            children_ = lwnew BulletMLNode*[child_capacity_];
             for (uint32_t i = 0; i < child_capacity_; ++i) {
                 children_[i] = nullptr;
             }
@@ -567,7 +567,7 @@ public:
 
 private:
     inline void allocateMetadataBuffers() {
-        filename_ = new char[BULLETML_MAX_FILENAME];
+        filename_ = lwnew char[BULLETML_MAX_FILENAME];
     }
 
     inline bool allocateRuntimeMaps(uint32_t bullet_count,
@@ -577,7 +577,7 @@ private:
         freeRuntimeMaps();
 
         if (bullet_count > 0) {
-            bulletMap_ = new BulletMLNode*[bullet_count];
+            bulletMap_ = lwnew BulletMLNode*[bullet_count];
             if (!bulletMap_) {
                 freeRuntimeMaps();
                 return false;
@@ -588,7 +588,7 @@ private:
         }
 
         if (action_count > 0) {
-            actionMap_ = new BulletMLNode*[action_count];
+            actionMap_ = lwnew BulletMLNode*[action_count];
             if (!actionMap_) {
                 freeRuntimeMaps();
                 return false;
@@ -599,7 +599,7 @@ private:
         }
 
         if (fire_count > 0) {
-            fireMap_ = new BulletMLNode*[fire_count];
+            fireMap_ = lwnew BulletMLNode*[fire_count];
             if (!fireMap_) {
                 freeRuntimeMaps();
                 return false;
@@ -610,7 +610,7 @@ private:
         }
 
         if (top_count > 0) {
-            topActions_ = new BulletMLNode*[top_count];
+            topActions_ = lwnew BulletMLNode*[top_count];
             if (!topActions_) {
                 freeRuntimeMaps();
                 return false;
@@ -650,7 +650,7 @@ private:
             return true;
         }
 
-        string_table_ = new char*[string_count];
+        string_table_ = lwnew char*[string_count];
         if (!string_table_) {
             string_table_capacity_ = 0;
             return false;
@@ -694,7 +694,7 @@ private:
         fire_refs_capacity_ = static_cast<uint16_t>(fire_count);
 
         if (bullet_count > 0) {
-            bullet_refs_ = new BulletMLRefEntry[bullet_count];
+            bullet_refs_ = lwnew BulletMLRefEntry[bullet_count];
             if (!bullet_refs_) {
                 freeParseScratch();
                 return false;
@@ -702,7 +702,7 @@ private:
         }
 
         if (action_count > 0) {
-            action_refs_ = new BulletMLRefEntry[action_count];
+            action_refs_ = lwnew BulletMLRefEntry[action_count];
             if (!action_refs_) {
                 freeParseScratch();
                 return false;
@@ -710,7 +710,7 @@ private:
         }
 
         if (fire_count > 0) {
-            fire_refs_ = new BulletMLRefEntry[fire_count];
+            fire_refs_ = lwnew BulletMLRefEntry[fire_count];
             if (!fire_refs_) {
                 freeParseScratch();
                 return false;
@@ -747,7 +747,7 @@ private:
         if (node_count == 0) {
             return false;
         }
-        node_map_ = new BulletMLNode*[node_count];
+        node_map_ = lwnew BulletMLNode*[node_count];
         if (!node_map_) {
             SRL::Logger::LogFatal("[BulletML] Failed to allocate node_map for %u nodes in '%s'", node_count, filename_ ? filename_ : "(null)");
             return false;
@@ -888,7 +888,7 @@ private:
         }
         
         // Allocate exact size needed and read directly into it.
-        uint8_t* allocated_buffer = new uint8_t[bytes_to_read];
+        uint8_t* allocated_buffer = lwnew uint8_t[bytes_to_read];
         if (!allocated_buffer) {
             SRL::Logger::LogFatal("[BulletML] Failed to allocate %d bytes for %s", bytes_to_read, filename);
             return false;
@@ -978,7 +978,7 @@ inline const char* readString() {
         return nullptr;
     }
 
-    char* str = new char[length + 1];
+    char* str = lwnew char[length + 1];
     if (!str) {
         return nullptr;
     }
@@ -1234,7 +1234,7 @@ inline const char* readStringAt(uint32_t index) {
         
         // Create node
         const char* node_name = nodeTypeToString(node_header.node_type);
-        BulletMLNode* node = new BulletMLNode(node_name, node_header.child_count);
+        BulletMLNode* node = lwnew BulletMLNode(node_name, node_header.child_count);
         
         // Set node ID for reference mapping
         uint32_t this_node_id = current_node_id_++;

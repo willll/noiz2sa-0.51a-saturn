@@ -125,7 +125,7 @@ Foe *addFoe(int x, int y, double rank, int d, int spd, int type, int shield,
 
   fe->parser = parser;
 
-  fe->cmd = new FoeCommand(parser, fe);
+  fe->cmd = lwnew FoeCommand(parser, fe);
 
   fe->pos.x = x;
   fe->pos.y = y;
@@ -168,7 +168,7 @@ void addFoeActiveBullet(Vector *pos, double rank,
     bulletSpawnFailed++;
     return;
   }
-  fe->cmd = new FoeCommand(state, fe);
+  fe->cmd = lwnew FoeCommand(state, fe);
   fe->spos = fe->ppos = fe->pos = *pos;
   fe->vel.x = fe->vel.y = 0;
   fe->rank = rank;
@@ -262,7 +262,7 @@ void moveFoes()
         if (fe->cmd->isEnd())
         {
           delete fe->cmd;
-          fe->cmd = new FoeCommand(fe->parser, fe);
+          fe->cmd = lwnew FoeCommand(fe->parser, fe);
           // fe->cmd->reset();
         }
       }
