@@ -15,6 +15,7 @@
 #include <srl_string.hpp>  // for string functions
 #include <srl_cd.hpp>      // for CD file access
 #include <srl_sound.hpp>   // for CDDA support
+#include <srl_system.hpp>
 
 #include "soundmanager.h"
 
@@ -84,10 +85,16 @@ void loadSounds() {
     SRL::Logger::LogDebug("[SOUND] loadSounds: Loading %s", name);
     chunk[i] = new SRL::Sound::Pcm::WaveSound(name);
     if ( chunk[i] == nullptr ) {
-      SRL::Logger::LogWarning("[SOUND] Allocation failed for: %s", name);
-      continue;
+      SRL::Logger::LogFatal("[SOUND] Allocation failed for: %s", name);
+      SRL::System::Exit(1);
+    } else {
+      SRL::Logger::LogDebug("[SOUND] loadSounds: Loaded %s", name);
     }
     loaded++;
+    // if (SRL::Sound::Pcm::IsChannelFree(0))
+    //     {
+    // chunk[i]->PlayOnChannel(0);
+    //     }
   }
 
   SRL::Cd::ChangeDir((char *)nullptr);
@@ -179,7 +186,13 @@ void playChunk(int idx) {
 
   // 4 PCM channels are available, let SRL pick the first free one.
   SRL::Logger::LogDebug("[SOUND] playChunk: Playing %s", chunkFileName[idx]);
-  SRL::Sound::Pcm::Play(*chunk[idx], 127, 0);
-  SRL::Logger::LogInfo("[SOUND] Playing chunk: %s", chunkFileName[idx]);
-
+  //SRL::Sound::Pcm::Play(*chunk[idx], 127, 0);
+  if (SRL::Sound::Pcm::IsChannelFree(0)) {
+  chunk[idx]->PlayOnChannel(0);
+   SRL::Logger::LogInfo("[SOUND] Playing chunk: %s on channel 0", chunkFileName[idx]);
+  } else {
+  chunk[idx]->PlayOnChannel(1);
+   SRL::Logger::LogInfo("[SOUND] Playing chunk: %s on channel 1", chunkFileName[idx]);
+  }
 }
+
