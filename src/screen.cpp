@@ -50,6 +50,12 @@ Canvas::Pixel *rpbuf = nullptr;
 static Canvas::Pixel smokeFallback = 0;
 static SDL_Rect layerRect, layerClearRect;
 static SDL_Rect lpanelRect, rpanelRect, panelClearRect;
+static void *panelLayerVram = nullptr;
+static int panelLayerVramSize = 0;
+static constexpr int PANEL_LAYER_WIDTH = 512;
+static constexpr int PANEL_LAYER_HEIGHT = 256;
+static constexpr int PANEL_LAYER_RIGHT_X = SCREEN_WIDTH - PANEL_WIDTH;
+static constexpr int PANEL_LAYER_PLAYFIELD_X = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
 
 // Handle TGA images in ISO 8:3 format
 #define SPRITE_NUM 7
@@ -126,6 +132,76 @@ static int32_t loadSpriteTextureRGB555(SRL::Bitmap::BitmapInfo &info, const uint
   }
 
   return textureIndex;
+}
+
+static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect, int dstX)
+{
+  if (panelLayerVram == nullptr || src == nullptr || dirtyRect.w == 0 || dirtyRect.h == 0)
+  {
+    return;
+  }
+
+  const uint8_t *srcRow = src + dirtyRect.x + (dirtyRect.y * PANEL_WIDTH);
+  uint8_t *dstRow = (uint8_t *)panelLayerVram + dstX + dirtyRect.x + (dirtyRect.y * PANEL_LAYER_WIDTH);
+
+  for (int row = 0; row < dirtyRect.h; row++)
+  {
+    slDMACopy((void *)srcRow, dstRow, dirtyRect.w);
+    srcRow += PANEL_WIDTH;
+    dstRow += PANEL_LAYER_WIDTH;
+  }
+  slDMAWait();
+}
+
+static void refreshPanelLayer()
+{
+  if (panelLayerVram == nullptr)
+  {
+    return;
+  }
+
+  if (lpanel->dirty)
+  {
+    SDL_Rect dirtyRect;
+    dirtyRect.x = lpanel->dirtyX1;
+    dirtyRect.y = lpanel->dirtyY1;
+    dirtyRect.w = (uint16_t)(lpanel->dirtyX2 - lpanel->dirtyX1);
+    dirtyRect.h = (uint16_t)(lpanel->dirtyY2 - lpanel->dirtyY1);
+    uploadPanelBitmapRegion(lpbuf, dirtyRect, 0);
+    SDL_ClearDirtyRect(lpanel);
+  }
+
+  if (rpanel->dirty)
+  {
+    SDL_Rect dirtyRect;
+    dirtyRect.x = rpanel->dirtyX1;
+    dirtyRect.y = rpanel->dirtyY1;
+    dirtyRect.w = (uint16_t)(rpanel->dirtyX2 - rpanel->dirtyX1);
+    dirtyRect.h = (uint16_t)(rpanel->dirtyY2 - rpanel->dirtyY1);
+    uploadPanelBitmapRegion(rpbuf, dirtyRect, PANEL_LAYER_RIGHT_X);
+    SDL_ClearDirtyRect(rpanel);
+  }
+}
+
+static void initPanelLayer(const int16_t paletteBank)
+{
+  SRL::Bitmap::BitmapInfo panelInfo(PANEL_LAYER_WIDTH, PANEL_LAYER_HEIGHT);
+  panelInfo.ColorMode = SRL::CRAM::TextureColorMode::Paletted256;
+
+  panelLayerVram = SRL::VDP2::VRAM::AutoAllocateBmp(panelInfo, scnNBG1, &panelLayerVramSize);
+  if (panelLayerVram == nullptr)
+  {
+    SRL::Logger::LogFatal("[SCREEN] Failed to allocate VDP2 panel layer");
+    SRL::System::Exit(1);
+  }
+
+  SRL::VDP2::NBG1::SetCellAddress(panelLayerVram, panelLayerVramSize);
+  SRL::VDP2::NBG1::TilePalette = SRL::CRAM::Palette(SRL::CRAM::TextureColorMode::Paletted256, (uint16_t)paletteBank);
+  SRL::VDP2::VRAM::Blank(panelLayerVram, panelLayerVramSize);
+  SRL::VDP2::NBG1::Init(panelInfo);
+  SRL::VDP2::NBG1::TransparentEnable();
+  SRL::VDP2::NBG1::SetPriority(SRL::VDP2::Priority::Layer1);
+  SRL::VDP2::NBG1::ScrollEnable();
 }
 
 // SDL_Joystick *stick = nullptr;
@@ -344,13 +420,13 @@ void initSDL()
   lpanel->pixels = lpbuf;
   rpanel->pixels = rpbuf;
   video->pixels = nullptr;
-  // Correctness-first path: keep all surfaces in RGB555 to avoid paletted artifacts.
-  layer->preferRGB555 = true;
-  lpanel->preferRGB555 = true;
-  rpanel->preferRGB555 = true;
-  layer->dirty = true;
-  lpanel->dirty = true;
-  rpanel->dirty = true;
+  // Keep software surfaces paletted so VRAM uploads can use DMA directly.
+  layer->preferRGB555 = false;
+  lpanel->preferRGB555 = false;
+  rpanel->preferRGB555 = false;
+  SDL_SetSurfaceDirty(layer);
+  SDL_SetSurfaceDirty(lpanel);
+  SDL_SetSurfaceDirty(rpanel);
 
   layerRect.x = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
   layerRect.y = (SCREEN_HEIGHT - LAYER_HEIGHT) / 2;
@@ -371,40 +447,41 @@ void initSDL()
 
   const int32_t mainPaletteBank = Palette::initPalette();
   SDL_SetBlitPaletteBank((int16_t)mainPaletteBank);
+  initPanelLayer((int16_t)mainPaletteBank);
   makeSmokeBuf();
   clearLPanel();
   clearRPanel();
+  refreshPanelLayer();
 
   loadSprites();
 }
 
 void blendScreen()
 {
-  int i;
-  for (i = lyrSize - 1; i >= 0; i--)
+  SDL_CopyBytes(buf, l2buf, lyrSize);
+
+  for (int i = lyrSize - 1; i >= 0; i--)
   {
-    buf[i] = colorAlp[l1buf[i]][l2buf[i]];
+    if (l1buf[i] == 0)
+    {
+      continue;
+    }
+
+    buf[i] = (buf[i] == 0) ? l1buf[i] : colorAlp[l1buf[i]][buf[i]];
   }
+
+  SDL_SetSurfaceDirty(layer);
 }
 
 void flipScreen()
 {
   static uint32_t flipCounter = 0;
 
-  // Main layer is rebuilt every frame.
-  layer->dirty = true;
+  refreshPanelLayer();
 
   uint32_t blitStartUs = SDL_GetProfileMicros();
   SDL_BlitSurface(layer, nullptr, video, &layerRect);
   uint32_t timeLayerUs = SDL_GetProfileMicros() - blitStartUs;
-  
-  blitStartUs = SDL_GetProfileMicros();
-  SDL_BlitSurface(lpanel, nullptr, video, &lpanelRect);
-  uint32_t timeLpanelUs = SDL_GetProfileMicros() - blitStartUs;
-  
-  blitStartUs = SDL_GetProfileMicros();
-  SDL_BlitSurface(rpanel, nullptr, video, &rpanelRect);
-  uint32_t timeRpanelUs = SDL_GetProfileMicros() - blitStartUs;
   
   if (status == TITLE)
   {
@@ -422,11 +499,10 @@ void flipScreen()
     uint32_t drawUs = 0;
     SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadUs, &drawUs);
     SRL::Logger::LogWarning(
-      "[BLIT_US] frame=%lu layer=%lu lpanel=%lu rpanel=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
+      "[BLIT_US] frame=%lu layer=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
         (unsigned long)flipCounter,
       (unsigned long)timeLayerUs,
-      (unsigned long)timeLpanelUs,
-      (unsigned long)timeRpanelUs,
+      (unsigned long)0,
         (unsigned long)calls,
         (unsigned long)uploads,
       (unsigned long)uploadUs,
@@ -438,34 +514,25 @@ void flipScreen()
 void clearScreen()
 {
   memset(buf, 0, LAYER_WIDTH * LAYER_HEIGHT);
-  layer->dirty = true;
+  SDL_SetSurfaceDirty(layer);
 }
 
 void clearLPanel()
 {
   memset(lpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
-  lpanel->dirty = true;
+  SDL_SetSurfaceDirty(lpanel);
 }
 
 void clearRPanel()
 {
   memset(rpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
-  rpanel->dirty = true;
+  SDL_SetSurfaceDirty(rpanel);
 }
 
 void smokeScreen()
 {
-#if NOIZ2SA_ENABLE_SMOKE
-  // Fast path: direct decay on both layers.
-  // Avoids smokeBuf pointer indirection and per-frame memcpy, which is too slow on Saturn.
-  for (int i = lyrSize - 1; i >= 0; i--)
-  {
-    l1buf[i] = colorDfs[l1buf[i]];
-    l2buf[i] = colorDfs[l2buf[i]];
-  }
-#else
-  // Compile-time disabled smoke effect for performance builds.
-#endif
+  // The previous CPU decay pass was immediately cleared before drawing each frame.
+  // Keep smoke disabled here and rely on hardware compositing plus palette fades instead.
 }
 
 void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Canvas::Pixel *buf)
@@ -771,6 +838,15 @@ void drawBoxPanel(int x, int y, int width, int height,
   }
   ptr = x + y * PANEL_WIDTH;
   memset(&(buf[ptr]), color2, width);
+
+  if (buf == lpbuf)
+  {
+    SDL_MarkDirtyRect(lpanel, x, y - height + 1, width, height);
+  }
+  else if (buf == rpbuf)
+  {
+    SDL_MarkDirtyRect(rpanel, x, y - height + 1, width, height);
+  }
 }
 
 // Draw the numbers.
