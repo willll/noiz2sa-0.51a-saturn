@@ -80,9 +80,25 @@ static void renderLoadingScreen(const char *step, int percent)
   SRL::Core::Synchronize();
 }
 
+
+// Use global loading step state for updateLoadingProgress
 void updateLoadingProgress(const char *step, int percent)
 {
-  renderLoadingScreen(step, percent);
+  // If step and percent are provided, use them (for legacy/special cases)
+  // Otherwise, use global loading state
+  if (step && percent >= 0 && percent <= 100) {
+    renderLoadingScreen(step, percent);
+    return;
+  }
+  // Use global loading state if available
+  extern const char* g_loadingSteps[10];
+  extern int g_loadingNumSteps;
+  extern int g_loadingStepIdx;
+  if (g_loadingNumSteps > 0 && g_loadingStepIdx < g_loadingNumSteps) {
+    renderLoadingScreen(g_loadingSteps[g_loadingStepIdx], (g_loadingStepIdx + 1) * 100 / g_loadingNumSteps);
+  } else {
+    renderLoadingScreen("Loading", percent);
+  }
 }
 
 static void clearLoadingOverlay()
