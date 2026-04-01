@@ -52,14 +52,18 @@ struct SRL_Surface {
     const void* pixels;
     bool dirty;
     bool preferRGB555;
+    int16_t dirtyX1;
+    int16_t dirtyY1;
+    int16_t dirtyX2;
+    int16_t dirtyY2;
     int16_t cachedPaletteBank;  // Track which palette was used for RGB555 expansion
     uint32_t cachedPaletteHash; // Simple hash to detect palette changes
     
     // Constructor for proper initialization
-    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr), dirty(true), preferRGB555(false), cachedPaletteBank(INT16_MIN), cachedPaletteHash(0) {}
+    SRL_Surface() : textureIndex(-1), w(0), h(0), pixels(nullptr), dirty(true), preferRGB555(false), dirtyX1(0), dirtyY1(0), dirtyX2(0), dirtyY2(0), cachedPaletteBank(INT16_MIN), cachedPaletteHash(0) {}
     
     // Constructor with dimensions
-    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr), dirty(true), preferRGB555(false), cachedPaletteBank(INT16_MIN), cachedPaletteHash(0) {}
+    SRL_Surface(int32_t textureIndex, int width, int height) : textureIndex(textureIndex), w(width), h(height), pixels(nullptr), dirty(true), preferRGB555(false), dirtyX1(0), dirtyY1(0), dirtyX2((int16_t)width), dirtyY2((int16_t)height), cachedPaletteBank(INT16_MIN), cachedPaletteHash(0) {}
 };
 
 // SDL Event type - needs 'type' field for the main event loop
@@ -112,6 +116,85 @@ static inline void SDL_CopyBytes(void* dst, const void* src, uint32_t byteCount)
     {
         *d8++ = *s8++;
     }
+}
+
+static inline void SDL_ClearDirtyRect(SRL_Surface* surface)
+{
+    if (surface == nullptr)
+    {
+        return;
+    }
+
+    surface->dirty = false;
+    surface->dirtyX1 = (int16_t)surface->w;
+    surface->dirtyY1 = (int16_t)surface->h;
+    surface->dirtyX2 = 0;
+    surface->dirtyY2 = 0;
+}
+
+static inline void SDL_SetSurfaceDirty(SRL_Surface* surface)
+{
+    if (surface == nullptr)
+    {
+        return;
+    }
+
+    surface->dirty = true;
+    surface->dirtyX1 = 0;
+    surface->dirtyY1 = 0;
+    surface->dirtyX2 = (int16_t)surface->w;
+    surface->dirtyY2 = (int16_t)surface->h;
+}
+
+static inline void SDL_MarkDirtyRect(SRL_Surface* surface, int x, int y, int w, int h)
+{
+    if (surface == nullptr || w <= 0 || h <= 0)
+    {
+        return;
+    }
+
+    if (x < 0)
+    {
+        w += x;
+        x = 0;
+    }
+    if (y < 0)
+    {
+        h += y;
+        y = 0;
+    }
+    if (x >= surface->w || y >= surface->h)
+    {
+        return;
+    }
+
+    if (x + w > surface->w)
+    {
+        w = surface->w - x;
+    }
+    if (y + h > surface->h)
+    {
+        h = surface->h - y;
+    }
+    if (w <= 0 || h <= 0)
+    {
+        return;
+    }
+
+    if (!surface->dirty)
+    {
+        surface->dirty = true;
+        surface->dirtyX1 = (int16_t)x;
+        surface->dirtyY1 = (int16_t)y;
+        surface->dirtyX2 = (int16_t)(x + w);
+        surface->dirtyY2 = (int16_t)(y + h);
+        return;
+    }
+
+    if (x < surface->dirtyX1) surface->dirtyX1 = (int16_t)x;
+    if (y < surface->dirtyY1) surface->dirtyY1 = (int16_t)y;
+    if ((x + w) > surface->dirtyX2) surface->dirtyX2 = (int16_t)(x + w);
+    if ((y + h) > surface->dirtyY2) surface->dirtyY2 = (int16_t)(y + h);
 }
 
 // SDL initialization and system
@@ -241,7 +324,20 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
     // Upload source pixels if this is a software-backed surface.
     if (src->pixels != nullptr && src->dirty) {
         const uint32_t uploadStart = SDL_GetProfileMicros();
-        const uint32_t pixelCount = (uint32_t)(src->w * src->h);
+        int uploadX = src->dirtyX1;
+        int uploadY = src->dirtyY1;
+        int uploadW = src->dirtyX2 - src->dirtyX1;
+        int uploadH = src->dirtyY2 - src->dirtyY1;
+
+        if (uploadW <= 0 || uploadH <= 0)
+        {
+            uploadX = 0;
+            uploadY = 0;
+            uploadW = src->w;
+            uploadH = src->h;
+        }
+
+        const uint32_t pixelCount = (uint32_t)(uploadW * uploadH);
 
         void* dstData = SRL::VDP1::Textures[src->textureIndex].GetData();
 
@@ -259,41 +355,44 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
             // Only expand pixels if palette changed or this is the first time
             const uint32_t newPaletteHash = SDL_HashPalette();
             const int16_t newPaletteBank = (int16_t)(sdl_blitPaletteBank < 0 ? 0 : sdl_blitPaletteBank);
-            
-            if (src->cachedPaletteBank != newPaletteBank || src->cachedPaletteHash != newPaletteHash)
+
+            const uint8_t* src8 = (const uint8_t*)src->pixels;
+            uint16_t* dst16 = (uint16_t*)dstData;
+            for (int row = 0; row < uploadH; row++)
             {
-                // Palette changed - need to re-expand all pixels
-                const uint8_t* src8 = (const uint8_t*)src->pixels;
-                uint16_t* dst16 = (uint16_t*)dstData;
-                for (uint32_t i = 0; i < pixelCount; i++)
+                const uint8_t* srcRow = src8 + ((uploadY + row) * src->w) + uploadX;
+                uint16_t* dstRow = dst16 + ((uploadY + row) * src->w) + uploadX;
+                for (int col = 0; col < uploadW; col++)
                 {
-                    dst16[i] = sdl_blitPalette555[src8[i]];
-                }
-                
-                src->cachedPaletteBank = newPaletteBank;
-                src->cachedPaletteHash = newPaletteHash;
-            }
-            else
-            {
-                // Palette unchanged - texture already has correct expansion
-                // Just copy pixels as-is without re-expanding (they're already in 16-bit RGB555)
-                // Actually, we need to copy them since they changed. Do raw copy instead of expanding.
-                // Wait, they're in indexed format in the buffer. We need to expand them.
-                // Copy all pixels since we already passed the hash check
-                const uint8_t* src8 = (const uint8_t*)src->pixels;
-                uint16_t* dst16 = (uint16_t*)dstData;
-                for (uint32_t i = 0; i < pixelCount; i++)
-                {
-                    dst16[i] = sdl_blitPalette555[src8[i]];
+                    dstRow[col] = sdl_blitPalette555[srcRow[col]];
                 }
             }
+
+            src->cachedPaletteBank = newPaletteBank;
+            src->cachedPaletteHash = newPaletteHash;
         }
         else
         {
-            SDL_CopyBytes(dstData, src->pixels, pixelCount);
+            const uint8_t* src8 = (const uint8_t*)src->pixels;
+            uint8_t* dst8 = (uint8_t*)dstData;
+
+            if (uploadX == 0 && uploadY == 0 && uploadW == src->w && uploadH == src->h)
+            {
+                slDMACopy((void*)src8, dst8, (uint32_t)(src->w * src->h));
+            }
+            else
+            {
+                for (int row = 0; row < uploadH; row++)
+                {
+                    const uint8_t* srcRow = src8 + ((uploadY + row) * src->w) + uploadX;
+                    uint8_t* dstRow = dst8 + ((uploadY + row) * src->w) + uploadX;
+                    slDMACopy((void*)srcRow, dstRow, (uint32_t)uploadW);
+                }
+            }
+            slDMAWait();
         }
 
-        src->dirty = false;
+        SDL_ClearDirtyRect(src);
         sdl_blitUploads++;
         sdl_blitUploadPixels += pixelCount;
         sdl_blitUploadUs += (SDL_GetProfileMicros() - uploadStart);
