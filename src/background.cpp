@@ -10,15 +10,315 @@
  * @version $Revision: 1.2 $
  */
 #include "SDL.h"
+#include <srl.hpp>
 #include <srl_memory.hpp> // for memory allocation
 #include <srl_log.hpp>    // for logging
+#include <srl_system.hpp> // for exit
 
 #include "noiz2sa.h"
 #include "screen.h"
+#include "clrtbl.h"
 #include "vector.h"
 #include "background.h"
 
 static Board board[BOARD_MAX];
+static void *backgroundLayerVram = nullptr;
+static int backgroundLayerVramSize = 0;
+static uint16_t *backgroundBuffers[2] = { nullptr, nullptr };
+static uint32_t backgroundUploadedGeneration = 0;
+static uint32_t backgroundRequestedGeneration = 0;
+static bool backgroundUploadLogged = false;
+static constexpr int BACKGROUND_BITMAP_WIDTH = 512;
+static constexpr int BACKGROUND_BITMAP_HEIGHT = 256;
+static constexpr int BACKGROUND_SCREEN_X = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
+
+static int bdIdx;
+static int boardMx, boardMy;
+static int boardRepx, boardRepy;
+static int boardRepXn, boardRepYn;
+static constexpr uint16_t BACKGROUND_BASE_COLOR = 0xffff;
+
+static void fillBackgroundSpan(uint16_t *dst, int count, uint16_t color)
+{
+  for (int i = 0; i < count; i++)
+  {
+    dst[i] = color;
+  }
+}
+
+static void rasterBackgroundRect(
+    uint16_t *dst,
+    int centerX,
+    int centerY,
+    int width,
+    int height,
+    const uint16_t fillColor,
+    const uint16_t borderColor)
+{
+  int x = centerX - (width >> 1);
+  int y = centerY - (height >> 1);
+  if (x < 0) { width += x; x = 0; }
+  if (x + width > LAYER_WIDTH) { width = LAYER_WIDTH - x; }
+  if (width <= 1) return;
+  if (y < 0) { height += y; y = 0; }
+  if (y + height > LAYER_HEIGHT) { height = LAYER_HEIGHT - y; }
+  if (height <= 1) return;
+
+  int ptr = x + y * LAYER_WIDTH;
+  fillBackgroundSpan(&(dst[ptr]), width, borderColor);
+  y++;
+  for (int row = 0; row < height - 2; row++, y++)
+  {
+    ptr = x + y * LAYER_WIDTH;
+    dst[ptr] = borderColor;
+    ptr++;
+    fillBackgroundSpan(&(dst[ptr]), width - 2, fillColor);
+    ptr += width - 2;
+    dst[ptr] = borderColor;
+  }
+  ptr = x + y * LAYER_WIDTH;
+  fillBackgroundSpan(&(dst[ptr]), width, borderColor);
+}
+
+static void renderBackgroundBitmap(
+    const Board *srcBoard,
+    int srcBoardRepx,
+    int srcBoardRepy,
+    int srcBoardRepXn,
+    int srcBoardRepYn,
+    uint16_t *dst)
+{
+  for (int i = 0; i < LAYER_WIDTH * LAYER_HEIGHT; i++)
+  {
+    dst[i] = BACKGROUND_BASE_COLOR;
+  }
+
+  const int osx = -srcBoardRepx * (srcBoardRepXn / 2);
+  const int osy = -srcBoardRepy * (srcBoardRepYn / 2);
+
+  for (int i = 0; i < BOARD_MAX; i++)
+  {
+    if (srcBoard[i].width == NOT_EXIST)
+    {
+      continue;
+    }
+
+    const Board *bd = &(srcBoard[i]);
+    int ox = osx;
+    for (int rx = 0; rx < srcBoardRepXn; rx++, ox += srcBoardRepx)
+    {
+      int oy = osy;
+      for (int ry = 0; ry < srcBoardRepYn; ry++, oy += srcBoardRepy)
+      {
+        rasterBackgroundRect(
+            dst,
+            (bd->x + ox) / bd->z + LAYER_WIDTH / 2,
+            (bd->y + oy) / bd->z + LAYER_HEIGHT / 2,
+            bd->width,
+            bd->height,
+            (uint16_t)color[1],
+            (uint16_t)color[3]);
+      }
+    }
+  }
+}
+
+class BackgroundRenderTask : public SRL::Types::ITask
+{
+public:
+  void Prepare(
+      const Board *srcBoard,
+      int srcBoardRepx,
+      int srcBoardRepy,
+      int srcBoardRepXn,
+      int srcBoardRepYn,
+      uint16_t *dst,
+      uint32_t generation,
+      int bufferIndex)
+  {
+    memcpy(snapshotBoard, srcBoard, sizeof(snapshotBoard));
+    snapshotBoardRepx = srcBoardRepx;
+    snapshotBoardRepy = srcBoardRepy;
+    snapshotBoardRepXn = srcBoardRepXn;
+    snapshotBoardRepYn = srcBoardRepYn;
+    targetBuffer = dst;
+    targetGeneration = generation;
+    targetBufferIndex = bufferIndex;
+  }
+
+  uint32_t GetGeneration() const
+  {
+    return targetGeneration;
+  }
+
+  int GetBufferIndex() const
+  {
+    return targetBufferIndex;
+  }
+
+protected:
+  void Do() override
+  {
+    if (targetBuffer == nullptr)
+    {
+      return;
+    }
+
+    renderBackgroundBitmap(
+        snapshotBoard,
+        snapshotBoardRepx,
+        snapshotBoardRepy,
+        snapshotBoardRepXn,
+        snapshotBoardRepYn,
+        targetBuffer);
+  }
+
+private:
+  Board snapshotBoard[BOARD_MAX];
+  int snapshotBoardRepx = 0;
+  int snapshotBoardRepy = 0;
+  int snapshotBoardRepXn = 0;
+  int snapshotBoardRepYn = 0;
+  uint16_t *targetBuffer = nullptr;
+  uint32_t targetGeneration = 0;
+  int targetBufferIndex = 0;
+};
+
+static BackgroundRenderTask backgroundRenderTask;
+
+static void uploadBackgroundBitmap(const uint16_t *src)
+{
+  if (backgroundLayerVram == nullptr || src == nullptr)
+  {
+    return;
+  }
+
+  const uint8_t *srcRow = (const uint8_t *)src;
+  uint8_t *dstRow = (uint8_t *)backgroundLayerVram + (BACKGROUND_SCREEN_X * (int)sizeof(uint16_t));
+  for (int row = 0; row < LAYER_HEIGHT; row++)
+  {
+    slDMACopy((void *)srcRow, dstRow, LAYER_WIDTH * sizeof(uint16_t));
+    srcRow += LAYER_WIDTH * sizeof(uint16_t);
+    dstRow += BACKGROUND_BITMAP_WIDTH * sizeof(uint16_t);
+  }
+  slDMAWait();
+
+  if (!backgroundUploadLogged)
+  {
+    SRL::Logger::LogInfo(
+        "[BACKGROUND] First upload complete gen=%lu px0=0x%04x px1=0x%04x px2=0x%04x px3=0x%04x",
+        (unsigned long)backgroundRequestedGeneration,
+        (unsigned int)src[0],
+        (unsigned int)src[1],
+        (unsigned int)src[2],
+        (unsigned int)src[3]);
+    backgroundUploadLogged = true;
+  }
+}
+
+static void ensureBackgroundLayer()
+{
+  if (backgroundLayerVram != nullptr)
+  {
+    return;
+  }
+
+  SRL::Bitmap::BitmapInfo backgroundInfo(BACKGROUND_BITMAP_WIDTH, BACKGROUND_BITMAP_HEIGHT);
+  backgroundInfo.ColorMode = SRL::CRAM::TextureColorMode::RGB555;
+  SRL::Math::Types::Vector2D backgroundPosition(0.0, 0.0);
+
+  backgroundLayerVram = SRL::VDP2::VRAM::Allocate(131072, 32, SRL::VDP2::VramBank::A1, 4);
+  if (backgroundLayerVram != nullptr)
+  {
+    void *secondBank = SRL::VDP2::VRAM::Allocate(131072, 32, SRL::VDP2::VramBank::B0, 4);
+    if (secondBank == nullptr)
+    {
+      backgroundLayerVram = nullptr;
+    }
+  }
+  backgroundLayerVramSize = 262144;
+  if (backgroundLayerVram == nullptr)
+  {
+    SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate VDP2 background layer");
+    SRL::System::Exit(1);
+  }
+
+  SRL::Logger::LogInfo(
+      "[BACKGROUND] NBG0 VRAM addr=%p size=%d mode=RGB555 container=%dx%d",
+      backgroundLayerVram,
+      backgroundLayerVramSize,
+      BACKGROUND_BITMAP_WIDTH,
+      BACKGROUND_BITMAP_HEIGHT);
+
+  for (int i = 0; i < 2; i++)
+  {
+    backgroundBuffers[i] = (uint16_t *)SRL::Memory::HighWorkRam::Malloc(LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t));
+    if (backgroundBuffers[i] == nullptr)
+    {
+      SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate CPU background buffer %d", i);
+      SRL::System::Exit(1);
+    }
+    memset(backgroundBuffers[i], 0, LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t));
+  }
+
+  SRL::VDP2::NBG0::SetCellAddress(backgroundLayerVram, backgroundLayerVramSize);
+  SRL::VDP2::VRAM::Blank(backgroundLayerVram, backgroundLayerVramSize);
+  SRL::VDP2::NBG0::Init(backgroundInfo);
+  SRL::VDP2::NBG0::SetPosition(backgroundPosition);
+  SRL::VDP2::NBG0::TransparentDisable();
+  SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer2);
+  SRL::VDP2::NBG0::ScrollEnable();
+  SRL::Logger::LogInfo("[BACKGROUND] NBG0 enabled priority=2 transparent=off base=0x%04x", (unsigned int)BACKGROUND_BASE_COLOR);
+}
+
+static void submitBackgroundRender()
+{
+  ensureBackgroundLayer();
+
+  if (backgroundBuffers[0] == nullptr || backgroundBuffers[1] == nullptr)
+  {
+    return;
+  }
+
+  if (backgroundRenderTask.IsRunning())
+  {
+    return;
+  }
+
+  if (backgroundRenderTask.IsDone() && backgroundRenderTask.GetGeneration() > backgroundUploadedGeneration)
+  {
+    return;
+  }
+
+  const int bufferIndex = (int)(backgroundRequestedGeneration & 1u);
+  backgroundRequestedGeneration++;
+  backgroundRenderTask.Prepare(
+      board,
+      boardRepx,
+      boardRepy,
+      boardRepXn,
+      boardRepYn,
+      backgroundBuffers[bufferIndex],
+      backgroundRequestedGeneration,
+      bufferIndex);
+  SRL::Slave::ExecuteOnSlave(backgroundRenderTask);
+}
+
+static void presentCompletedBackground()
+{
+  if (!backgroundRenderTask.IsDone())
+  {
+    return;
+  }
+
+  if (backgroundRenderTask.GetGeneration() <= backgroundUploadedGeneration)
+  {
+    return;
+  }
+
+  uploadBackgroundBitmap(backgroundBuffers[backgroundRenderTask.GetBufferIndex()]);
+  backgroundUploadedGeneration = backgroundRenderTask.GetGeneration();
+}
 
 void initBackground()
 {
@@ -28,11 +328,6 @@ void initBackground()
     board[i].width = NOT_EXIST;
   }
 }
-
-static int bdIdx;
-static int boardMx, boardMy;
-static int boardRepx, boardRepy;
-static int boardRepXn, boardRepYn;
 
 static void addBoard(int x, int y, int z, int width, int height)
 {
@@ -50,6 +345,7 @@ static void addBoard(int x, int y, int z, int width, int height)
 void setStageBackground(int bn)
 {
   int i, j, k;
+  ensureBackgroundLayer();
   bdIdx = 0;
 
   switch (bn)
@@ -197,45 +493,32 @@ void setStageBackground(int bn)
     boardRepXn = boardRepYn = 2;
     break;
   }
+
+  backgroundRequestedGeneration++;
+  renderBackgroundBitmap(board, boardRepx, boardRepy, boardRepXn, boardRepYn, backgroundBuffers[backgroundRequestedGeneration & 1u]);
+  uploadBackgroundBitmap(backgroundBuffers[backgroundRequestedGeneration & 1u]);
+  backgroundUploadedGeneration = backgroundRequestedGeneration;
 }
 
 void moveBackground()
 {
+  presentCompletedBackground();
+
   int i;
   Board *bd;
-  for (i = 0; i < BOARD_MAX; i++)
+  for (i = 0; i < bdIdx; i++)
   {
-    if (board[i].width == NOT_EXIST)
-      continue;
     bd = &(board[i]);
     bd->x += boardMx;
     bd->y += boardMy;
     bd->x &= (boardRepx - 1);
     bd->y &= (boardRepy - 1);
   }
+
+  submitBackgroundRender();
 }
 
 void drawBackground()
 {
-  int i;
-  Board *bd;
-  int ox, oy, osx, osy, rx, ry;
-  osx = -boardRepx * (boardRepXn / 2);
-  osy = -boardRepy * (boardRepYn / 2);
-  for (i = 0; i < BOARD_MAX; i++)
-  {
-    if (board[i].width == NOT_EXIST)
-      continue;
-    bd = &(board[i]);
-    ox = osx;
-    for (rx = 0; rx < boardRepXn; rx++, ox += boardRepx)
-    {
-      oy = osy;
-      for (ry = 0; ry < boardRepYn; ry++, oy += boardRepy)
-      {
-        drawBox((bd->x + ox) / bd->z + LAYER_WIDTH / 2, (bd->y + oy) / bd->z + LAYER_HEIGHT / 2,
-                bd->width, bd->height, 1, 3, l1buf);
-      }
-    }
-  }
+  presentCompletedBackground();
 }

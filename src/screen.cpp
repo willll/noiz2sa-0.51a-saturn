@@ -57,6 +57,19 @@ static constexpr int PANEL_LAYER_HEIGHT = 256;
 static constexpr int PANEL_LAYER_RIGHT_X = SCREEN_WIDTH - PANEL_WIDTH;
 static constexpr int PANEL_LAYER_PLAYFIELD_X = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
 
+struct PendingLineCommand
+{
+  int16_t x1;
+  int16_t y1;
+  int16_t x2;
+  int16_t y2;
+  Canvas::Pixel color;
+};
+
+static constexpr int MAX_PENDING_LINE_COMMANDS = 512;
+static PendingLineCommand pendingLineCommands[MAX_PENDING_LINE_COMMANDS];
+static int pendingLineCommandCount = 0;
+
 // Handle TGA images in ISO 8:3 format
 #define SPRITE_NUM 7
 
@@ -134,6 +147,43 @@ static int32_t loadSpriteTextureRGB555(SRL::Bitmap::BitmapInfo &info, const uint
   return textureIndex;
 }
 
+static void queueHardwareLineCommand(int x1, int y1, int x2, int y2, Canvas::Pixel lineColor)
+{
+  if (pendingLineCommandCount >= MAX_PENDING_LINE_COMMANDS)
+  {
+    return;
+  }
+
+  pendingLineCommands[pendingLineCommandCount].x1 = (int16_t)x1;
+  pendingLineCommands[pendingLineCommandCount].y1 = (int16_t)y1;
+  pendingLineCommands[pendingLineCommandCount].x2 = (int16_t)x2;
+  pendingLineCommands[pendingLineCommandCount].y2 = (int16_t)y2;
+  pendingLineCommands[pendingLineCommandCount].color = lineColor;
+  pendingLineCommandCount++;
+}
+
+static void flushHardwareLineCommands()
+{
+  const int16_t lineSort = 500;
+
+  for (int i = 0; i < pendingLineCommandCount; i++)
+  {
+    const PendingLineCommand &line = pendingLineCommands[i];
+    const int16_t sceneX1 = (int16_t)(layerRect.x + line.x1 - (SCREEN_WIDTH / 2));
+    const int16_t sceneY1 = (int16_t)(layerRect.y + line.y1 - (SCREEN_HEIGHT / 2));
+    const int16_t sceneX2 = (int16_t)(layerRect.x + line.x2 - (SCREEN_WIDTH / 2));
+    const int16_t sceneY2 = (int16_t)(layerRect.y + line.y2 - (SCREEN_HEIGHT / 2));
+
+    SRL::Scene2D::DrawLine(
+        Vector2D(Fxp::Convert(sceneX1), Fxp::Convert(sceneY1)),
+        Vector2D(Fxp::Convert(sceneX2), Fxp::Convert(sceneY2)),
+        color[line.color],
+        Fxp::Convert(lineSort));
+  }
+
+  pendingLineCommandCount = 0;
+}
+
 static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect, int dstX)
 {
   if (panelLayerVram == nullptr || src == nullptr || dirtyRect.w == 0 || dirtyRect.h == 0)
@@ -187,8 +237,14 @@ static void initPanelLayer(const int16_t paletteBank)
 {
   SRL::Bitmap::BitmapInfo panelInfo(PANEL_LAYER_WIDTH, PANEL_LAYER_HEIGHT);
   panelInfo.ColorMode = SRL::CRAM::TextureColorMode::Paletted256;
+  Vector2D panelPosition(0.0, 0.0);
 
-  panelLayerVram = SRL::VDP2::VRAM::AutoAllocateBmp(panelInfo, scnNBG1, &panelLayerVramSize);
+  panelLayerVram = SRL::VDP2::VRAM::Allocate(
+      PANEL_LAYER_WIDTH * PANEL_LAYER_HEIGHT,
+      32,
+      SRL::VDP2::VramBank::A0,
+      2);
+  panelLayerVramSize = PANEL_LAYER_WIDTH * PANEL_LAYER_HEIGHT;
   if (panelLayerVram == nullptr)
   {
     SRL::Logger::LogFatal("[SCREEN] Failed to allocate VDP2 panel layer");
@@ -199,8 +255,9 @@ static void initPanelLayer(const int16_t paletteBank)
   SRL::VDP2::NBG1::TilePalette = SRL::CRAM::Palette(SRL::CRAM::TextureColorMode::Paletted256, (uint16_t)paletteBank);
   SRL::VDP2::VRAM::Blank(panelLayerVram, panelLayerVramSize);
   SRL::VDP2::NBG1::Init(panelInfo);
+  SRL::VDP2::NBG1::SetPosition(panelPosition);
   SRL::VDP2::NBG1::TransparentEnable();
-  SRL::VDP2::NBG1::SetPriority(SRL::VDP2::Priority::Layer1);
+  SRL::VDP2::NBG1::SetPriority(SRL::VDP2::Priority::Layer6);
   SRL::VDP2::NBG1::ScrollEnable();
 }
 
@@ -482,6 +539,10 @@ void flipScreen()
   uint32_t blitStartUs = SDL_GetProfileMicros();
   SDL_BlitSurface(layer, nullptr, video, &layerRect);
   uint32_t timeLayerUs = SDL_GetProfileMicros() - blitStartUs;
+
+  const uint32_t hwLineStartUs = SDL_GetProfileMicros();
+  flushHardwareLineCommands();
+  const uint32_t timeHwLineUs = SDL_GetProfileMicros() - hwLineStartUs;
   
   if (status == TITLE)
   {
@@ -499,9 +560,10 @@ void flipScreen()
     uint32_t drawUs = 0;
     SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadUs, &drawUs);
     SRL::Logger::LogWarning(
-      "[BLIT_US] frame=%lu layer=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
+      "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
         (unsigned long)flipCounter,
       (unsigned long)timeLayerUs,
+      (unsigned long)timeHwLineUs,
       (unsigned long)0,
         (unsigned long)calls,
         (unsigned long)uploads,
@@ -509,6 +571,7 @@ void flipScreen()
       (unsigned long)drawUs);
     SDL_ResetBlitStats();
   }
+
 }
 
 void clearScreen()
@@ -606,6 +669,13 @@ void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Ca
 
   lx = abs(x2 - x1);
   ly = abs(y2 - y1);
+
+  // Fast Saturn path: bullet wake lines are safe to emit in active gameplay only.
+  if (width == 1 && buf == l1buf && status == IN_GAME)
+  {
+    queueHardwareLineCommand(x1, y1, x2, y2, color);
+    return;
+  }
 
   if (lx < ly)
   {
