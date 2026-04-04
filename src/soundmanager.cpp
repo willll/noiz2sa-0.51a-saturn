@@ -206,6 +206,7 @@ void initSound() {
 #  else
   for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
   SRL::Logger::LogInfo("[SOUND] Initializing Ponesound driver");
+  SRL::Cd::ChangeDir((char *)nullptr);
   SRL::Ponesound::Sound::Driver::Initialize(SRL::Ponesound::ADXMode::ADX2304);
   SRL::Ponesound::CD::SetVolume(7);
   SRL::Logger::LogInfo("[SOUND] Ponesound driver ready");
