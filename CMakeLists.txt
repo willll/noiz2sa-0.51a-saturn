@@ -402,6 +402,9 @@ target_include_directories(
     ${CD_NAME}.elf PUBLIC
     # SaturnRingLib headers (MUST come first to override system headers)
     ${SRL_INSTALL_ROOT}/saturnringlib
+    ${CMAKE_SOURCE_DIR}/src/ponesound/INC
+    ${CMAKE_SOURCE_DIR}/src/decompression/INC
+    ${CMAKE_SOURCE_DIR}/src/smpc/INC
     src/SDL
     ${SRL_INSTALL_ROOT}/modules/sgl/INC
     ${SRL_INSTALL_ROOT}/modules/dummy
@@ -468,9 +471,27 @@ file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/cd/music")
 # Create asset directories at build time (in case they're cleaned)
 add_custom_command(TARGET ${CD_NAME}.elf POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${ASSETS_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${ASSETS_DIR}/SOUNDS"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/cd/music"
     COMMENT "Ensuring asset directories exist"
 )
+
+# Convert SFX WAV assets into raw PCM files expected by Ponesound.
+if(SOX_EXECUTABLE)
+    add_custom_command(TARGET ${CD_NAME}.elf POST_BUILD
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/SHOT.WAV"   -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/SHOT.PCM"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/HIT.WAV"    -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/HIT.PCM"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/FOEDES.WAV" -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/FOEDES.PCM"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/BOSDES.WAV" -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/BOSDES.PCM"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/SHIPDS.WAV" -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/SHIPDS.PCM"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/BONUS.WAV"  -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/BONUS.PCM"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/EXTEND.WAV" -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/EXTEND.PCM"
+        COMMENT "Converting SFX WAV files to raw PCM for Ponesound"
+        VERBATIM
+    )
+else()
+    message(WARNING "sox not found: Ponesound SFX conversion (WAV->PCM) will be skipped")
+endif()
 
 # Create required text files (done at CMake config time)
 file(WRITE "${ASSETS_DIR}/ABS.TXT" "NOT Abstracted by SEGA\n")
