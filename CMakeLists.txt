@@ -494,6 +494,13 @@ add_custom_command(TARGET ${CD_NAME}.elf POST_BUILD
 # Convert SFX WAV assets into raw PCM files expected by Ponesound.
 if(SOX_EXECUTABLE)
     add_custom_command(TARGET ${CD_NAME}.elf POST_BUILD
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/SHOT.WAV"   -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/SHOT.SGL.WAV"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/HIT.WAV"    -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/HIT.SGL.WAV"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/FOEDES.WAV" -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/FOEDES.SGL.WAV"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/BOSDES.WAV" -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/BOSDES.SGL.WAV"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/SHIPDS.WAV" -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/SHIPDS.SGL.WAV"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/BONUS.WAV"  -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/BONUS.SGL.WAV"
+        COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/EXTEND.WAV" -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/EXTEND.SGL.WAV"
         COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/SHOT.WAV"   -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/SHOT.PCM"
         COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/HIT.WAV"    -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/HIT.PCM"
         COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/FOEDES.WAV" -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/FOEDES.PCM"
@@ -501,7 +508,7 @@ if(SOX_EXECUTABLE)
         COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/SHIPDS.WAV" -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/SHIPDS.PCM"
         COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/BONUS.WAV"  -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/BONUS.PCM"
         COMMAND ${SOX_EXECUTABLE} "${ASSETS_DIR}/SOUNDS/EXTEND.WAV" -t raw -r 15360 -e signed-integer -b 8 -c 1 "${ASSETS_DIR}/SOUNDS/EXTEND.PCM"
-        COMMENT "Converting SFX WAV files to raw PCM for Ponesound"
+        COMMENT "Converting SFX WAV files to SGL-compatible WAV and raw PCM"
         VERBATIM
     )
 else()
