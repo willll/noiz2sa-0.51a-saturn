@@ -53,14 +53,15 @@ const uint8_t musicTrackMap[MUSIC_NUM] = {
 
 #define CHUNK_NUM 7
 
-static const char *chunkFileName[CHUNK_NUM] = {
-  "SHOT.PCM", "HIT.PCM", "FOEDES.PCM", "BOSDES.PCM", "SHIPDS.PCM", "BONUS.PCM", "EXTEND.PCM",
+static const char *chunkName[CHUNK_NUM] = {
+  "SHOT", "HIT", "FOEDES", "BOSDES", "SHIPDS", "BONUS", "EXTEND",
 };
 
 // ---- Per-driver chunk storage ----
 #if NOIZ2SA_ENABLE_SOUND == 1 && SRL_USE_SGL_SOUND_DRIVER == 1
-// SGL backend: heap-allocated RawPcm objects, one per SFX slot
-static SRL::Sound::Pcm::RawPcm* sglChunks[CHUNK_NUM];
+// SGL backend: heap-allocated WaveSound objects, one per SFX slot
+static SRL::Sound::Pcm::WaveSound* sglChunks[CHUNK_NUM];
+static bool sglChunkExists[CHUNK_NUM];
 #else
 // Ponesound backend: integer IDs returned by Pcm::Load8
 static int16_t chunk[CHUNK_NUM];
@@ -83,6 +84,7 @@ void closeSound() {
   SRL::Sound::Cdda::StopPause();
   // Free loaded PCM SFX objects
   for (int i = 0; i < CHUNK_NUM; i++) {
+    sglChunkExists[i] = false;
     if (sglChunks[i] != nullptr) {
       delete sglChunks[i];
       sglChunks[i] = nullptr;
@@ -119,7 +121,10 @@ void loadSounds() {
   // CDDA playback is still available (SGL driver path only).
   SRL::Logger::LogWarning("[SOUND] PCM SFX loading disabled (NOIZ2SA_ENABLE_PCM_SFX=0)");
 #  if SRL_USE_SGL_SOUND_DRIVER == 1
-  for (int i = 0; i < CHUNK_NUM; i++) sglChunks[i] = nullptr;
+  for (int i = 0; i < CHUNK_NUM; i++) {
+    sglChunks[i] = nullptr;
+    sglChunkExists[i] = false;
+  }
 #  else
   for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
 #  endif
@@ -135,28 +140,28 @@ void loadSounds() {
 
 #  if SRL_USE_SGL_SOUND_DRIVER == 1
   // ---- SGL PCM path ----
-  // PCM files are raw 8-bit signed mono at 15360 Hz (converted from WAV by the build system)
+  // SGL path uses lazy WAV loading to reduce init-time memory pressure.
   for (int i = 0; i < CHUNK_NUM; i++) {
     sglChunks[i] = nullptr;
-    const char* name = chunkFileName[i];
+    sglChunkExists[i] = false;
+    char name[32];
+    snprintf(name, sizeof(name), "%s.WAV", chunkName[i]);
     SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loading %s", name);
-    SRL::Cd::File f(name);
-    if (!f.Exists()) {
+    SRL::Cd::File file(name);
+    if (!file.Exists()) {
       SRL::Logger::LogWarning("[SOUND] loadSounds (SGL): %s not found on disc", name);
       continue;
     }
-    sglChunks[i] = new SRL::Sound::Pcm::RawPcm(&f,
-                                                 SRL::Sound::Pcm::PcmChannels::Mono,
-                                                 SRL::Sound::Pcm::PcmBitDepth::Pcm8Bit,
-                                                 15360);
-    SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loaded %s", name);
+    sglChunkExists[i] = true;
+    SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Found WAV %s (deferred)", name);
     loaded++;
   }
 #  else
   // ---- Ponesound PCM path ----
   for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
-    const char* name = chunkFileName[i];
+    char name[32];
+    snprintf(name, sizeof(name), "%s.PCM", chunkName[i]);
     SRL::Logger::LogDebug("[SOUND] loadSounds (Ponesound): Loading %s", name);
     chunk[i] = SRL::Ponesound::Pcm::Load8(name, 15360);
     if (chunk[i] < 0) {
@@ -193,7 +198,10 @@ void initSound() {
 
   // Zero out chunk storage before any driver init
 #  if SRL_USE_SGL_SOUND_DRIVER == 1
-  for (int i = 0; i < CHUNK_NUM; i++) sglChunks[i] = nullptr;
+  for (int i = 0; i < CHUNK_NUM; i++) {
+    sglChunks[i] = nullptr;
+    sglChunkExists[i] = false;
+  }
 #  else
   for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
 #  endif
@@ -318,11 +326,17 @@ void playChunk(int idx) {
 #if NOIZ2SA_ENABLE_SOUND == 1
 
 #  if SRL_USE_SGL_SOUND_DRIVER == 1
-  if (sglChunks[idx] == nullptr) {
-    SRL::Logger::LogWarning("[SOUND] playChunk: sglChunks[%d] not loaded", idx);
+  if (!sglChunkExists[idx]) {
+    SRL::Logger::LogWarning("[SOUND] playChunk: %s.WAV missing", chunkName[idx]);
     return;
   }
-  SRL::Logger::LogDebug("[SOUND] playChunk (SGL): Playing %s", chunkFileName[idx]);
+  if (sglChunks[idx] == nullptr) {
+    char name[32];
+    snprintf(name, sizeof(name), "%s.WAV", chunkName[idx]);
+    sglChunks[idx] = new SRL::Sound::Pcm::WaveSound(name);
+    SRL::Logger::LogDebug("[SOUND] playChunk (SGL): Lazy-loaded %s", name);
+  }
+  SRL::Logger::LogDebug("[SOUND] playChunk (SGL): Playing %s.WAV", chunkName[idx]);
   // Play at full volume (127/127) with no panning
   sglChunks[idx]->Play(127, 0);
 
@@ -331,10 +345,10 @@ void playChunk(int idx) {
     SRL::Logger::LogWarning("[SOUND] playChunk: chunk[%d] invalid (id=%d)", idx, chunk[idx]);
     return;
   }
-  SRL::Logger::LogDebug("[SOUND] playChunk (Ponesound): Playing %s id=%d", chunkFileName[idx], chunk[idx]);
+  SRL::Logger::LogDebug("[SOUND] playChunk (Ponesound): Playing %s.PCM id=%d", chunkName[idx], chunk[idx]);
   SRL::Ponesound::Pcm::Play(chunk[idx], SRL::Ponesound::PlayMode::Volatile, 7);
 #  endif
 
-  SRL::Logger::LogInfo("[SOUND] Playing chunk: %s", chunkFileName[idx]);
+  SRL::Logger::LogInfo("[SOUND] Playing chunk: %s", chunkName[idx]);
 #endif // NOIZ2SA_ENABLE_SOUND
 }
