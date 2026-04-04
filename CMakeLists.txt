@@ -83,7 +83,15 @@ set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 option(SRL_USE_SGL_SOUND_DRIVER "Use SGL sound driver" ON)
 option(SRL_ENABLE_FREQ_ANALYSIS "Enable frequency analysis" OFF)
 option(NOIZ2SA_ENABLE_SOUND "Enable in-game sound (PCM SFX + CDDA BGM)" ON)
-option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound / SGL WAV backend" ON)
+option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound backend" OFF)
+
+# SRL SGL sound driver path uses WAV playback. Ponesound path uses PCM playback.
+# Keep these backend toggles mutually exclusive to avoid mixed configuration ambiguity.
+if(SRL_USE_SGL_SOUND_DRIVER AND NOIZ2SA_ENABLE_PCM_SFX)
+    message(FATAL_ERROR
+        "Invalid sound configuration: SRL_USE_SGL_SOUND_DRIVER=ON and NOIZ2SA_ENABLE_PCM_SFX=ON are mutually exclusive. "
+        "Use SGL driver for WAV SFX, or disable SGL and enable NOIZ2SA_ENABLE_PCM_SFX for Ponesound PCM SFX.")
+endif()
 
 # Gameplay performance toggles
 option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" ON)
