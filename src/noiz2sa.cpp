@@ -490,28 +490,14 @@ int main()
 
   // Define loading steps for main()
   const char* mainSteps[] = {
-    "Initializing sound",
     "Initializing game config",
     "Initializing math utilities",
     "Initializing screen",
+    "Initializing sound",
     "Entering title"
   };
   const int mainNumSteps = sizeof(mainSteps) / sizeof(mainSteps[0]);
   int mainStepIdx = 0;
-
-  if (!noSound)
-  {
-    SRL::Logger::LogDebug("[MAIN] Initializing sound");
-    updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
-    initSound();
-    loadSounds();
-  }
-  else
-  {
-    SRL::Logger::LogInfo("[MAIN] Sound disabled");
-    updateLoadingProgress("Sound disabled", (mainStepIdx + 1) * 100 / mainNumSteps);
-  }
-  mainStepIdx++;
 
   SRL::Logger::LogDebug("[MAIN] Initializing game config");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
@@ -526,6 +512,20 @@ int main()
   SRL::Logger::LogDebug("[MAIN] Initializing SDL");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initSDL();
+  mainStepIdx++;
+
+  if (!noSound)
+  {
+    SRL::Logger::LogDebug("[MAIN] Initializing sound");
+    updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
+    initSound();
+    loadSounds();
+  }
+  else
+  {
+    SRL::Logger::LogInfo("[MAIN] Sound disabled");
+    updateLoadingProgress("Sound disabled", (mainStepIdx + 1) * 100 / mainNumSteps);
+  }
   mainStepIdx++;
 
   initFirst();

@@ -10,11 +10,9 @@
  * @version $Revision: 1.4 $
  */
 #include "SDL.h"
-#include <srl_memory.hpp>  // for malloc/free
-#include <srl_log.hpp>     // for logging
-#include <srl_string.hpp>  // for string functions
-#include <srl_cd.hpp>      // for CD file access
-#include <srl_sound.hpp>   // for CDDA support
+#include <ponesound.hpp>
+#include <srl_cd.hpp>
+#include <srl_log.hpp>
 #include <srl_system.hpp>
 
 #include "soundmanager.h"
@@ -41,9 +39,9 @@ const uint8_t musicTrackMap[MUSIC_NUM] = {
 #define CHUNK_NUM 7
 
 static const char *chunkFileName[CHUNK_NUM] = {
-  "SHOT.WAV", "HIT.WAV", "FOEDES.WAV", "BOSDES.WAV", "SHIPDS.WAV", "BONUS.WAV", "EXTEND.WAV",
+  "SHOT.PCM", "HIT.PCM", "FOEDES.PCM", "BOSDES.PCM", "SHIPDS.PCM", "BONUS.PCM", "EXTEND.PCM",
 };
-static SRL::Sound::Pcm::WaveSound *chunk[CHUNK_NUM];
+static int16_t chunk[CHUNK_NUM];
 
 void closeSound() {
   SRL::Logger::LogDebug("[SOUND] closeSound() called");
@@ -54,15 +52,12 @@ void closeSound() {
   }
   // Stop CDDA playback
   SRL::Logger::LogDebug("[SOUND] closeSound: Stopping CDDA");
-  SRL::Sound::Cdda::StopPause();
+  SRL::Ponesound::CD::Stop();
   // Clean up sound effects
   for ( i=0 ; i<CHUNK_NUM ; i++ ) {
-    if ( chunk[i] ) {
-      SRL::Logger::LogDebug("[SOUND] closeSound: Deleting chunk[%d]", i);
-      delete chunk[i];
-    }
-    chunk[i] = nullptr;
+    chunk[i] = -1;
   }
+  SRL::Ponesound::Pcm::Unload(-1);
   useAudio = 0;
   SRL::Logger::LogDebug("[SOUND] closeSound: Audio closed");
 }
@@ -73,28 +68,22 @@ void closeSound() {
 void loadSounds() {
   SRL::Logger::LogDebug("[SOUND] loadSounds() called");
   int i;
-  char name[56];
   int loaded = 0;
 
   SRL::Cd::ChangeDir((char *)nullptr);
   SRL::Cd::ChangeDir("SOUNDS");
 
   for ( i=0 ; i<CHUNK_NUM ; i++ ) {
-    chunk[i] = nullptr;
-    strcpy(name, chunkFileName[i]);
+    chunk[i] = -1;
+    const char* name = chunkFileName[i];
     SRL::Logger::LogDebug("[SOUND] loadSounds: Loading %s", name);
-    chunk[i] = new SRL::Sound::Pcm::WaveSound(name);
-    if ( chunk[i] == nullptr ) {
-      SRL::Logger::LogFatal("[SOUND] Allocation failed for: %s", name);
-      SRL::System::Exit(1);
+    chunk[i] = SRL::Ponesound::Pcm::Load8(name, 15360);
+    if ( chunk[i] < 0 ) {
+      SRL::Logger::LogWarning("[SOUND] Failed to load %s (code=%d)", name, chunk[i]);
     } else {
       SRL::Logger::LogDebug("[SOUND] loadSounds: Loaded %s", name);
+      loaded++;
     }
-    loaded++;
-    // if (SRL::Sound::Pcm::IsChannelFree(0))
-    //     {
-    // chunk[i]->PlayOnChannel(0);
-    //     }
   }
 
   SRL::Cd::ChangeDir((char *)nullptr);
@@ -115,15 +104,12 @@ void initSound() {
   return;
 #else
   SRL::Logger::LogDebug("[SOUND] initSound() called");
-  for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = nullptr;
+  for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
 
-//   // Ensure we are in root before loading optional SGL sound driver files.
-//   SRL::Cd::ChangeDir((char *)nullptr);
-
-// #if defined(SRL_USE_SGL_SOUND_DRIVER) && SRL_USE_SGL_SOUND_DRIVER == 1
-//   SRL::Logger::LogInfo("[SOUND] Initializing SGL sound driver");
-//   SRL::Sound::Hardware::Initialize();
-// #endif
+  SRL::Cd::ChangeDir((char *)nullptr);
+  SRL::Logger::LogInfo("[SOUND] Initializing Ponesound driver");
+  SRL::Ponesound::Sound::Driver::Initialize(SRL::Ponesound::ADXMode::ADX2304);
+  SRL::Ponesound::CD::SetVolume(7);
 
   useAudio = 1;
 #endif
@@ -139,7 +125,7 @@ void playMusic(int idx) {
   }
   if (idx >= 0 && idx < MUSIC_NUM) {
     SRL::Logger::LogDebug("[SOUND] playMusic: Playing CDDA track %d", musicTrackMap[idx]);
-    SRL::Sound::Cdda::PlaySingle(musicTrackMap[idx], true);
+    SRL::Ponesound::CD::PlaySingle(musicTrackMap[idx], true);
     SRL::Logger::LogInfo("[SOUND] Playing music: Track %d", musicTrackMap[idx]);
   } else {
     SRL::Logger::LogWarning("[SOUND] playMusic: Invalid index %d", idx);
@@ -154,7 +140,7 @@ void fadeMusic() {
   }
   // CDDA doesn't support fade, so just stop
   SRL::Logger::LogDebug("[SOUND] fadeMusic: Stopping CDDA");
-  SRL::Sound::Cdda::StopPause();
+  SRL::Ponesound::CD::Stop();
   SRL::Logger::LogInfo("[SOUND] Fading music (CDDA doesn't support fade, so stopped)");
 }
 
@@ -165,7 +151,7 @@ void stopMusic() {
     return;
   }
   SRL::Logger::LogDebug("[SOUND] stopMusic: Stopping CDDA");
-  SRL::Sound::Cdda::StopPause();
+  SRL::Ponesound::CD::Stop();
   SRL::Logger::LogInfo("[SOUND] Stopped music");
 }
 
@@ -179,20 +165,14 @@ void playChunk(int idx) {
     SRL::Logger::LogWarning("[SOUND] playChunk: Invalid index %d", idx);
     return;
   }
-  if ( chunk[idx] == nullptr ) {
-    SRL::Logger::LogWarning("[SOUND] playChunk: chunk[%d] is nullptr", idx);
+  if ( chunk[idx] < 0 ) {
+    SRL::Logger::LogWarning("[SOUND] playChunk: chunk[%d] is invalid (code=%d)", idx, chunk[idx]);
     return;
   }
 
-  // 4 PCM channels are available, let SRL pick the first free one.
+  // Play as a one-shot SFX using Ponesound PCM playback.
   SRL::Logger::LogDebug("[SOUND] playChunk: Playing %s", chunkFileName[idx]);
-  //SRL::Sound::Pcm::Play(*chunk[idx], 127, 0);
-  if (SRL::Sound::Pcm::IsChannelFree(0)) {
-  chunk[idx]->PlayOnChannel(0);
-   SRL::Logger::LogInfo("[SOUND] Playing chunk: %s on channel 0", chunkFileName[idx]);
-  } else {
-  chunk[idx]->PlayOnChannel(1);
-   SRL::Logger::LogInfo("[SOUND] Playing chunk: %s on channel 1", chunkFileName[idx]);
-  }
+  SRL::Ponesound::Pcm::Play(chunk[idx], SRL::Ponesound::PlayMode::Volatile, 7);
+  SRL::Logger::LogInfo("[SOUND] Playing chunk: %s pcmId=%d", chunkFileName[idx], chunk[idx]);
 }
 
