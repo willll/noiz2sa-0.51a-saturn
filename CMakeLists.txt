@@ -80,9 +80,10 @@ set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 
 # Sound configuration
-option(SRL_USE_SGL_SOUND_DRIVER "Use SGL sound driver" ON)
+option(SRL_USE_SGL_SOUND_DRIVER "Use SGL sound driver" OFF)
 option(SRL_ENABLE_FREQ_ANALYSIS "Enable frequency analysis" OFF)
 option(NOIZ2SA_ENABLE_SOUND "Enable in-game sound (PCM SFX + CDDA BGM)" ON)
+option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound" OFF)
 
 # Gameplay performance toggles
 option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" ON)
@@ -190,6 +191,12 @@ if(NOIZ2SA_ENABLE_SOUND)
     add_compile_definitions(NOIZ2SA_ENABLE_SOUND=1)
 else()
     add_compile_definitions(NOIZ2SA_ENABLE_SOUND=0)
+endif()
+
+if(NOIZ2SA_ENABLE_PCM_SFX)
+    add_compile_definitions(NOIZ2SA_ENABLE_PCM_SFX=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_PCM_SFX=0)
 endif()
 
 # Gameplay performance toggles

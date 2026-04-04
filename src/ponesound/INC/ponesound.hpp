@@ -372,7 +372,10 @@ namespace SRL::Ponesound
 
 			volatile PCM::CTRL *ctrl = &m68kCommands.pcmCtrl[numberOfPCMs];
 			volatile uint8_t *ctrlBytes = reinterpret_cast<volatile uint8_t *>(ctrl);
+			volatile uint16_t *ctrlWords = reinterpret_cast<volatile uint16_t *>(ctrl);
 			SRL::Logger::LogInfo("Ponesound::RegisterPcm ctrl idx=%d addr=0x%08x", numberOfPCMs, (uint32_t)ctrl);
+
+			const uint8_t pcmType = (bitDepth == BitDepth::PCM16) ? PCM::TYPE_16BIT : PCM::TYPE_8BIT;
 
 			SRL::Logger::LogInfo("Ponesound::RegisterPcm write hiAddrBits");
             ctrl->hiAddrBits = (uint16_t)((uint32_t)scspWorkAddr >> 16);
@@ -391,8 +394,6 @@ namespace SRL::Ponesound
 					ctrlBytes[8] = (uint8_t)(playSize >> 8);
 					ctrlBytes[9] = (uint8_t)(playSize & 0xFF);
 				}
-				SRL::Logger::LogInfo("Ponesound::RegisterPcm PCM16 write bitDepth");
-                ctrl->bitDepth = PCM::TYPE_16BIT;
             }
             else if (bitDepth == BitDepth::PCM8) {
 				SRL::Logger::LogInfo("Ponesound::RegisterPcm PCM8 skip bytesPerBlank write");
@@ -402,8 +403,6 @@ namespace SRL::Ponesound
 					ctrlBytes[8] = (uint8_t)(playSize >> 8);
 					ctrlBytes[9] = (uint8_t)(playSize & 0xFF);
 				}
-				SRL::Logger::LogInfo("Ponesound::RegisterPcm PCM8 write bitDepth");
-                ctrl->bitDepth = PCM::TYPE_8BIT;
             }
 
 			SRL::Logger::LogInfo(
@@ -415,9 +414,9 @@ namespace SRL::Ponesound
 			);
 
 			SRL::Logger::LogInfo("Ponesound::RegisterPcm write loopType");
-            ctrl->loopType = 0;
+			ctrlWords[0] = (uint16_t)pcmType;
 			SRL::Logger::LogInfo("Ponesound::RegisterPcm write volume");
-            ctrl->volume = 7;
+			ctrlWords[6] = 0x0007;
 			SRL::Logger::LogInfo("Ponesound::RegisterPcm flags written idx=%d", numberOfPCMs);
 
             numberOfPCMs++;

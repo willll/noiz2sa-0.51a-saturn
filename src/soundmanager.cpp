@@ -5,15 +5,30 @@
  */
 
 /**
- * BGM/SE manager(using SDL_mixer for SFX and CDDA for music).
+ * BGM/SE manager.
+ *
+ * Supports two sound driver backends selected at compile time:
+ *   SRL_USE_SGL_SOUND_DRIVER=1  -> SGL driver (SDDRVS.TSK/BOOTSND.MAP) for CDDA + SGL PCM for SFX
+ *   SRL_USE_SGL_SOUND_DRIVER=0  -> Ponesound driver for CDDA + PCM SFX
+ *
+ * PCM SFX loading can be independently toggled:
+ *   NOIZ2SA_ENABLE_PCM_SFX=1   -> load and play PCM sound effects
+ *   NOIZ2SA_ENABLE_PCM_SFX=0   -> skip PCM SFX (CDDA BGM still works with SGL driver path)
  *
  * @version $Revision: 1.4 $
  */
 #include "SDL.h"
-#include <ponesound.hpp>
 #include <srl_cd.hpp>
 #include <srl_log.hpp>
 #include <srl_system.hpp>
+
+#if NOIZ2SA_ENABLE_SOUND == 1
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+#    include <srl_sound.hpp>
+#  else
+#    include <ponesound.hpp>
+#  endif
+#endif
 
 #include "soundmanager.h"
 
@@ -41,81 +56,181 @@ const uint8_t musicTrackMap[MUSIC_NUM] = {
 static const char *chunkFileName[CHUNK_NUM] = {
   "SHOT.PCM", "HIT.PCM", "FOEDES.PCM", "BOSDES.PCM", "SHIPDS.PCM", "BONUS.PCM", "EXTEND.PCM",
 };
+
+// ---- Per-driver chunk storage ----
+#if NOIZ2SA_ENABLE_SOUND == 1 && SRL_USE_SGL_SOUND_DRIVER == 1
+// SGL backend: heap-allocated RawPcm objects, one per SFX slot
+static SRL::Sound::Pcm::RawPcm* sglChunks[CHUNK_NUM];
+#else
+// Ponesound backend: integer IDs returned by Pcm::Load8
 static int16_t chunk[CHUNK_NUM];
+#endif
+
+
+// ---- closeSound ----------------------------------------------------------------
 
 void closeSound() {
   SRL::Logger::LogDebug("[SOUND] closeSound() called");
-  int i;
   if ( !useAudio ) {
     SRL::Logger::LogDebug("[SOUND] closeSound: useAudio=0, skipping");
     return;
   }
-  // Stop CDDA playback
-  SRL::Logger::LogDebug("[SOUND] closeSound: Stopping CDDA");
+
+#if NOIZ2SA_ENABLE_SOUND == 1
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  // Stop CDDA playback via SGL
+  SRL::Logger::LogDebug("[SOUND] closeSound: Stopping CDDA (SGL)");
+  SRL::Sound::Cdda::StopPause();
+  // Free loaded PCM SFX objects
+  for (int i = 0; i < CHUNK_NUM; i++) {
+    if (sglChunks[i] != nullptr) {
+      delete sglChunks[i];
+      sglChunks[i] = nullptr;
+    }
+  }
+#  else
+  // Stop CDDA playback via Ponesound
+  SRL::Logger::LogDebug("[SOUND] closeSound: Stopping CDDA (Ponesound)");
   SRL::Ponesound::CD::Stop();
-  // Clean up sound effects
-  for ( i=0 ; i<CHUNK_NUM ; i++ ) {
+  // Reset chunk IDs and unload all Ponesound PCM
+  for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
   }
   SRL::Ponesound::Pcm::Unload(-1);
+#  endif
+#endif
+
   useAudio = 0;
   SRL::Logger::LogDebug("[SOUND] closeSound: Audio closed");
 }
 
 
-// Initialize the sound.
+// ---- loadSounds ----------------------------------------------------------------
 
 void loadSounds() {
   SRL::Logger::LogDebug("[SOUND] loadSounds() called");
-  int i;
+
+#if NOIZ2SA_ENABLE_SOUND == 0
+  SRL::Logger::LogDebug("[SOUND] loadSounds: sound disabled at compile time");
+  return;
+
+#elif NOIZ2SA_ENABLE_PCM_SFX == 0
+  // PCM SFX disabled: nothing to load here.
+  // CDDA playback is still available (SGL driver path only).
+  SRL::Logger::LogWarning("[SOUND] PCM SFX loading disabled (NOIZ2SA_ENABLE_PCM_SFX=0)");
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  for (int i = 0; i < CHUNK_NUM; i++) sglChunks[i] = nullptr;
+#  else
+  for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
+#  endif
+  return;
+
+#else  // NOIZ2SA_ENABLE_SOUND==1 && NOIZ2SA_ENABLE_PCM_SFX==1
+
   int loaded = 0;
 
+  // Navigate into the SOUNDS directory on disc
   SRL::Cd::ChangeDir((char *)nullptr);
   SRL::Cd::ChangeDir("SOUNDS");
 
-  for ( i=0 ; i<CHUNK_NUM ; i++ ) {
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  // ---- SGL PCM path ----
+  // PCM files are raw 8-bit signed mono at 15360 Hz (converted from WAV by the build system)
+  for (int i = 0; i < CHUNK_NUM; i++) {
+    sglChunks[i] = nullptr;
+    const char* name = chunkFileName[i];
+    SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loading %s", name);
+    SRL::Cd::File f(name);
+    if (!f.Exists()) {
+      SRL::Logger::LogWarning("[SOUND] loadSounds (SGL): %s not found on disc", name);
+      continue;
+    }
+    sglChunks[i] = new SRL::Sound::Pcm::RawPcm(&f,
+                                                 SRL::Sound::Pcm::PcmChannels::Mono,
+                                                 SRL::Sound::Pcm::PcmBitDepth::Pcm8Bit,
+                                                 15360);
+    SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loaded %s", name);
+    loaded++;
+  }
+#  else
+  // ---- Ponesound PCM path ----
+  for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
     const char* name = chunkFileName[i];
-    SRL::Logger::LogDebug("[SOUND] loadSounds: Loading %s", name);
+    SRL::Logger::LogDebug("[SOUND] loadSounds (Ponesound): Loading %s", name);
     chunk[i] = SRL::Ponesound::Pcm::Load8(name, 15360);
-    if ( chunk[i] < 0 ) {
-      SRL::Logger::LogWarning("[SOUND] Failed to load %s (code=%d)", name, chunk[i]);
+    if (chunk[i] < 0) {
+      SRL::Logger::LogWarning("[SOUND] loadSounds (Ponesound): Failed to load %s (code=%d)", name, chunk[i]);
     } else {
-      SRL::Logger::LogDebug("[SOUND] loadSounds: Loaded %s", name);
+      SRL::Logger::LogDebug("[SOUND] loadSounds (Ponesound): Loaded %s id=%d", name, chunk[i]);
       loaded++;
     }
   }
+#  endif
 
   SRL::Cd::ChangeDir((char *)nullptr);
 
   if (loaded <= 0) {
-    SRL::Logger::LogWarning("[SOUND] No PCM chunks loaded; disabling audio");
-    useAudio = 0;
+    SRL::Logger::LogWarning("[SOUND] No PCM chunks loaded; SFX unavailable");
   } else {
     SRL::Logger::LogInfo("[SOUND] Loaded %d/%d PCM chunks", loaded, CHUNK_NUM);
   }
+#endif // NOIZ2SA_ENABLE_PCM_SFX
 }
+
+
+// ---- initSound -----------------------------------------------------------------
 
 void initSound() {
 #if NOIZ2SA_ENABLE_SOUND == 0
   SRL::Logger::LogDebug("[SOUND] initSound() called (NOIZ2SA_ENABLE_SOUND=0)");
   useAudio = 0;
-  SRL::Logger::LogInfo("[SOUND] Disabled at compile time (NOIZ2SA_ENABLE_SOUND=0)");
+  SRL::Logger::LogInfo("[SOUND] Disabled at compile time");
   return;
+
 #else
   SRL::Logger::LogDebug("[SOUND] initSound() called");
-  for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
 
-  SRL::Cd::ChangeDir((char *)nullptr);
+  // Zero out chunk storage before any driver init
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  for (int i = 0; i < CHUNK_NUM; i++) sglChunks[i] = nullptr;
+#  else
+  for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
+#  endif
+
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  // ---- SGL driver path ----
+  // SRL::Core::Initialize() already called Hardware::Initialize() via srl_core.hpp
+  // (guard: #if SRL_USE_SGL_SOUND_DRIVER == 1 in Core::Initialize).
+  // We only need to set CDDA volume here.
+  SRL::Logger::LogInfo("[SOUND] SGL sound driver already initialised by Core::Initialize");
+  SRL::Sound::Cdda::SetVolume(7);
+  SRL::Logger::LogInfo("[SOUND] SGL CDDA volume set");
+  useAudio = 1;
+
+#  elif NOIZ2SA_ENABLE_PCM_SFX == 0
+  // Ponesound driver with PCM SFX disabled.
+  // Skip driver initialisation entirely to avoid M68K/SCSP bus conflicts —
+  // the Ponesound M68K program interacts with SCSP registers in ways that
+  // destabilise later bus accesses when no PCM is ever registered.
+  SRL::Logger::LogWarning("[SOUND] Ponesound driver init skipped (NOIZ2SA_ENABLE_PCM_SFX=0)");
+  useAudio = 0;
+  return;
+
+#  else
+  // ---- Ponesound driver init (PCM SFX enabled) ----
   SRL::Logger::LogInfo("[SOUND] Initializing Ponesound driver");
   SRL::Ponesound::Sound::Driver::Initialize(SRL::Ponesound::ADXMode::ADX2304);
   SRL::Ponesound::CD::SetVolume(7);
-
+  SRL::Logger::LogInfo("[SOUND] Ponesound driver ready");
   useAudio = 1;
-#endif
+#  endif
+
+#endif // NOIZ2SA_ENABLE_SOUND
 }
 
-// Play/Stop the music/chunk.
+
+// ---- playMusic -----------------------------------------------------------------
 
 void playMusic(int idx) {
   SRL::Logger::LogDebug("[SOUND] playMusic(%d) called", idx);
@@ -123,14 +238,26 @@ void playMusic(int idx) {
     SRL::Logger::LogDebug("[SOUND] playMusic: useAudio=0, skipping");
     return;
   }
-  if (idx >= 0 && idx < MUSIC_NUM) {
-    SRL::Logger::LogDebug("[SOUND] playMusic: Playing CDDA track %d", musicTrackMap[idx]);
-    SRL::Ponesound::CD::PlaySingle(musicTrackMap[idx], true);
-    SRL::Logger::LogInfo("[SOUND] Playing music: Track %d", musicTrackMap[idx]);
-  } else {
+  if (idx < 0 || idx >= MUSIC_NUM) {
     SRL::Logger::LogWarning("[SOUND] playMusic: Invalid index %d", idx);
+    return;
   }
+  uint8_t track = musicTrackMap[idx];
+  SRL::Logger::LogDebug("[SOUND] playMusic: Playing CDDA track %d", track);
+
+#if NOIZ2SA_ENABLE_SOUND == 1
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  SRL::Sound::Cdda::PlaySingle(track, true);
+#  else
+  SRL::Ponesound::CD::PlaySingle(track, true);
+#  endif
+#endif
+
+  SRL::Logger::LogInfo("[SOUND] Playing music: Track %d", track);
 }
+
+
+// ---- fadeMusic -----------------------------------------------------------------
 
 void fadeMusic() {
   SRL::Logger::LogDebug("[SOUND] fadeMusic() called");
@@ -138,11 +265,22 @@ void fadeMusic() {
     SRL::Logger::LogDebug("[SOUND] fadeMusic: useAudio=0, skipping");
     return;
   }
-  // CDDA doesn't support fade, so just stop
-  SRL::Logger::LogDebug("[SOUND] fadeMusic: Stopping CDDA");
+  // Neither SGL CDDA nor Ponesound supports fade-out; just stop.
+  SRL::Logger::LogDebug("[SOUND] fadeMusic: stopping CDDA (no fade support)");
+
+#if NOIZ2SA_ENABLE_SOUND == 1
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  SRL::Sound::Cdda::StopPause();
+#  else
   SRL::Ponesound::CD::Stop();
-  SRL::Logger::LogInfo("[SOUND] Fading music (CDDA doesn't support fade, so stopped)");
+#  endif
+#endif
+
+  SRL::Logger::LogInfo("[SOUND] Fading music (stopped)");
 }
+
+
+// ---- stopMusic -----------------------------------------------------------------
 
 void stopMusic() {
   SRL::Logger::LogDebug("[SOUND] stopMusic() called");
@@ -151,9 +289,20 @@ void stopMusic() {
     return;
   }
   SRL::Logger::LogDebug("[SOUND] stopMusic: Stopping CDDA");
+
+#if NOIZ2SA_ENABLE_SOUND == 1
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  SRL::Sound::Cdda::StopPause();
+#  else
   SRL::Ponesound::CD::Stop();
+#  endif
+#endif
+
   SRL::Logger::LogInfo("[SOUND] Stopped music");
 }
+
+
+// ---- playChunk -----------------------------------------------------------------
 
 void playChunk(int idx) {
   SRL::Logger::LogDebug("[SOUND] playChunk(%d) called", idx);
@@ -161,18 +310,31 @@ void playChunk(int idx) {
     SRL::Logger::LogDebug("[SOUND] playChunk: useAudio=0, skipping");
     return;
   }
-  if ( idx < 0 || idx >= CHUNK_NUM ) {
+  if (idx < 0 || idx >= CHUNK_NUM) {
     SRL::Logger::LogWarning("[SOUND] playChunk: Invalid index %d", idx);
     return;
   }
-  if ( chunk[idx] < 0 ) {
-    SRL::Logger::LogWarning("[SOUND] playChunk: chunk[%d] is invalid (code=%d)", idx, chunk[idx]);
+
+#if NOIZ2SA_ENABLE_SOUND == 1
+
+#  if SRL_USE_SGL_SOUND_DRIVER == 1
+  if (sglChunks[idx] == nullptr) {
+    SRL::Logger::LogWarning("[SOUND] playChunk: sglChunks[%d] not loaded", idx);
     return;
   }
+  SRL::Logger::LogDebug("[SOUND] playChunk (SGL): Playing %s", chunkFileName[idx]);
+  // Play at full volume (127/127) with no panning
+  sglChunks[idx]->Play(127, 0);
 
-  // Play as a one-shot SFX using Ponesound PCM playback.
-  SRL::Logger::LogDebug("[SOUND] playChunk: Playing %s", chunkFileName[idx]);
+#  else
+  if (chunk[idx] < 0) {
+    SRL::Logger::LogWarning("[SOUND] playChunk: chunk[%d] invalid (id=%d)", idx, chunk[idx]);
+    return;
+  }
+  SRL::Logger::LogDebug("[SOUND] playChunk (Ponesound): Playing %s id=%d", chunkFileName[idx], chunk[idx]);
   SRL::Ponesound::Pcm::Play(chunk[idx], SRL::Ponesound::PlayMode::Volatile, 7);
-  SRL::Logger::LogInfo("[SOUND] Playing chunk: %s pcmId=%d", chunkFileName[idx], chunk[idx]);
-}
+#  endif
 
+  SRL::Logger::LogInfo("[SOUND] Playing chunk: %s", chunkFileName[idx]);
+#endif // NOIZ2SA_ENABLE_SOUND
+}
