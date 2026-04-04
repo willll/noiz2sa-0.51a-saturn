@@ -22,8 +22,8 @@ typedef struct {
 
 #define SHOT_SPEED (4096 / SCREEN_DIVISOR)
 
-#define SHOT_WIDTH 8
-#define SHOT_HEIGHT 24
+#define SHOT_WIDTH (8 / SCREEN_DIVISOR)
+#define SHOT_HEIGHT (24 / SCREEN_DIVISOR)
 
 extern Shot shot[];
 
