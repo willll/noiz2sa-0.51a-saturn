@@ -69,6 +69,41 @@ static void addFrag(Vector *pos, Vector *vel, int spc, int size)
   frag[i].spc = spc;
 }
 
+static void ensureFragCapacity(int required)
+{
+  int freeSlots = 0;
+  for (int i = 0; i < FRAG_MAX; i++)
+  {
+    if (frag[i].cnt <= 0)
+    {
+      freeSlots++;
+    }
+  }
+
+  int reclaim = required - freeSlots;
+  while (reclaim > 0)
+  {
+    int victim = -1;
+    int minCnt = 0x7fffffff;
+    for (int i = 0; i < FRAG_MAX; i++)
+    {
+      if (frag[i].cnt > 0 && frag[i].cnt < minCnt)
+      {
+        minCnt = frag[i].cnt;
+        victim = i;
+      }
+    }
+
+    if (victim < 0)
+    {
+      break;
+    }
+
+    frag[victim].cnt = 0;
+    reclaim--;
+  }
+}
+
 void addShotFrag(Vector *p)
 {
   Vector pos, vel;
@@ -108,6 +143,10 @@ void addShipFrag(Vector *p)
   Vector pos, vel;
   int cmx, cmy;
   int i;
+
+  // Ship explosion should remain visible even in effect-heavy scenes.
+  ensureFragCapacity(48 + 32);
+
   pos.x = (p->x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
   pos.y = (p->y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
   for (i = 0; i < 48; i++)
