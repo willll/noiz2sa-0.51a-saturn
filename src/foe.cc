@@ -28,6 +28,7 @@
 #include "attractmanager.h"
 #include "brgmng_mtd.h"
 #include "letterrender.h"
+#include "collision_math.hpp"
 
 #define FOE_MAX 1024
 #define FOE_TYPE_MAX 4
@@ -247,8 +248,6 @@ void moveFoes()
   int bossActiveBulletNum = 0;
   int mx, my;
   int wl;
-  Vector bmv, sofs;
-  float ht, hd, inab, inaa;
 
   for (i = 0; i < FOE_MAX; i++)
   {
@@ -294,31 +293,15 @@ void moveFoes()
 
     if (fe->spc == FOE)
     {
-      const int foeType = fe->type;
-      if (foeType < 0 || foeType >= FOE_TYPE_MAX)
-      {
-        removeFoeForced(fe);
-        continue;
-      }
-      if (fe->shield <= 0)
-      {
-        removeFoeForced(fe);
-        continue;
-      }
-
       fe->hit = 0;
       bool foeRemovedByShot = false;
       // Check if the shot hits the foe.
       for (j = 0; j < SHOT_MAX; j++)
       {
-        if (fe->spc != FOE)
-        {
-          break;
-        }
         if (shot[j].cnt != NOT_EXIST)
         {
-          if (absN(fe->pos.x - shot[j].pos.x) < foeScanSize[foeType] &&
-              absN(fe->pos.y - shot[j].pos.y) < foeScanSize[foeType] + SHOT_SCAN_HEIGHT)
+          const int shotPrevY = shot[j].pos.y + SHOT_SPEED;
+          if (shotHitsFoeSwept(fe->pos, shot[j].pos, shotPrevY, foeScanSize[fe->type], SHOT_SCAN_HEIGHT))
           {
             Vector shotPos = shot[j].pos;
             shot[j].cnt = NOT_EXIST;
@@ -328,11 +311,11 @@ void moveFoes()
 
             if (fe->shield <= 0)
             {
-              addScore(enemyScore[foeType]);
-              wipeBullets(&(fe->pos), BULLET_WIPE_WIDTH * (foeType + 1));
-              addEnemyFrag(&(fe->pos), mx, my, foeType);
+              addScore(enemyScore[fe->type]);
+              wipeBullets(&(fe->pos), BULLET_WIPE_WIDTH * (fe->type + 1));
+              addEnemyFrag(&(fe->pos), mx, my, fe->type);
 
-              if (foeType == BOSS_TYPE)
+              if (fe->type == BOSS_TYPE)
               {
                 bossDestroied();
                 playChunk(3);
@@ -340,8 +323,9 @@ void moveFoes()
               else
               {
                 playChunk(2);
-                removeFoeForced(fe);
               }
+
+              removeFoeForced(fe);
 
               foeRemovedByShot = true;
               break;
@@ -357,13 +341,13 @@ void moveFoes()
         continue;
       }
 
-      // Fallback enemy fire path: if BLB command callbacks do not emit bullets,
-      // keep foes dangerous with periodic aimed shots.
+      // Fallback enemy fire path: if BLB callbacks do not emit bullets reliably,
+      // keep foes active with periodic aimed shots.
       if (fe->shield > 0 && (fe->cnt % 48) == 0)
       {
         const int fireDir = getPlayerDeg(fe->pos.x, fe->pos.y);
-        const int fireSpd = 320 + (foeType * 80);
-        addFoeNormalBullet(&(fe->pos), fe->rank, fireDir, fireSpd, foeType + 1);
+        const int fireSpd = 320 + (fe->type * 80);
+        addFoeNormalBullet(&(fe->pos), fe->rank, fireDir, fireSpd, fe->type + 1);
       }
     }
     else
@@ -382,24 +366,10 @@ void moveFoes()
       }
 
       // Check if the bullet hits the ship.
-      bmv = fe->pos;
-      vctSub(&bmv, &(fe->ppos));
-      inaa = vctInnerProduct(&bmv, &bmv);
-      if (inaa > 1.0f)
+      if (movingBulletHitsShip(fe->pos, fe->ppos, ship.pos, SHIP_HIT_WIDTH))
       {
-        sofs = ship.pos;
-        vctSub(&sofs, &(fe->ppos));
-        inab = vctInnerProduct(&bmv, &sofs);
-        ht = inab / inaa;
-        if (ht > 0.0f && ht < 1.0f)
-        {
-          hd = vctInnerProduct(&sofs, &sofs) - inab * inab / inaa / inaa;
-          if (hd >= 0 && hd < SHIP_HIT_WIDTH)
-          {
-            bulletRemovedHitShip++;
-            destroyShip();
-          }
-        }
+        bulletRemovedHitShip++;
+        destroyShip();
       }
     }
     if (fe->ppos.x < 0 || fe->ppos.x >= SCAN_WIDTH_8 ||
