@@ -688,3 +688,120 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/postbuild.cmake")
         COMMENT "Running post-build script"
     )
 endif()
+
+# ============================================================================
+# SH2 Collision Unit Tests (CMake + CTest integration)
+# ============================================================================
+
+set(COLLISION_TEST_CD_NAME "noiz2sa_collision_ut")
+set(COLLISION_TESTS_DIR "${CMAKE_SOURCE_DIR}/Tests")
+set(COLLISION_TEST_BUILD_DROP "${COLLISION_TESTS_DIR}/BuildDrop")
+set(COLLISION_TEST_ASSETS_DIR "${COLLISION_TESTS_DIR}/cd/data")
+set(COLLISION_TEST_ELF "${COLLISION_TEST_BUILD_DROP}/${COLLISION_TEST_CD_NAME}.elf")
+set(COLLISION_TEST_ISO "${COLLISION_TEST_BUILD_DROP}/${COLLISION_TEST_CD_NAME}.iso")
+set(COLLISION_TEST_BIN "${COLLISION_TEST_BUILD_DROP}/${COLLISION_TEST_CD_NAME}.bin")
+set(COLLISION_TEST_CUE "${COLLISION_TEST_BUILD_DROP}/${COLLISION_TEST_CD_NAME}.cue")
+set(COLLISION_TEST_MAP "${COLLISION_TEST_BUILD_DROP}/${COLLISION_TEST_CD_NAME}.map")
+
+file(MAKE_DIRECTORY "${COLLISION_TEST_BUILD_DROP}")
+file(MAKE_DIRECTORY "${COLLISION_TEST_ASSETS_DIR}")
+file(WRITE "${COLLISION_TEST_ASSETS_DIR}/ABS.TXT" "NOT Abstracted by SEGA\n")
+file(WRITE "${COLLISION_TEST_ASSETS_DIR}/BIB.TXT" "NOT Bibliographiced by SEGA\n")
+file(WRITE "${COLLISION_TEST_ASSETS_DIR}/CPY.TXT" "")
+
+set(COLLISION_TEST_SOURCES
+    ${CMAKE_SOURCE_DIR}/Tests/src/main.cxx
+    ${CMAKE_SOURCE_DIR}/src/vector.cpp
+)
+
+add_executable(${COLLISION_TEST_CD_NAME}.elf
+    "${SGL_PRELOADER_SOURCE}"
+    ${COLLISION_TEST_SOURCES}
+    ${SOURCES_SGL_SYSTEM}
+)
+
+set_target_properties(${COLLISION_TEST_CD_NAME}.elf PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${COLLISION_TEST_BUILD_DROP}"
+)
+
+target_include_directories(
+    ${COLLISION_TEST_CD_NAME}.elf PUBLIC
+    ${SRL_INSTALL_ROOT}/saturnringlib
+    ${SRL_INSTALL_ROOT}/modules/sgl/INC
+    ${SRL_INSTALL_ROOT}/modules/dummy
+    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+    ${SRL_INSTALL_ROOT}/modules/tlsf
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/Tests/src
+)
+
+target_compile_options(${COLLISION_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
+    $<$<COMPILE_LANGUAGE:C>:${c_flags}>
+)
+
+target_compile_definitions(${COLLISION_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:bool=int>
+    $<$<COMPILE_LANGUAGE:C>:true=1>
+    $<$<COMPILE_LANGUAGE:C>:false=0>
+)
+
+target_link_options(${COLLISION_TEST_CD_NAME}.elf PUBLIC
+    "SHELL:-m2"
+    "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+    "SHELL:-Xlinker -Map -Xlinker ${COLLISION_TEST_MAP}"
+    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+)
+
+if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+    target_link_options(${COLLISION_TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+endif()
+
+srl_link_target(${COLLISION_TEST_CD_NAME}.elf)
+
+add_custom_command(TARGET ${COLLISION_TEST_CD_NAME}.elf POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${COLLISION_TEST_CD_NAME}.elf>" "${COLLISION_TEST_ASSETS_DIR}/0.bin"
+    COMMENT "Converting collision test ELF to binary: ${COLLISION_TEST_ASSETS_DIR}/0.bin"
+    VERBATIM
+)
+
+if(XORRISOFS_EXECUTABLE)
+    add_custom_target(${COLLISION_TEST_CD_NAME}_iso
+        DEPENDS ${COLLISION_TEST_CD_NAME}.elf
+        COMMAND ${XORRISOFS_EXECUTABLE}
+            --norock -quiet
+            -sysid "SEGA SATURN"
+            -volid "${COLLISION_TEST_CD_NAME}"
+            -volset "${COLLISION_TEST_CD_NAME}"
+            -publisher "SEGA ENTERPRISES, LTD."
+            -preparer "SEGA ENTERPRISES, LTD."
+            -appid "${COLLISION_TEST_CD_NAME}"
+            -abstract "NOT Abstracted by SEGA"
+            -copyright ""
+            -biblio ""
+            -generic-boot "${IPFILE}"
+            -full-iso9660-filenames
+            -o "${COLLISION_TEST_ISO}"
+            "${COLLISION_TEST_ASSETS_DIR}"
+        COMMENT "Building collision test ISO: ${COLLISION_TEST_ISO}"
+        VERBATIM
+    )
+endif()
+
+if(EXISTS "${ISO2RAW_EXECUTABLE}")
+    add_custom_target(${COLLISION_TEST_CD_NAME}_bin_cue
+        DEPENDS ${COLLISION_TEST_CD_NAME}_iso
+        COMMAND "${ISO2RAW_EXECUTABLE}" "${COLLISION_TEST_ISO}"
+        COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${COLLISION_TEST_CUE}" "${COLLISION_TEST_CD_NAME}.bin"
+        COMMENT "Creating collision test BIN/CUE"
+        VERBATIM
+    )
+endif()
+
+enable_testing()
+add_test(
+    NAME sh2_collision_campaign
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_campaign.sh" --emulator mednafen --strict
+)
+set_tests_properties(sh2_collision_campaign PROPERTIES TIMEOUT 700)
