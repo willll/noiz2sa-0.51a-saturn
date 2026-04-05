@@ -143,16 +143,13 @@ static void test_shotHitsFoeSwept_tunneling()
   const int foeScan = 2000;
   const int shotScanHeight = 300;
 
-  // Current sample misses, but previous frame overlaps vertical band.
   const Vector shotNow{10000, 17000};
   const int shotPrevY = 23000;
   EXPECT_TRUE(shotHitsFoeSwept(foe, shotNow, shotPrevY, foeScan, shotScanHeight));
 
-  // X out of range should still fail even if Y sweep overlaps.
   const Vector shotFarX{13000, 17000};
   EXPECT_FALSE(shotHitsFoeSwept(foe, shotFarX, shotPrevY, foeScan, shotScanHeight));
 
-  // Y sweep fully outside foe range.
   const Vector shotMissY{10000, 12000};
   EXPECT_FALSE(shotHitsFoeSwept(foe, shotMissY, 14000, foeScan, shotScanHeight));
 }
@@ -161,43 +158,43 @@ static void test_movingBulletHitsShip_full_coverage()
 {
   const int shipHitWidth = 512 * 512;
 
-  // True branch: segment crosses near ship center.
-  Vector prev{-2000, 0};
-  Vector cur{2000, 0};
-  Vector ship{0, 0};
+  // Swept bullet segment crosses ship AABB.
+  Vector prev{0, 0};
+  Vector cur{1000, 0};
+  Vector ship{200, 0};
   EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // inaa <= 1 branch.
+  // No overlap with ship AABB.
   prev = {0, 0};
   cur = {0, 0};
-  ship = {600, 0};
+  ship = {700, 0};
   EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // ht <= 0 branch.
+  // Miss due to X separation.
   prev = {1000, 0};
   cur = {2000, 0};
   ship = {500, 600};
   EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // ht >= 1 branch.
+  // Miss due to far end X separation.
   prev = {0, 0};
   cur = {1000, 0};
-  ship = {2500, 600};
+  ship = {2600, 0};
   EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // hd >= shipHitWidth branch (parallel pass, too far).
+  // Parallel pass with Y outside ship AABB.
   prev = {-2000, 1000};
   cur = {2000, 1000};
   ship = {0, 0};
   EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // Endpoint overlap must still count as a hit.
+  // Endpoint overlap still counts.
   prev = {0, 0};
   cur = {0, 0};
   ship = {200, 0};
   EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // GP32-style gameplay case at large world coordinates.
+  // Large-coordinate overlap remains stable.
   prev = {120000, 70000};
   cur = {121200, 70000};
   ship = {120600, 70100};
