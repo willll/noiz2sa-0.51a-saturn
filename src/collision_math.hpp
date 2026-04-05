@@ -16,6 +16,26 @@ inline bool shotHitsFoe(const Vector &foePos, const Vector &shotPos, int foeScan
          absN(foePos.y - shotPos.y) < (foeScanSize + shotScanHeight);
 }
 
+inline bool shotHitsFoeSwept(const Vector &foePos,
+                             const Vector &shotPos,
+                             int shotPrevY,
+                             int foeScanSize,
+                             int shotScanHeight)
+{
+  if (absN(foePos.x - shotPos.x) >= foeScanSize)
+  {
+    return false;
+  }
+
+  const int yRange = foeScanSize + shotScanHeight;
+  const int foeMinY = foePos.y - yRange;
+  const int foeMaxY = foePos.y + yRange;
+  const int shotMinY = (shotPos.y < shotPrevY) ? shotPos.y : shotPrevY;
+  const int shotMaxY = (shotPos.y > shotPrevY) ? shotPos.y : shotPrevY;
+
+  return !(shotMaxY < foeMinY || shotMinY > foeMaxY);
+}
+
 inline bool movingBulletHitsShip(const Vector &bulletPos,
                                  const Vector &bulletPrevPos,
                                  const Vector &shipPos,
