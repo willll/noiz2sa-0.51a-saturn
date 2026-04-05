@@ -203,11 +203,40 @@ static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &di
   slDMAWait();
 }
 
+static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect)
+{
+  if (panelLayerVram == nullptr || src == nullptr || dirtyRect.w == 0 || dirtyRect.h == 0)
+  {
+    return;
+  }
+
+  const uint8_t *srcRow = src + dirtyRect.x + (dirtyRect.y * LAYER_WIDTH);
+  uint8_t *dstRow = (uint8_t *)panelLayerVram + PANEL_LAYER_PLAYFIELD_X + dirtyRect.x + (dirtyRect.y * PANEL_LAYER_WIDTH);
+
+  for (int row = 0; row < dirtyRect.h; row++)
+  {
+    slDMACopy((void *)srcRow, dstRow, dirtyRect.w);
+    srcRow += LAYER_WIDTH;
+    dstRow += PANEL_LAYER_WIDTH;
+  }
+  slDMAWait();
+}
+
 static void refreshPanelLayer()
 {
   if (panelLayerVram == nullptr)
   {
     return;
+  }
+
+  if (layer->dirty)
+  {
+    SDL_Rect dirtyRect;
+    dirtyRect.x = layer->dirtyX1;
+    dirtyRect.y = layer->dirtyY1;
+    dirtyRect.w = (uint16_t)(layer->dirtyX2 - layer->dirtyX1);
+    dirtyRect.h = (uint16_t)(layer->dirtyY2 - layer->dirtyY1);
+    uploadPlayfieldBitmapRegion(buf, dirtyRect);
   }
 
   if (lpanel->dirty)
@@ -384,6 +413,36 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
     return;
   }
 
+  // Software fallback so title sprites remain visible even if emulator VDP1 composition is incomplete.
+  if (status == TITLE)
+  {
+    for (int sy = 0; sy < 20; sy++)
+    {
+      const int dstY = y + sy;
+      if (dstY < 0 || dstY >= LAYER_HEIGHT)
+      {
+        continue;
+      }
+
+      for (int sx = 0; sx < 20; sx++)
+      {
+        const int dstX = x + sx;
+        if (dstX < 0 || dstX >= LAYER_WIDTH)
+        {
+          continue;
+        }
+
+        const Canvas::Pixel pixel = titleSprite[n][sy * 20 + sx];
+        if (pixel != 0)
+        {
+          buf[dstY * pitch + dstX] = pixel;
+        }
+      }
+    }
+
+    SDL_SetSurfaceDirty(layer);
+  }
+
   // Draw directly from the loaded 40x40 title texture and scale to GP32-like 20x20.
   const int16_t screenX = (int16_t)(layerRect.x + x - (SCREEN_WIDTH / 2));
   const int16_t screenY = (int16_t)(layerRect.y + y - (SCREEN_HEIGHT / 2));
@@ -529,6 +588,11 @@ void initSDL()
 
   const int32_t mainPaletteBank = Palette::initPalette();
   SDL_SetBlitPaletteBank((int16_t)mainPaletteBank);
+
+  // The software gameplay layer and title sprites are drawn through VDP1.
+  // Raise the default RGB sprite bank above NBG0 so center-layer UI is not hidden by the background.
+  SRL::VDP2::SpriteLayer::SetPriority(SRL::VDP2::Priority::Layer7);
+
   initPanelLayer((int16_t)mainPaletteBank);
   makeSmokeBuf();
   clearLPanel();
@@ -569,10 +633,6 @@ void flipScreen()
   flushHardwareLineCommands();
   const uint32_t timeHwLineUs = SDL_GetProfileMicros() - hwLineStartUs;
   
-  if (status == TITLE)
-  {
-    drawTitle();
-  }
   SDL_Flip(video);
 
   flipCounter++;
