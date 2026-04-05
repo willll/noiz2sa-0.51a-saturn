@@ -41,7 +41,9 @@ Makefile.am
 
 build-full/**
 
-BuildDrop/**
-cd/data/0.bin
+**/BuildDrop/**
+**/cd/data/0.bin
 cd/music/*.raw
 **/__pycache__/**
+
+*.log
