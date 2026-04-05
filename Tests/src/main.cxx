@@ -113,6 +113,23 @@ MU_TEST(test_shotHitsFoe_boundaries)
   mu_check(!shotHitsFoe(foe, missBoundaryY, foeScan, shotScanHeight));
 }
 
+MU_TEST(test_shotHitsFoeSwept_tunneling)
+{
+  const Vector foe{10000, 20000};
+  const int foeScan = 2000;
+  const int shotScanHeight = 300;
+
+  const Vector shotNow{10000, 17000};
+  const int shotPrevY = 23000;
+  mu_check(shotHitsFoeSwept(foe, shotNow, shotPrevY, foeScan, shotScanHeight));
+
+  const Vector shotFarX{13000, 17000};
+  mu_check(!shotHitsFoeSwept(foe, shotFarX, shotPrevY, foeScan, shotScanHeight));
+
+  const Vector shotMissY{10000, 12000};
+  mu_check(!shotHitsFoeSwept(foe, shotMissY, 14000, foeScan, shotScanHeight));
+}
+
 MU_TEST(test_movingBulletHitsShip_full_coverage)
 {
   const int shipHitWidth = 512 * 512;
@@ -162,6 +179,7 @@ MU_TEST_SUITE(collision_test_suite)
   MU_RUN_TEST(test_vctGetElement_projection);
   MU_RUN_TEST(test_vctSize);
   MU_RUN_TEST(test_shotHitsFoe_boundaries);
+  MU_RUN_TEST(test_shotHitsFoeSwept_tunneling);
   MU_RUN_TEST(test_movingBulletHitsShip_full_coverage);
 }
 

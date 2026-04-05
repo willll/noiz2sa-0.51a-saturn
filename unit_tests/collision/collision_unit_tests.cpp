@@ -137,6 +137,26 @@ static void test_shotHitsFoe_full_coverage()
   EXPECT_FALSE(shotHitsFoe(foe, missFar, foeScan, shotScanHeight));
 }
 
+static void test_shotHitsFoeSwept_tunneling()
+{
+  const Vector foe{10000, 20000};
+  const int foeScan = 2000;
+  const int shotScanHeight = 300;
+
+  // Current sample misses, but previous frame overlaps vertical band.
+  const Vector shotNow{10000, 17000};
+  const int shotPrevY = 23000;
+  EXPECT_TRUE(shotHitsFoeSwept(foe, shotNow, shotPrevY, foeScan, shotScanHeight));
+
+  // X out of range should still fail even if Y sweep overlaps.
+  const Vector shotFarX{13000, 17000};
+  EXPECT_FALSE(shotHitsFoeSwept(foe, shotFarX, shotPrevY, foeScan, shotScanHeight));
+
+  // Y sweep fully outside foe range.
+  const Vector shotMissY{10000, 12000};
+  EXPECT_FALSE(shotHitsFoeSwept(foe, shotMissY, 14000, foeScan, shotScanHeight));
+}
+
 static void test_movingBulletHitsShip_full_coverage()
 {
   const int shipHitWidth = 512 * 512;
@@ -193,6 +213,7 @@ int main()
   test_vctGetElement_projection();
   test_vctSize();
   test_shotHitsFoe_full_coverage();
+  test_shotHitsFoeSwept_tunneling();
   test_movingBulletHitsShip_full_coverage();
 
   if (g_failed != 0)
