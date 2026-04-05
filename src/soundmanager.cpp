@@ -81,6 +81,7 @@ void closeSound() {
   }
 #  else
   SRL::Logger::LogDebug("[SOUND] closeSound: Stopping CDDA (Ponesound)");
+  SRL::Ponesound::Sound::Driver::SetTickEnabled(false);
   SRL::Ponesound::CD::Stop();
   for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
@@ -184,7 +185,9 @@ void loadSounds() {
   if (!ponesoundDriverInitialized) {
     SRL::Logger::LogInfo("[SOUND] Initializing Ponesound driver (deferred)");
     SRL::Ponesound::Sound::Driver::Initialize(SRL::Ponesound::ADXMode::ADX2304);
+    SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
     SRL::Ponesound::CD::SetVolume(7);
+    SRL::Logger::LogInfo("[SOUND] Ponesound vblank tick enabled");
     ponesoundDriverInitialized = true;
   }
 
@@ -282,6 +285,7 @@ void playMusic(int idx) {
 #  if SRL_USE_SGL_SOUND_DRIVER == 1
   SRL::Sound::Cdda::PlaySingle(track, true);
 #  else
+  SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
   SRL::Ponesound::CD::PlaySingle(track, true);
 #  endif
 #endif
@@ -372,6 +376,7 @@ void playChunk(int idx) {
     SRL::Logger::LogWarning("[SOUND] playChunk: chunk[%d] invalid (id=%d)", idx, chunk[idx]);
     return;
   }
+  SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
   SRL::Logger::LogDebug("[SOUND] playChunk (Ponesound): Playing %s.PCM id=%d", chunkName[idx], chunk[idx]);
   SRL::Ponesound::Pcm::Play(chunk[idx], SRL::Ponesound::PlayMode::Volatile, 7);
 #  endif
