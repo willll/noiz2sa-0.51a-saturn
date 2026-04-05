@@ -487,33 +487,101 @@ namespace SRL::Ponesound
                 if (numberOfPCMs >= PCM::CTRL_MAX) return -2;
 
                 SRL::Cd::File file(fileName);
+				SRL::Logger::LogInfo("Ponesound::LoadPcm enter file=%s bitDepth=%d rate=%d scsp=0x%08x", fileName, (int32_t)bitDepth, sampleRate, (uint32_t)scspWorkAddr);
 
                 if (file.Open())
                 {
-                    int32_t fileSize = file.Size.Bytes;
+					int32_t rawFileSize = file.Size.Bytes;
+					int32_t fileSize = rawFileSize;
+					SRL::Logger::LogInfo("Ponesound::LoadPcm opened file=%s size=%d", fileName, rawFileSize);
                     
                     if (fileSize > (128 * 1024) && bitDepth == BitDepth::PCM16)
                     {
-                        file.Close();
                         return -3;
                     }
                     else if (fileSize > (64 * 1024) && bitDepth == BitDepth::PCM8)
                     {
-                        file.Close();
                         return -3;
                     }
 
                     fileSize += ((uint32_t)fileSize & 1) ? 1 : 0;
                     fileSize += ((uint32_t)fileSize & 3) ? 2 : 0;
+					SRL::Logger::LogInfo("Ponesound::LoadPcm aligned size=%d", fileSize);
 
-                    file.Read(fileSize, (void*)((uint32_t)scspWorkAddr + SNDRAM));
-                    file.Close();
-                                        
-                    return RegisterPcm(fileSize, bitDepth, sampleRate);
+					uint8_t* staging = new uint8_t[fileSize];
+					SRL::Logger::LogInfo("Ponesound::LoadPcm staging alloc ptr=0x%08x size=%d", (uint32_t)staging, fileSize);
+
+					SRL::Logger::LogInfo("Ponesound::LoadPcm read begin size=%d (staging)", rawFileSize);
+					const bool readOk = file.Read(rawFileSize, staging);
+					SRL::Logger::LogInfo("Ponesound::LoadPcm read done ok=%d", (int32_t)readOk);
+					SRL::Logger::LogInfo("Ponesound::LoadPcm load finished (file close deferred)");
+
+					if (!readOk)
+					{
+						delete[] staging;
+						SRL::Logger::LogWarning("Ponesound::LoadPcm read failed");
+						return -5;
+					}
+
+					for (int32_t i = rawFileSize; i < fileSize; i++)
+					{
+						staging[i] = 0x00;
+					}
+
+					SRL::Logger::LogInfo("Ponesound::LoadPcm disable sound CPU (dma/register)");
+					SRL::SMPC::DisableSoundCPU();
+					SRL::Logger::LogInfo("Ponesound::LoadPcm DMA begin size=%d dest=0x%08x", fileSize, (uint32_t)((uint32_t)scspWorkAddr + SNDRAM));
+					slDMACopy(staging, (void*)((uint32_t)scspWorkAddr + SNDRAM), fileSize);
+					slDMAWait();
+					SRL::Logger::LogInfo("Ponesound::LoadPcm DMA done");
+					delete[] staging;
+					SRL::Logger::LogInfo("Ponesound::LoadPcm staging free done");
+
+					SRL::Logger::LogInfo("Ponesound::LoadPcm RegisterPcm begin");
+					int16_t pcmId = RegisterPcm(fileSize, bitDepth, sampleRate);
+					SRL::Logger::LogInfo("Ponesound::LoadPcm RegisterPcm done id=%d", pcmId);
+					SRL::SMPC::EnableSoundCPU();
+					SRL::Logger::LogInfo("Ponesound::LoadPcm sound CPU enabled");
+					return pcmId;
                 }
                 else {
+					SRL::Logger::LogWarning("Ponesound::LoadPcm open failed file=%s", fileName);
                     return -4;
                 }
+			}
+
+			/** @brief Register PCM sound effect from memory buffer
+			 * @param data PCM byte buffer
+			 * @param rawFileSize Number of valid PCM bytes in data
+			 * @param bitDepth Bit depth of PCM data
+			 * @param sampleRate Sample rate of PCM data
+			 * @return Sound effect identifier (< 0 on fail)
+			 */
+			static int16_t LoadPcmFromMemory(const uint8_t* data, const int32_t rawFileSize, const BitDepth bitDepth, const int32_t sampleRate)
+			{
+				if (data == nullptr || rawFileSize <= 0) return -6;
+				if ((int32_t)scspWorkAddr > 0x7F800) return -1;
+				if (numberOfPCMs >= PCM::CTRL_MAX) return -2;
+
+				int32_t fileSize = rawFileSize;
+				if (fileSize > (128 * 1024) && bitDepth == BitDepth::PCM16) return -3;
+				if (fileSize > (64 * 1024) && bitDepth == BitDepth::PCM8) return -3;
+
+				fileSize += ((uint32_t)fileSize & 1) ? 1 : 0;
+				fileSize += ((uint32_t)fileSize & 3) ? 2 : 0;
+
+				uint8_t* staging = new uint8_t[fileSize];
+				for (int32_t i = 0; i < rawFileSize; i++) staging[i] = data[i];
+				for (int32_t i = rawFileSize; i < fileSize; i++) staging[i] = 0x00;
+
+				SRL::SMPC::DisableSoundCPU();
+				slDMACopy(staging, (void*)((uint32_t)scspWorkAddr + SNDRAM), fileSize);
+				slDMAWait();
+				int16_t pcmId = RegisterPcm(fileSize, bitDepth, sampleRate);
+				SRL::SMPC::EnableSoundCPU();
+
+				delete[] staging;
+				return pcmId;
 			}
 			
             /** @brief Load packed PCM sound effects
@@ -572,6 +640,7 @@ namespace SRL::Ponesound
 							return -3;
 						}
                     }
+
                     else
                     {
                         // COMPRESSED PCM

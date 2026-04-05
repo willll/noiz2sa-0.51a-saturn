@@ -57,6 +57,7 @@ static char sglChunkFileName[CHUNK_NUM][32];
 static bool sglStartupSelfTestPlayed = false;
 #else
 static int16_t chunk[CHUNK_NUM];
+static bool ponesoundDriverInitialized = false;
 #endif
 
 void closeSound() {
@@ -145,14 +146,63 @@ void loadSounds() {
   SRL::Logger::LogWarning("[SOUND] Ponesound PCM SFX disabled (NOIZ2SA_ENABLE_PCM_SFX=0)");
   for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
 #    else
+  uint8_t* rawBuffers[CHUNK_NUM] = {nullptr};
+  int32_t rawSizes[CHUNK_NUM] = {0};
+
+  // Phase 1: read PCM files from CD before starting Ponesound driver.
   for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
     char name[32];
     snprintf(name, sizeof(name), "%s.PCM", chunkName[i]);
     SRL::Logger::LogDebug("[SOUND] loadSounds (Ponesound): Loading %s", name);
-    chunk[i] = SRL::Ponesound::Pcm::Load8(name, 15360);
+
+    SRL::Cd::File file(name);
+    if (!file.Open()) {
+      SRL::Logger::LogWarning("[SOUND] loadSounds (Ponesound): Failed to open %s", name);
+      continue;
+    }
+
+    rawSizes[i] = file.Size.Bytes;
+    rawBuffers[i] = new uint8_t[rawSizes[i]];
+    const int32_t loadedBytes = file.LoadBytes(0, rawSizes[i], rawBuffers[i]);
+    file.Close();
+
+    if (loadedBytes != rawSizes[i]) {
+      SRL::Logger::LogWarning("[SOUND] loadSounds (Ponesound): Failed to read %s (%d/%d)", name, loadedBytes, rawSizes[i]);
+      delete[] rawBuffers[i];
+      rawBuffers[i] = nullptr;
+      rawSizes[i] = 0;
+      continue;
+    }
+
+    SRL::Logger::LogDebug("[SOUND] loadSounds (Ponesound): Preloaded %s bytes=%d", name, rawSizes[i]);
+  }
+
+  SRL::Cd::ChangeDir((char *)nullptr);
+
+  // Phase 2: start Ponesound driver once, then register preloaded PCM buffers.
+  if (!ponesoundDriverInitialized) {
+    SRL::Logger::LogInfo("[SOUND] Initializing Ponesound driver (deferred)");
+    SRL::Ponesound::Sound::Driver::Initialize(SRL::Ponesound::ADXMode::ADX2304);
+    SRL::Ponesound::CD::SetVolume(7);
+    ponesoundDriverInitialized = true;
+  }
+
+  for (int i = 0; i < CHUNK_NUM; i++) {
+    char name[32];
+    snprintf(name, sizeof(name), "%s.PCM", chunkName[i]);
+
+    if (rawBuffers[i] == nullptr || rawSizes[i] <= 0) {
+      chunk[i] = -1;
+      continue;
+    }
+
+    chunk[i] = SRL::Ponesound::Pcm::LoadPcmFromMemory(rawBuffers[i], rawSizes[i], SRL::Ponesound::BitDepth::PCM8, 15360);
+    delete[] rawBuffers[i];
+    rawBuffers[i] = nullptr;
+
     if (chunk[i] < 0) {
-      SRL::Logger::LogWarning("[SOUND] loadSounds (Ponesound): Failed to load %s (code=%d)", name, chunk[i]);
+      SRL::Logger::LogWarning("[SOUND] loadSounds (Ponesound): Failed to register %s (code=%d)", name, chunk[i]);
     } else {
       SRL::Logger::LogDebug("[SOUND] loadSounds (Ponesound): Loaded %s id=%d", name, chunk[i]);
       loaded++;
@@ -201,15 +251,14 @@ void initSound() {
 #  elif NOIZ2SA_ENABLE_PCM_SFX == 0
   for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
   SRL::Logger::LogWarning("[SOUND] Ponesound driver init skipped (NOIZ2SA_ENABLE_PCM_SFX=0)");
+  ponesoundDriverInitialized = false;
   useAudio = 0;
   return;
 #  else
   for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
-  SRL::Logger::LogInfo("[SOUND] Initializing Ponesound driver");
-  SRL::Cd::ChangeDir((char *)nullptr);
-  SRL::Ponesound::Sound::Driver::Initialize(SRL::Ponesound::ADXMode::ADX2304);
-  SRL::Ponesound::CD::SetVolume(7);
-  SRL::Logger::LogInfo("[SOUND] Ponesound driver ready");
+  // Driver init is deferred to loadSounds() so PCM files are read from CD first.
+  ponesoundDriverInitialized = false;
+  SRL::Logger::LogInfo("[SOUND] Ponesound driver init deferred until loadSounds()");
   useAudio = 1;
 #  endif
 #endif
