@@ -243,7 +243,6 @@ set(c_flags
     -O3
     -flto
     -ffat-lto-objects
-    -fsection-anchors
     -funroll-loops
     -fomit-frame-pointer
     -Wno-strict-aliasing
@@ -258,7 +257,6 @@ set(cxx_flags
     -O3
     -flto
     -ffat-lto-objects
-    -fsection-anchors
     -funroll-loops
     -fomit-frame-pointer
     -Wno-strict-aliasing
