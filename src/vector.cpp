@@ -10,45 +10,58 @@
  * @version $Revision: 1.1.1.1 $
  */
 #include "vector.h"
-#include <impl/vector2d.hpp>
 
-using SaturnMath::Types::Vector2D;
-using SaturnMath::Types::Fxp;
+static int intSqrtU64(unsigned long long value)
+{
+  unsigned long long op = value;
+  unsigned long long res = 0;
+  unsigned long long one = 1ull << 62;
 
-/* Helper: convert int to Fxp */
-static inline Fxp intToFxp(const int16_t val) {
-  return Fxp::Convert(val);
-}
+  while (one > op)
+  {
+    one >>= 2;
+  }
 
-/* Helper: convert Vector to Vector2D */
-static inline Vector2D vecToVec2D(const Vector *v) {
-  return Vector2D(intToFxp(v->x), intToFxp(v->y));
-}
+  while (one != 0)
+  {
+    if (op >= res + one)
+    {
+      op -= res + one;
+      res = (res >> 1) + one;
+    }
+    else
+    {
+      res >>= 1;
+    }
+    one >>= 2;
+  }
 
-/* Helper: convert Vector2D to Vector */
-static inline Vector vec2DToVec(const Vector2D &v) {
-  return {v.X.template As<int>(), v.Y.template As<int>()};
+  return (int)res;
 }
 
 float vctInnerProduct(Vector *v1, Vector *v2) {
-  Vector2D v1_f = vecToVec2D(v1);
-  Vector2D v2_f = vecToVec2D(v2);
-  return v1_f.Dot(v2_f).As<float>();
+  const long long x = (long long)v1->x * (long long)v2->x;
+  const long long y = (long long)v1->y * (long long)v2->y;
+  return (float)(x + y);
 }
 
 Vector vctGetElement(Vector *v1, Vector *v2) {
   Vector ans;
-  Vector2D v1_f = vecToVec2D(v1);
-  Vector2D v2_f = vecToVec2D(v2);
-  
-  Fxp ll = v2_f.X * v2_f.X + v2_f.Y * v2_f.Y;
-  if ( ll == 0 ) {
+
+  const long long ll = (long long)v2->x * (long long)v2->x +
+                       (long long)v2->y * (long long)v2->y;
+  if (ll == 0)
+  {
     ans.x = ans.y = 0;
-  } else {
-    Fxp mag = v1_f.Dot(v2_f);
-    Vector2D proj = v2_f * (mag / ll);
-    ans = vec2DToVec(proj);
   }
+  else
+  {
+    const long long mag = (long long)v1->x * (long long)v2->x +
+                          (long long)v1->y * (long long)v2->y;
+    ans.x = (int)((mag * (long long)v2->x) / ll);
+    ans.y = (int)((mag * (long long)v2->y) / ll);
+  }
+
   return ans;
 }
 
@@ -89,8 +102,9 @@ int vctCheckSide(Vector *checkPos, Vector *pos1, Vector *pos2) {
 }
 
 int vctSize(Vector *v) {
-  Vector2D v_f = vecToVec2D(v);
-  return v_f.Length().template As<int>();
+  const long long xx = (long long)v->x * (long long)v->x;
+  const long long yy = (long long)v->y * (long long)v->y;
+  return intSqrtU64((unsigned long long)(xx + yy));
 }
 
 int vctDist(Vector *v1, Vector *v2) {
