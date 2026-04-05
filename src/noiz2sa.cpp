@@ -442,6 +442,10 @@ static void draw()
     drawPause();
     break;
   }
+
+  // Foreground primitives (shots/ship/UI) are drawn after blendScreen().
+  // Force a layer refresh so these late writes are guaranteed to upload.
+  markPlayfieldDirty();
 }
 
 static int accframe = 0;
