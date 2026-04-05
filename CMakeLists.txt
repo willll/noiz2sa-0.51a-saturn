@@ -70,7 +70,7 @@ set(SRL_FRAMERATE "0" CACHE STRING "Target framerate (0 = auto)")
 set(SRL_MODE "NTSC" CACHE STRING "Video mode: NTSC or PAL")
 
 # Memory configuration
-set(SRL_MAX_TEXTURES "100" CACHE STRING "Maximum textures")
+set(SRL_MAX_TEXTURES "75" CACHE STRING "Maximum textures")
 
 # Debug configuration
 option(DEBUG "Enable debug mode" OFF)
@@ -80,10 +80,11 @@ set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 
 # Sound configuration
-option(SRL_USE_SGL_SOUND_DRIVER "Use SGL sound driver" ON)
+option(SRL_USE_SGL_SOUND_DRIVER "Use SGL sound driver" OFF)
 option(SRL_ENABLE_FREQ_ANALYSIS "Enable frequency analysis" OFF)
+set(MATH_PERFORMANCE_MODE "TURBO" CACHE STRING "Math precision: ACCURATE, FAST, or TURBO")
 option(NOIZ2SA_ENABLE_SOUND "Enable in-game sound (PCM SFX + CDDA BGM)" ON)
-option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound backend" OFF)
+option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound backend" ON)
 
 # SRL SGL sound driver path uses WAV playback. Ponesound path uses PCM playback.
 # Keep these backend toggles mutually exclusive to avoid mixed configuration ambiguity.
@@ -145,7 +146,6 @@ else()
 endif()
 
 # Memory
-set(SRL_MAX_TEXTURES "75" CACHE STRING "Maximum textures" FORCE)
 add_compile_definitions(SRL_MAX_TEXTURES=${SRL_MAX_TEXTURES})
 
 # Debug
@@ -241,6 +241,11 @@ set(c_flags
     -m2
     -c
     -O3
+    -flto
+    -ffat-lto-objects
+    -fsection-anchors
+    -funroll-loops
+    -fomit-frame-pointer
     -Wno-strict-aliasing
     -std=c2x
 )
@@ -251,6 +256,11 @@ set(cxx_flags
     -m2
     -c
     -O3
+    -flto
+    -ffat-lto-objects
+    -fsection-anchors
+    -funroll-loops
+    -fomit-frame-pointer
     -Wno-strict-aliasing
     -fpermissive
     -fno-exceptions
@@ -447,6 +457,7 @@ target_compile_definitions(${CD_NAME}.elf PUBLIC
 target_link_options(${CD_NAME}.elf PUBLIC
     "SHELL:-m2"
     "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-flto"
     "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
     "SHELL:-Xlinker -Map -Xlinker ${BUILD_MAP}"
     "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
