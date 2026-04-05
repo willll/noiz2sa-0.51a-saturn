@@ -61,6 +61,7 @@ extern Digital *gamepad;
 void initSDL();
 void closeSDL();
 void blendScreen();
+void markPlayfieldDirty();
 void flipScreen();
 void clearScreen();
 void clearLPanel();

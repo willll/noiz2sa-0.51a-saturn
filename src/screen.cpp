@@ -619,6 +619,11 @@ void blendScreen()
   SDL_SetSurfaceDirty(layer);
 }
 
+void markPlayfieldDirty()
+{
+  SDL_SetSurfaceDirty(layer);
+}
+
 void flipScreen()
 {
   static uint32_t flipCounter = 0;
