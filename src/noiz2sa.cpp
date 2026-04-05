@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <srl.hpp> // for malloc/free, atoi
 #include <srl_log.hpp>    // for logging
+#include <srl_memory.hpp> // for explicit allocator initialization
 #include <srl_system.hpp> // for exit
 
 // Include Random class (must be AFTER SRL headers to avoid macro conflicts)
@@ -474,6 +475,7 @@ static bool gUseFixedFramePacing = false;
 
 int main()
 {
+  SRL::Memory::Initialize();
   SRL::Logger::LogInfo("[MAIN] Noiz2sa startup (v%d)", VERSION_NUM);
 
   int done = 0;
