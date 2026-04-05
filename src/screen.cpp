@@ -455,16 +455,41 @@ void initSDL()
   rpanel = &rpanelSurface;
 
   // Allocate frame buffers from LWRAM (1MB at 0x00200000), preserving main RAM heap for BLB parsers
+  const size_t lwrFreeBefore = SRL::Memory::LowWorkRam::GetFreeSpace();
+  SRL::Logger::LogInfo("[SCREEN] LWRAM free before frame buffers: %lu", (unsigned long)lwrFreeBefore);
+
   pbuf  = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
   l1buf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
   l2buf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
   buf   = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
   lpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
   rpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
-  if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf) {
-    SRL::Logger::LogFatal("[SCREEN] Failed to allocate frame buffers in LWRAM");
+  if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
+  {
+    SRL::Logger::LogWarning(
+        "[SCREEN] LWRAM alloc fallback: p=%p l1=%p l2=%p b=%p lp=%p rp=%p freeAfter=%lu",
+        pbuf,
+        l1buf,
+        l2buf,
+        buf,
+        lpbuf,
+        rpbuf,
+        (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+
+    if (!pbuf)  pbuf  = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
+    if (!l1buf) l1buf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
+    if (!l2buf) l2buf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
+    if (!buf)   buf   = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
+    if (!lpbuf) lpbuf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
+    if (!rpbuf) rpbuf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
+  }
+
+  if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
+  {
+    SRL::Logger::LogFatal("[SCREEN] Failed to allocate frame buffers (LWRAM+HWRAM)");
     SRL::System::Exit(1);
   }
+
   memset(pbuf,  0, lyrSize);
   memset(l1buf, 0, lyrSize);
   memset(l2buf, 0, lyrSize);
