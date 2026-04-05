@@ -222,6 +222,8 @@ void initTitle()
 
   setStageBackground(1);
   initTitleStage(stg);
+  showScore();
+  drawRPanel();
 
   SRL::Logger::LogInfo("[STATE] TITLE screen ready");
 }
@@ -379,6 +381,7 @@ static void draw()
     blendScreen();
     // Draw forground.
     drawScore();
+    drawTitle();
     drawTitleMenu();
     break;
   case IN_GAME:
@@ -674,7 +677,16 @@ int main()
     // Keep input polling active so controls still update.
     SRL::Input::Management::RefreshPeripherals();
   #else
-    SRL::Core::Synchronize();
+    // Prefer synchronized presentation when timer is healthy (normal emulator/hardware path).
+    // Fall back to non-blocking refresh only when ticks are stalled to avoid hard lockups.
+    if (!gUseFixedFramePacing && nowTick > 0)
+    {
+      SRL::Core::Synchronize();
+    }
+    else
+    {
+      SRL::Input::Management::RefreshPeripherals();
+    }
   #endif
     uint32_t timeSyncUs = SDL_GetProfileMicros() - phaseStartUs;
 
