@@ -15,6 +15,96 @@
 #include <srl.hpp>
 #include <srl_string.hpp>
 
+namespace
+{
+static constexpr int kDefaultColLeft = 1;
+static constexpr int kDefaultRowTitle = 1;
+static constexpr int kDefaultRowPercent = 3;
+static constexpr int kDefaultRowBar = 4;
+static constexpr int kDefaultRowStep = 6;
+static constexpr int kDefaultBarWidth = 20;
+
+static constexpr int kDefaultBgR = 20;
+static constexpr int kDefaultBgG = 10;
+static constexpr int kDefaultBgB = 50;
+
+static void ensureRuntimeDefaults(LoadingLayout &layout)
+{
+    // Some SH2 runtime paths may not run global C++ constructors reliably.
+    // Keep rendering stable by applying sane defaults on first use.
+    if (layout.colLeft == 0 && layout.rowTitle == 0 &&
+        layout.rowPercent == 0 && layout.rowBar == 0 && layout.rowStep == 0)
+    {
+        layout.colLeft = kDefaultColLeft;
+        layout.rowTitle = kDefaultRowTitle;
+        layout.rowPercent = kDefaultRowPercent;
+        layout.rowBar = kDefaultRowBar;
+        layout.rowStep = kDefaultRowStep;
+    }
+
+    if (layout.barWidth <= 0 || layout.barWidth > LoadingScreen::kMaxBarWidth)
+    {
+        layout.barWidth = kDefaultBarWidth;
+    }
+
+    if (layout.bgR == 0 && layout.bgG == 0 && layout.bgB == 0)
+    {
+        layout.bgR = kDefaultBgR;
+        layout.bgG = kDefaultBgG;
+        layout.bgB = kDefaultBgB;
+    }
+
+    if (layout.postBgR == 0 && layout.postBgG == 0 && layout.postBgB == 0)
+    {
+        layout.postBgR = NOIZ2SA_POST_LOAD_BG_R;
+        layout.postBgG = NOIZ2SA_POST_LOAD_BG_G;
+        layout.postBgB = NOIZ2SA_POST_LOAD_BG_B;
+    }
+}
+} // namespace
+
+static int firstDigitIndex(const char *text)
+{
+    if (text == nullptr)
+    {
+        return -1;
+    }
+
+    for (int i = 0; text[i] != '\0'; i++)
+    {
+        if (text[i] >= '0' && text[i] <= '9')
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+static bool sameProgressFamily(const char *lhs, const char *rhs)
+{
+    if (lhs == nullptr || rhs == nullptr)
+    {
+        return false;
+    }
+
+    const int lhsDigit = firstDigitIndex(lhs);
+    const int rhsDigit = firstDigitIndex(rhs);
+    if (lhsDigit <= 0 || rhsDigit <= 0)
+    {
+        return false;
+    }
+
+    // Compare message stem up to the first digit. This collapses
+    // lines like "Loading ZAKO 9/32" and "Loading ZAKO 10/32".
+    if (lhsDigit != rhsDigit)
+    {
+        return false;
+    }
+
+    return strncmp(lhs, rhs, (size_t)lhsDigit) == 0;
+}
+
 // ---------------------------------------------------------------------------
 // LoadingScreen — construction
 // ---------------------------------------------------------------------------
@@ -41,11 +131,54 @@ LoadingScreen::LoadingScreen()
 
     // Progress bar fill width (number of '#'/'–' characters).
     _layout.barWidth = 20;
+
+    _historyCount = 0;
+    for (int i = 0; i < kMaxHistoryLines; i++)
+    {
+        _history[i][0] = '\0';
+    }
 }
 
 LoadingScreen::LoadingScreen(const LoadingLayout &layout)
     : _layout(layout)
 {
+    _historyCount = 0;
+    for (int i = 0; i < kMaxHistoryLines; i++)
+    {
+        _history[i][0] = '\0';
+    }
+}
+
+void LoadingScreen::PushHistory(const char *step)
+{
+    if (step == nullptr || step[0] == '\0')
+    {
+        return;
+    }
+
+    if (_historyCount > 0 && strcmp(_history[_historyCount - 1], step) == 0)
+    {
+        return;
+    }
+
+    if (_historyCount > 0 && sameProgressFamily(_history[_historyCount - 1], step))
+    {
+        snprintf(_history[_historyCount - 1], kMaxStepText + 1, "%s", step);
+        return;
+    }
+
+    if (_historyCount < kMaxHistoryLines)
+    {
+        snprintf(_history[_historyCount], kMaxStepText + 1, "%s", step);
+        _historyCount++;
+        return;
+    }
+
+    for (int i = 1; i < kMaxHistoryLines; i++)
+    {
+        snprintf(_history[i - 1], kMaxStepText + 1, "%s", _history[i]);
+    }
+    snprintf(_history[kMaxHistoryLines - 1], kMaxStepText + 1, "%s", step);
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +187,8 @@ LoadingScreen::LoadingScreen(const LoadingLayout &layout)
 
 void LoadingScreen::Update(const char *step, int percent)
 {
+    ensureRuntimeDefaults(_layout);
+
     const char *displayStep = (step != nullptr) ? step : "Loading";
 
     int displayPercent = percent;
@@ -69,6 +204,8 @@ void LoadingScreen::Update(const char *step, int percent)
 
 void LoadingScreen::Clear()
 {
+    ensureRuntimeDefaults(_layout);
+
     SRL::Debug::PrintClearScreen();
     SRL::Debug::PrintColorRestore();
 
@@ -83,6 +220,8 @@ void LoadingScreen::Clear()
 
 void LoadingScreen::Render(const char *step, int percent)
 {
+    ensureRuntimeDefaults(_layout);
+
     SRL::VDP2::SetBackColor(
         SRL::Types::HighColor(_layout.bgR, _layout.bgG, _layout.bgB));
 
@@ -95,7 +234,7 @@ void LoadingScreen::Render(const char *step, int percent)
     char bar[kMaxBarWidth + 1];
     char percentLine[32];
     char barLine[kMaxBarWidth + 4]; // '[' + bar + ']' + '\0'
-    char stepLine[48];
+    char stepLine[kMaxStepText + 1];
 
     const int filled = (percent * width) / 100;
     for (int i = 0; i < width; i++)

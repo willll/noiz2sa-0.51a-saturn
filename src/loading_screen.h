@@ -57,6 +57,8 @@ class LoadingScreen
 public:
     // Maximum supported barWidth value.
     static constexpr int kMaxBarWidth = 62;
+    static constexpr int kMaxHistoryLines = 4;
+    static constexpr int kMaxStepText = 47;
 
     // Constructs with sensible defaults matching the original hard-coded values.
     LoadingScreen();
@@ -75,9 +77,12 @@ public:
     const LoadingLayout &GetLayout() const { return _layout; }
 
 private:
+    void PushHistory(const char *step);
     void Render(const char *step, int percent);
 
     LoadingLayout _layout;
+    int _historyCount;
+    char _history[kMaxHistoryLines][kMaxStepText + 1];
 };
 
 // Global loading screen instance; defined in loading_screen.cpp.

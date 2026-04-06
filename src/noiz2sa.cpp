@@ -33,79 +33,15 @@
 #include "soundmanager.h"
 #include "attractmanager.h"
 #include "gamepad.h"
+#include "loading_screen.h"
 
 static int noSound = 0;
 
-static void renderLoadingScreen(const char *step, int percent)
-{
-  // Force loading backdrop to blue even if gameplay uses a different clear color.
-  SRL::VDP2::SetBackColor(SRL::Types::HighColor(20, 10, 50));
-
-  if (percent < 0)
-  {
-    percent = 0;
-  }
-  else if (percent > 100)
-  {
-    percent = 100;
-  }
-
-  char bar[21];
-  char percentLine[32];
-  char barLine[32];
-  char stepLine[48];
-  const int filled = (percent * 20) / 100;
-  for (int i = 0; i < 20; i++)
-  {
-    bar[i] = (i < filled) ? '#' : '-';
-  }
-  bar[20] = '\0';
-
-  snprintf(percentLine, sizeof(percentLine), "Loading... %d%%", percent);
-  snprintf(barLine, sizeof(barLine), "[%s]", bar);
-  if (step != nullptr)
-  {
-    snprintf(stepLine, sizeof(stepLine), "%s", step);
-  }
-  else
-  {
-    stepLine[0] = '\0';
-  }
-
-  SRL::Debug::PrintColorSet(1);
-  SRL::Debug::PrintClearScreen();
-  SRL::Debug::Print(1, 1, "NOIZ2SA");
-  SRL::Debug::Print(1, 3, percentLine);
-  SRL::Debug::Print(1, 4, barLine);
-  SRL::Debug::Print(1, 6, stepLine);
-  SRL::Core::Synchronize();
-}
-
-
-// Use global loading step state for updateLoadingProgress
+// Thin wrapper kept for compatibility with callers in other translation units
+// (barragemanager.cc, screen.cpp).  All logic lives in LoadingScreen.
 void updateLoadingProgress(const char *step, int percent)
 {
-  const char *displayStep = (step != nullptr) ? step : "Loading";
-  int displayPercent = percent;
-  if (displayPercent < 0)
-  {
-    displayPercent = 0;
-  }
-  else if (displayPercent > 100)
-  {
-    displayPercent = 100;
-  }
-
-  renderLoadingScreen(displayStep, displayPercent);
-}
-
-static void clearLoadingOverlay()
-{
-  SRL::Debug::PrintClearScreen();
-  SRL::Debug::PrintColorRestore();
-
-  // Switch to configured background color once loading is complete.
-  SRL::VDP2::SetBackColor(SRL::Types::HighColor(NOIZ2SA_POST_LOAD_BG_R, NOIZ2SA_POST_LOAD_BG_G, NOIZ2SA_POST_LOAD_BG_B));
+  g_loadingScreen.Update(step, percent);
 }
 
 // Global random number generator (using SRL::Math namespace which is aliased to SaturnMath)
@@ -292,25 +228,6 @@ void initStageClear()
 
 static void move()
 {
-  // Periodic debug logging to track game state execution
-  // Log every 180 frames (~3 seconds at 60Hz) to avoid spam
-  static int move_frame_counter = 0;
-  move_frame_counter++;
-  
-  if ((move_frame_counter % 180) == 0)
-  {
-    const char* state_name = "UNKNOWN";
-    switch (status)
-    {
-      case TITLE: state_name = "TITLE"; break;
-      case IN_GAME: state_name = "IN_GAME"; break;
-      case GAMEOVER: state_name = "GAMEOVER"; break;
-      case STAGE_CLEAR: state_name = "STAGE_CLEAR"; break;
-      case PAUSE: state_name = "PAUSE"; break;
-    }
-    SRL::Logger::LogDebug("[MOVE] Processing state: %s (frame: %d)", state_name, move_frame_counter);
-  }
-  
   switch (status)
   {
   case TITLE:
@@ -352,26 +269,6 @@ static void draw()
 {
   memset(l1buf, 0, lyrSize);
   memset(l2buf, 0, lyrSize);
-
-  // Periodic debug logging to track rendering execution
-  // Log every 180 frames (~3 seconds at 60Hz) to avoid spam
-  static int draw_frame_counter = 0;
-  
-  if ((draw_frame_counter % 180) == 0)
-  {
-    const char* state_name = "UNKNOWN";
-    switch (status)
-    {
-      case TITLE: state_name = "TITLE"; break;
-      case IN_GAME: state_name = "IN_GAME"; break;
-      case GAMEOVER: state_name = "GAMEOVER"; break;
-      case STAGE_CLEAR: state_name = "STAGE_CLEAR"; break;
-      case PAUSE: state_name = "PAUSE"; break;
-    }
-    SRL::Logger::LogDebug("[DRAW] Rendering state: %s (frame: %d)", state_name, draw_frame_counter);
-  }
-  
-  draw_frame_counter++;
 
   switch (status)
   {
@@ -540,7 +437,7 @@ int main()
   initFirst();
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initTitle();
-  clearLoadingOverlay();
+  g_loadingScreen.Clear();
 
   initGamepad();
   SRL::Logger::LogDebug("[MAIN] Gamepad initialized");
@@ -701,7 +598,7 @@ int main()
     {
       const uint32_t totalUs = timeMoveUs + timeSmokeUs + timeDrawUs + timeFlipUs + timeSyncUs;
       const uint32_t fpsTimes100 = (totalUs > 0) ? (100000000u / totalUs) : 0u;
-      SRL::Logger::LogWarning(
+      SRL::Logger::LogDebug(
                           "[PERF_US] move=%lu smoke=%lu draw=%lu flip=%lu sync=%lu total=%lu fps=%lu.%02lu tick_ms=%lu frame=%d render=%d rdiv=%lu fixed=%d stalled=%lu status=%d dbuf_off=%d",
           (unsigned long)timeMoveUs,
           (unsigned long)timeSmokeUs,
@@ -721,11 +618,6 @@ int main()
                   NOIZ2SA_DISABLE_DOUBLE_BUFFER);
     }
 
-    // Periodic logging for frame rate monitoring
-    if ((tick % 300) == 0)  // Every ~5 seconds at 60Hz
-    {
-      SRL::Logger::LogDebug("[FRAME] Game tick: %d, Status: %d, Time: %ums", tick, status, SDL_GetTicks());
-    }
   }
   quitLast();
 }
