@@ -7,22 +7,34 @@
     exit 1
   fi
 
-  TIMEOUT=600
+  stop_emulator() {
+    if [[ -n ${EMULATOR_PID:-} ]] && kill -0 "$EMULATOR_PID" 2>/dev/null; then
+      kill -15 "$EMULATOR_PID" 2>/dev/null || true
+
+      # Give the emulator a brief grace period to terminate cleanly.
+      for _ in 1 2 3 4 5; do
+        if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+          break
+        fi
+        sleep 1
+      done
+
+      if kill -0 "$EMULATOR_PID" 2>/dev/null; then
+        kill -9 "$EMULATOR_PID" 2>/dev/null || true
+      fi
+
+      # Reap the child so no stdout/stderr capture stays open.
+      wait "$EMULATOR_PID" 2>/dev/null || true
+    fi
+  }
 
   cleanup() {
     status=$?
-    [[ -n ${WATCHDOG_PID:-} ]] && kill $WATCHDOG_PID 2>/dev/null || true
+    stop_emulator
     exit $status
   }
 
   trap cleanup EXIT
-
-  (
-      sleep $TIMEOUT
-      echo "Script timed out after $TIMEOUT seconds"
-      kill -9 -$$ 2>/dev/null
-  ) &
-  WATCHDOG_PID=$!
 
   if [ "$1" = "mednafen" ]; then
     command="mednafen -sound 0 -ss.cart debug -force_module ss BuildDrop/noiz2sa_collision_ut.cue"
@@ -56,13 +68,13 @@
       TIMER_ELAPSED=$((TIMER_NOW - TIMER_START))
       if [ $TIMER_ELAPSED -ge $TIMER_LIMIT ]; then
           echo "Test timed out after $TIMER_LIMIT seconds"
-          kill -15 $EMULATOR_PID 2>/dev/null || true
+          stop_emulator
           exit 1
       fi
 
       if fgrep --quiet "$match" "$log"; then
           echo "Test completion marker found"
-          kill -15 $EMULATOR_PID 2>/dev/null || true
+          stop_emulator
           echo "Tests completed successfully"
           exit 0
       fi
