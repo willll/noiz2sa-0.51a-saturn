@@ -268,9 +268,7 @@ void initSound() {
 }
 
 void playMusic(int idx) {
-  SRL::Logger::LogDebug("[SOUND] playMusic(%d) called", idx);
   if (!useAudio) {
-    SRL::Logger::LogDebug("[SOUND] playMusic: useAudio=0, skipping");
     return;
   }
   if (idx < 0 || idx >= MUSIC_NUM) {
@@ -279,7 +277,6 @@ void playMusic(int idx) {
   }
 
   const uint8_t track = musicTrackMap[idx];
-  SRL::Logger::LogDebug("[SOUND] playMusic: Playing CDDA track %d", track);
 
 #if NOIZ2SA_ENABLE_SOUND == 1
 #  if SRL_USE_SGL_SOUND_DRIVER == 1
@@ -289,14 +286,10 @@ void playMusic(int idx) {
   SRL::Ponesound::CD::PlaySingle(track, true);
 #  endif
 #endif
-
-  SRL::Logger::LogInfo("[SOUND] Playing music: Track %d", track);
 }
 
 void fadeMusic() {
-  SRL::Logger::LogDebug("[SOUND] fadeMusic() called");
   if (!useAudio) {
-    SRL::Logger::LogDebug("[SOUND] fadeMusic: useAudio=0, skipping");
     return;
   }
 
@@ -307,14 +300,10 @@ void fadeMusic() {
   SRL::Ponesound::CD::Stop();
 #  endif
 #endif
-
-  SRL::Logger::LogInfo("[SOUND] Fading music (stopped)");
 }
 
 void stopMusic() {
-  SRL::Logger::LogDebug("[SOUND] stopMusic() called");
   if (!useAudio) {
-    SRL::Logger::LogDebug("[SOUND] stopMusic: useAudio=0, skipping");
     return;
   }
 
@@ -325,14 +314,10 @@ void stopMusic() {
   SRL::Ponesound::CD::Stop();
 #  endif
 #endif
-
-  SRL::Logger::LogInfo("[SOUND] Stopped music");
 }
 
 void playChunk(int idx) {
-  SRL::Logger::LogDebug("[SOUND] playChunk(%d) called", idx);
   if (!useAudio) {
-    SRL::Logger::LogDebug("[SOUND] playChunk: useAudio=0, skipping");
     return;
   }
   if (idx < 0 || idx >= CHUNK_NUM) {
@@ -352,13 +337,9 @@ void playChunk(int idx) {
     SRL::Cd::ChangeDir("SOUNDS");
     sglChunks[idx] = new SRL::Sound::Pcm::WaveSound(sglChunkFileName[idx]);
     SRL::Cd::ChangeDir((char *)nullptr);
-    SRL::Logger::LogDebug("[SOUND] playChunk (SGL): Lazy-loaded %s", sglChunkFileName[idx]);
   }
-  SRL::Logger::LogDebug("[SOUND] playChunk (SGL): Playing %s", sglChunkFileName[idx]);
 
-  // First try normal allocation on the first free PCM channel.
-  int8_t channel = sglChunks[idx]->Play(127, 0);
-  if (channel < 0) {
+  if (sglChunks[idx]->Play(127, 0) < 0) {
     SRL::Logger::LogWarning("[SOUND] playChunk (SGL): No free PCM channel for %s.WAV, forcing channel 0", chunkName[idx]);
 
     // If all channels are occupied, steal channel 0 to guarantee audible SFX.
@@ -367,19 +348,14 @@ void playChunk(int idx) {
       SRL::Logger::LogWarning("[SOUND] playChunk (SGL): Failed to start %s.WAV on forced channel", chunkName[idx]);
       return;
     }
-    channel = 0;
   }
-
-  SRL::Logger::LogDebug("[SOUND] playChunk (SGL): Started %s.WAV on channel %d", chunkName[idx], channel);
 #  else
   if (chunk[idx] < 0) {
     SRL::Logger::LogWarning("[SOUND] playChunk: chunk[%d] invalid (id=%d)", idx, chunk[idx]);
     return;
   }
   SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
-  SRL::Logger::LogDebug("[SOUND] playChunk (Ponesound): Playing %s.PCM id=%d", chunkName[idx], chunk[idx]);
   SRL::Ponesound::Pcm::Play(chunk[idx], SRL::Ponesound::PlayMode::Volatile, 7);
 #  endif
-  SRL::Logger::LogInfo("[SOUND] Playing chunk: %s", chunkName[idx]);
 #endif
 }
