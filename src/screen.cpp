@@ -1066,29 +1066,13 @@ int getPadState()
   if (gamepad && gamepad->IsConnected())
   {
     if (gamepad->IsHeld(SRL::Input::Digital::Button::Right))
-    {
-      if (gamepad->WasPressed(SRL::Input::Digital::Button::Right))
-        SRL::Logger::LogTrace("[INPUT] Key pressed: RIGHT");
       pad |= PAD_RIGHT;
-    }
     if (gamepad->IsHeld(SRL::Input::Digital::Button::Left))
-    {
-      if (gamepad->WasPressed(SRL::Input::Digital::Button::Left))
-        SRL::Logger::LogTrace("[INPUT] Key pressed: LEFT");
       pad |= PAD_LEFT;
-    }
     if (gamepad->IsHeld(SRL::Input::Digital::Button::Down))
-    {
-      if (gamepad->WasPressed(SRL::Input::Digital::Button::Down))
-        SRL::Logger::LogTrace("[INPUT] Key pressed: DOWN");
       pad |= PAD_DOWN;
-    }
     if (gamepad->IsHeld(SRL::Input::Digital::Button::Up))
-    {
-      if (gamepad->WasPressed(SRL::Input::Digital::Button::Up))
-        SRL::Logger::LogTrace("[INPUT] Key pressed: UP");
       pad |= PAD_UP;
-    }
   }
 
   return pad;
@@ -1103,18 +1087,9 @@ int getButtonState()
   if (gamepad->IsConnected())
   {
     fireBtn1 = gamepad->IsHeld(Digital::Button::A);
-    if (gamepad->WasPressed(Digital::Button::A))
-      SRL::Logger::LogTrace("[INPUT] Button pressed: A (fire)");
     fireBtn2 = gamepad->IsHeld(Digital::Button::B);
-    if (gamepad->WasPressed(Digital::Button::B))
-      SRL::Logger::LogTrace("[INPUT] Button pressed: B (fire)");
-
     slowBtn1 = gamepad->IsHeld(Digital::Button::R);
-    if (gamepad->WasPressed(Digital::Button::R))
-      SRL::Logger::LogTrace("[INPUT] Button pressed: R (slow)");
     slowBtn2 = gamepad->IsHeld(Digital::Button::L);
-    if (gamepad->WasPressed(Digital::Button::L))
-      SRL::Logger::LogTrace("[INPUT] Button pressed: L (slow)");
   }
   if (fireBtn1 || fireBtn2)
   {
