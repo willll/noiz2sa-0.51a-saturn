@@ -47,3 +47,4 @@ cd/music/*.raw
 **/__pycache__/**
 
 *.log
+cd/data/SOUNDS/*.SGL.WAV
