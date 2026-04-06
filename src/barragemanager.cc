@@ -277,8 +277,6 @@ void setBarrages(float level, int bm, int midMode) {
   int bpn = 0, bn, i;
   int barrageMax, addFrqLoop = 0;
 
-  SRL::Logger::LogDebug("[BARRAGE] Setting barrage pattern: level=%.2f, bossMode=%d, midMode=%d", level, bm, midMode);
-
   barrageNum = 0;
   barrageMax = nextRandInt(&rnd)%3+4;
   bossMode = bm;
@@ -336,7 +334,6 @@ void setBarrages(float level, int bm, int midMode) {
   pay = (nextRandInt(&rnd)%(SCAN_HEIGHT_8/6) + (SCAN_HEIGHT_8/10));
 
   scene++;
-  SRL::Logger::LogDebug("[BARRAGE] Barrage pattern set for scene %d: %d patterns, position=(%d,%d)", scene, barrageNum, pax, pay);
 }
 
 #define SCENE_TERM 1000
@@ -359,8 +356,6 @@ void addBullets() {
   // Scene time control.
   sceneCnt--;
   if ( sceneCnt < 0 ) {
-    SRL::Logger::LogDebug("[BARRAGE] Scene transition: current scene=%d, level=%.2f", scene, level);
-    
     if ( !insane ) clearFoes();
     if ( scene >= 0 && !endless ) setClearScore();
     if ( scene%10 == 8 ) {
@@ -413,8 +408,6 @@ void addBullets() {
 }
 
 void bossDestroied() {
-  SRL::Logger::LogDebug("[BARRAGE] Boss defeated at scene %d, level=%.2f", scene, level);
-  
   if ( !endless ) {
     setClearScore();
     addLeftBonus();
@@ -431,17 +424,13 @@ void addBossBullet() {
   Foe *bl;
   bossBullet = nullptr;
 
-  SRL::Logger::LogDebug("[BARRAGE] Adding boss bullet patterns, count=%d", barrageNum);
-
   for ( int i=0 ; i<barrageNum ; i++ ) {
     if ( barrage[i]->type != 2 ) continue;
     if ( bossBullet == nullptr ) {
-      SRL::Logger::LogDebug("[BARRAGE] Creating primary boss with pattern index %d, rank=%.2f", i, barrage[i]->rank);
       bl = addFoe(SCAN_WIDTH_8/2, SCAN_HEIGHT_8/5, barrage[i]->rank, 512, 0,
 		  BOSS_TYPE, BOSS_SHIELD, barrage[i]->bulletml);
       bossBullet = bl;
     } else {
-      SRL::Logger::LogDebug("[BARRAGE] Adding additional boss pattern index %d, rank=%.2f", i, barrage[i]->rank);
       bl = addFoeBossActiveBullet(SCAN_WIDTH_8/2, SCAN_HEIGHT_8/5, barrage[i]->rank, 512, 0,
 				  barrage[i]->bulletml);
     }
