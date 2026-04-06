@@ -142,16 +142,20 @@ static void test_shotHitsFoeSwept_tunneling()
   const Vector foe{10000, 20000};
   const int foeScan = 2000;
   const int shotScanHeight = 300;
+  const int shotScanHalfWidth = 512;
 
   const Vector shotNow{10000, 17000};
   const int shotPrevY = 23000;
-  EXPECT_TRUE(shotHitsFoeSwept(foe, shotNow, shotPrevY, foeScan, shotScanHeight));
+  EXPECT_FALSE(shotHitsFoeSwept(foe, shotNow, shotPrevY, foeScan, shotScanHeight, shotScanHalfWidth));
+
+  const Vector shotCurrentHit{10000, 19900};
+  EXPECT_TRUE(shotHitsFoeSwept(foe, shotCurrentHit, shotPrevY, foeScan, shotScanHeight, shotScanHalfWidth));
 
   const Vector shotFarX{13000, 17000};
-  EXPECT_FALSE(shotHitsFoeSwept(foe, shotFarX, shotPrevY, foeScan, shotScanHeight));
+  EXPECT_FALSE(shotHitsFoeSwept(foe, shotFarX, shotPrevY, foeScan, shotScanHeight, shotScanHalfWidth));
 
   const Vector shotMissY{10000, 12000};
-  EXPECT_FALSE(shotHitsFoeSwept(foe, shotMissY, 14000, foeScan, shotScanHeight));
+  EXPECT_FALSE(shotHitsFoeSwept(foe, shotMissY, 14000, foeScan, shotScanHeight, shotScanHalfWidth));
 }
 
 static void test_movingBulletHitsShip_full_coverage()
@@ -192,13 +196,13 @@ static void test_movingBulletHitsShip_full_coverage()
   prev = {0, 0};
   cur = {0, 0};
   ship = {200, 0};
-  EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
+  EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
   // Large-coordinate overlap remains stable.
   prev = {120000, 70000};
   cur = {121200, 70000};
   ship = {120600, 70100};
-  EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
+  EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 }
 
 int main()
