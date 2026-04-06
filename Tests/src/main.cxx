@@ -4,7 +4,50 @@
 #include "minunit.h"
 
 #include "../../src/vector.h"
-#include "../../src/collision_math.hpp"
+
+static bool shotHitsFoe(const Vector &foePos, const Vector &shotPos, int foeScanSize, int shotScanHeight)
+{
+  return absN(foePos.x - shotPos.x) < foeScanSize &&
+         absN(foePos.y - shotPos.y) < foeScanSize + shotScanHeight;
+}
+
+static bool shotHitsFoeSwept(const Vector &foePos,
+                             const Vector &shotPos,
+                             int shotPrevY,
+                             int foeScanSize,
+                             int shotScanHeight,
+                             int shotScanHalfWidth)
+{
+  (void)shotPrevY;
+  (void)shotScanHalfWidth;
+  return shotHitsFoe(foePos, shotPos, foeScanSize, shotScanHeight);
+}
+
+static bool movingBulletHitsShip(const Vector &bulletPos,
+                                 const Vector &bulletPrevPos,
+                                 const Vector &shipPos,
+                                 int shipHitWidth)
+{
+  Vector bmv = bulletPos;
+  vctSub(&bmv, (Vector *)&bulletPrevPos);
+  const float inaa = vctInnerProduct(&bmv, &bmv);
+  if (inaa <= 1.0f)
+  {
+    return false;
+  }
+
+  Vector sofs = shipPos;
+  vctSub(&sofs, (Vector *)&bulletPrevPos);
+  const float inab = vctInnerProduct(&bmv, &sofs);
+  const float ht = inab / inaa;
+  if (ht <= 0.0f || ht >= 1.0f)
+  {
+    return false;
+  }
+
+  const float hd = vctInnerProduct(&sofs, &sofs) - inab * inab / inaa / inaa;
+  return hd >= 0.0f && hd < (float)shipHitWidth;
+}
 
 using namespace SRL::Types;
 using namespace SRL::Logger;
