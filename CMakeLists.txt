@@ -291,6 +291,7 @@ set(SOURCES_NOIZ2SA
   src/gamepad.cpp
   src/rand.cpp
   src/attractmanager.cpp
+  src/loading_screen.cpp
   src/soundmanager.cpp
   src/background.cpp
   src/foe.cc
