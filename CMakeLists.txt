@@ -695,7 +695,7 @@ endif()
 # ============================================================================
 
 set(COLLISION_TEST_CD_NAME "noiz2sa_collision_ut")
-set(COLLISION_TESTS_DIR "${CMAKE_SOURCE_DIR}/unit_tests/sh2")
+set(COLLISION_TESTS_DIR "${CMAKE_SOURCE_DIR}/Tests")
 set(COLLISION_TEST_BUILD_DROP "${COLLISION_TESTS_DIR}/BuildDrop")
 set(COLLISION_TEST_ASSETS_DIR "${COLLISION_TESTS_DIR}/cd/data")
 set(COLLISION_TEST_ELF "${COLLISION_TEST_BUILD_DROP}/${COLLISION_TEST_CD_NAME}.elf")
@@ -711,7 +711,7 @@ file(WRITE "${COLLISION_TEST_ASSETS_DIR}/BIB.TXT" "NOT Bibliographiced by SEGA\n
 file(WRITE "${COLLISION_TEST_ASSETS_DIR}/CPY.TXT" "")
 
 set(COLLISION_TEST_SOURCES
-    ${CMAKE_SOURCE_DIR}/unit_tests/sh2/src/main.cxx
+    ${CMAKE_SOURCE_DIR}/Tests/src/main.cxx
     ${CMAKE_SOURCE_DIR}/src/vector.cpp
 )
 
@@ -733,7 +733,7 @@ target_include_directories(
     ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
     ${SRL_INSTALL_ROOT}/modules/tlsf
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/unit_tests/sh2/src
+    ${CMAKE_SOURCE_DIR}/Tests/src
 )
 
 target_compile_options(${COLLISION_TEST_CD_NAME}.elf PUBLIC
@@ -803,6 +803,6 @@ endif()
 enable_testing()
 add_test(
     NAME sh2_collision_campaign
-    COMMAND bash "${CMAKE_SOURCE_DIR}/unit_tests/sh2/test_campaign.sh" --emulator mednafen --strict
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_campaign.sh" --emulator mednafen --strict
 )
 set_tests_properties(sh2_collision_campaign PROPERTIES TIMEOUT 700)
