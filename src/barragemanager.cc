@@ -372,7 +372,7 @@ void addBullets() {
       }
     }
     level += levelInc;
-    if ( status == IN_GAME ) {
+    if ( status == IN_GAME || status == TITLE ) {
       drawRPanel();
     } else {
       sceneCnt = 999999;
