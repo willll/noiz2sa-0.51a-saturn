@@ -159,7 +159,7 @@ void initTitle()
   setStageBackground(1);
   initTitleStage(stg);
   showScore();
-  drawRPanel();
+  clearRPanel();
 
   SRL::Logger::LogInfo("[STATE] TITLE screen ready");
 }
@@ -233,6 +233,8 @@ static void move()
   case TITLE:
     moveTitleMenu();
     moveBackground();
+    addBullets();
+    moveFoes();
     break;
   case IN_GAME:
     moveBackground();
@@ -275,9 +277,13 @@ static void draw()
   case TITLE:
     // Draw background.
     drawBackground();
+    drawFoes();
+    drawBulletsWake();
     blendScreen();
-    // Draw forground.
+    // Draw foreground.
+    drawBullets();
     drawScore();
+    clearRPanel();
     drawTitle();
     drawTitleMenu();
     break;
