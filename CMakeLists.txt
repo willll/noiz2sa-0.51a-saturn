@@ -801,8 +801,40 @@ if(EXISTS "${ISO2RAW_EXECUTABLE}")
 endif()
 
 enable_testing()
+
+# ============================================================================
+# BulletML Parity Test (compiled with native compiler, not Saturn toolchain)
+# ============================================================================
+
+set(BULLETML_TEST_NAME "bulletml_parity_ut")
+set(BULLETML_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_parity_tests.cpp")
+set(BULLETML_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_TEST_NAME}")
+
+# Build bulletml parity test with native compiler (not Saturn SH-ELF)
+add_custom_command(
+    OUTPUT "${BULLETML_TEST_EXECUTABLE}"
+    COMMAND g++ -std=c++11 -Wall -Wextra -o "${BULLETML_TEST_EXECUTABLE}" "${BULLETML_TEST_SOURCE}"
+    DEPENDS "${BULLETML_TEST_SOURCE}"
+    COMMENT "Building bulletml parity test with native compiler"
+    VERBATIM
+)
+
+add_custom_target(bulletml_parity_ut_build ALL
+    DEPENDS "${BULLETML_TEST_EXECUTABLE}"
+)
+
+# ============================================================================
+# CTest Registration
+# ============================================================================
+
 add_test(
     NAME sh2_collision_campaign
     COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_campaign.sh" --emulator mednafen --strict
 )
 set_tests_properties(sh2_collision_campaign PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME bulletml_parity_test
+    COMMAND "${BULLETML_TEST_EXECUTABLE}"
+)
+set_tests_properties(bulletml_parity_test PROPERTIES TIMEOUT 60)

@@ -217,6 +217,85 @@ MU_TEST(test_movingBulletHitsShip_full_coverage)
   mu_check(!movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 }
 
+MU_TEST(test_add_sub_mul_div_extended)
+{
+  Vector a{20, -30};
+  Vector b{-4, 10};
+
+  vctAdd(&a, &b);
+  mu_assert_int_eq(16, a.x);
+  mu_assert_int_eq(-20, a.y);
+
+  vctSub(&a, &b);
+  mu_assert_int_eq(20, a.x);
+  mu_assert_int_eq(-30, a.y);
+
+  vctMul(&a, 3);
+  mu_assert_int_eq(60, a.x);
+  mu_assert_int_eq(-90, a.y);
+
+  vctDiv(&a, 3);
+  mu_assert_int_eq(20, a.x);
+  mu_assert_int_eq(-30, a.y);
+}
+
+MU_TEST(test_inner_product_large_values_extended)
+{
+  Vector a{120000, -50000};
+  Vector b{120000, 50000};
+
+  const float dot = vctInnerProduct(&a, &b);
+  mu_assert(dot > 1.18e10f, "dot product too small");
+  mu_assert(dot < 1.20e10f, "dot product too large");
+}
+
+MU_TEST(test_get_element_projection_extended)
+{
+  Vector v{9000, 3000};
+  Vector axis{3000, 0};
+  Vector p = vctGetElement(&v, &axis);
+  mu_assert_int_eq(9000, p.x);
+  mu_assert_int_eq(0, p.y);
+
+  Vector zero{0, 0};
+  p = vctGetElement(&v, &zero);
+  mu_assert_int_eq(0, p.x);
+  mu_assert_int_eq(0, p.y);
+}
+
+MU_TEST(test_check_side_extended)
+{
+  Vector p{10, 10};
+
+  Vector verticalA{5, 0};
+  Vector verticalB{5, 20};
+  mu_assert_int_eq(5, vctCheckSide(&p, &verticalA, &verticalB));
+
+  Vector horizontalA{0, 5};
+  Vector horizontalB{20, 5};
+  mu_assert_int_eq(-5, vctCheckSide(&p, &horizontalA, &horizontalB));
+
+  Vector diagA{0, 0};
+  Vector diagB{10, 10};
+  mu_assert_int_eq(0, vctCheckSide(&p, &diagA, &diagB));
+}
+
+MU_TEST(test_size_and_dist_extended)
+{
+  Vector v{3, 4};
+  mu_assert_int_eq(5, vctSize(&v));
+
+  Vector big{30000, 40000};
+  mu_assert_int_eq(50000, vctSize(&big));
+
+  Vector a{100, 20};
+  Vector b{0, 0};
+  mu_assert_int_eq(110, vctDist(&a, &b));
+
+  Vector c{20, 100};
+  mu_assert_int_eq(110, vctDist(&c, &b));
+}
+
 MU_TEST_SUITE(collision_test_suite)
 {
   MU_RUN_TEST(test_basic_vector_ops);
@@ -230,6 +309,15 @@ MU_TEST_SUITE(collision_test_suite)
   MU_RUN_TEST(test_movingBulletHitsShip_full_coverage);
 }
 
+MU_TEST_SUITE(vector_test_suite)
+{
+  MU_RUN_TEST(test_add_sub_mul_div_extended);
+  MU_RUN_TEST(test_inner_product_large_values_extended);
+  MU_RUN_TEST(test_get_element_projection_extended);
+  MU_RUN_TEST(test_check_side_extended);
+  MU_RUN_TEST(test_size_and_dist_extended);
+}
+
 int main()
 {
   SRL::Core::Initialize(HighColor(20, 10, 50));
@@ -237,6 +325,7 @@ int main()
   LogInfo(strStart);
 
   MU_RUN_SUITE(collision_test_suite);
+  MU_RUN_SUITE(vector_test_suite);
   MU_REPORT();
 
   LogInfo(strEnd);
