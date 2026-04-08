@@ -413,8 +413,8 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
     return;
   }
 
-  // Software fallback so title sprites remain visible even if emulator VDP1 composition is incomplete.
-  if (status == TITLE)
+  // Software fallback only if texture allocation failed.
+  if (sprite[n].textureIndex < 0)
   {
     for (int sy = 0; sy < 20; sy++)
     {
@@ -441,6 +441,7 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
     }
 
     SDL_SetSurfaceDirty(layer);
+    return;
   }
 
   // Draw directly from the loaded 40x40 title texture and scale to GP32-like 20x20.
