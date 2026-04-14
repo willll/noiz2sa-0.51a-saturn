@@ -803,130 +803,25 @@ endif()
 enable_testing()
 
 # ============================================================================
-# SH2 BulletML Parser Unit Tests (Mednafen/Saturn)
+# BulletML Parity Test (compiled with native compiler, not Saturn toolchain)
 # ============================================================================
 
-set(BULLETML_SH2_TEST_CD_NAME "noiz2sa_bulletml_ut")
-set(BULLETML_SH2_TESTS_DIR "${CMAKE_SOURCE_DIR}/Tests")
-set(BULLETML_SH2_TEST_BUILD_DROP "${BULLETML_SH2_TESTS_DIR}/BuildDrop")
-set(BULLETML_SH2_TEST_ASSETS_DIR "${BULLETML_SH2_TESTS_DIR}/cd_bulletml/data")
-set(BULLETML_SH2_TEST_ELF "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.elf")
-set(BULLETML_SH2_TEST_ISO "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.iso")
-set(BULLETML_SH2_TEST_BIN "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.bin")
-set(BULLETML_SH2_TEST_CUE "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.cue")
-set(BULLETML_SH2_TEST_MAP "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.map")
-set(BULLETML_SH2_MANIFEST_SCRIPT "${CMAKE_SOURCE_DIR}/Tests/bulletml/generate_blb_manifest.py")
-set(BULLETML_SH2_MANIFEST_FILE "${BULLETML_SH2_TEST_ASSETS_DIR}/BLBEXP.TXT")
+set(BULLETML_TEST_NAME "bulletml_parity_ut")
+set(BULLETML_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_parity_tests.cpp")
+set(BULLETML_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_TEST_NAME}")
 
-file(MAKE_DIRECTORY "${BULLETML_SH2_TEST_BUILD_DROP}")
-file(MAKE_DIRECTORY "${BULLETML_SH2_TEST_ASSETS_DIR}")
-
-set(BULLETML_SH2_TEST_SOURCES
-    ${CMAKE_SOURCE_DIR}/Tests/src/bulletml_main.cxx
-)
-
-add_executable(${BULLETML_SH2_TEST_CD_NAME}.elf
-    "${SGL_PRELOADER_SOURCE}"
-    ${BULLETML_SH2_TEST_SOURCES}
-    ${SOURCES_SGL_SYSTEM}
-)
-
-set_target_properties(${BULLETML_SH2_TEST_CD_NAME}.elf PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${BULLETML_SH2_TEST_BUILD_DROP}"
-)
-
-target_include_directories(
-    ${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
-    ${SRL_INSTALL_ROOT}/saturnringlib
-    ${SRL_INSTALL_ROOT}/modules/sgl/INC
-    ${SRL_INSTALL_ROOT}/modules/dummy
-    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
-    ${SRL_INSTALL_ROOT}/modules/tlsf
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/Tests/src
-)
-
-target_compile_options(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
-    $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
-    $<$<COMPILE_LANGUAGE:C>:${c_flags}>
-)
-
-target_compile_definitions(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
-    $<$<COMPILE_LANGUAGE:C>:bool=int>
-    $<$<COMPILE_LANGUAGE:C>:true=1>
-    $<$<COMPILE_LANGUAGE:C>:false=0>
-)
-
-target_link_options(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
-    "SHELL:-m2"
-    "SHELL:-L${SRL_SGL_DIR}/LIB"
-    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
-    "SHELL:-Xlinker -Map -Xlinker ${BULLETML_SH2_TEST_MAP}"
-    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
-)
-
-if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
-    target_link_options(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
-endif()
-
-srl_link_target(${BULLETML_SH2_TEST_CD_NAME}.elf)
-
-add_custom_target(${BULLETML_SH2_TEST_CD_NAME}_assets
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${BULLETML_SH2_TEST_ASSETS_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/cd/data/ABS.TXT" "${BULLETML_SH2_TEST_ASSETS_DIR}/ABS.TXT"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/cd/data/BIB.TXT" "${BULLETML_SH2_TEST_ASSETS_DIR}/BIB.TXT"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/cd/data/CPY.TXT" "${BULLETML_SH2_TEST_ASSETS_DIR}/CPY.TXT"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/cd/data/BOSS" "${BULLETML_SH2_TEST_ASSETS_DIR}/BOSS"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/cd/data/MIDDLE" "${BULLETML_SH2_TEST_ASSETS_DIR}/MIDDLE"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/cd/data/ZAKO" "${BULLETML_SH2_TEST_ASSETS_DIR}/ZAKO"
-    COMMAND python3 "${BULLETML_SH2_MANIFEST_SCRIPT}" --data-root "${BULLETML_SH2_TEST_ASSETS_DIR}" --output "${BULLETML_SH2_MANIFEST_FILE}"
-    DEPENDS
-        "${BULLETML_SH2_MANIFEST_SCRIPT}"
-        "${CMAKE_SOURCE_DIR}/cd/data/BOSS/LIST.TXT"
-        "${CMAKE_SOURCE_DIR}/cd/data/MIDDLE/LIST.TXT"
-        "${CMAKE_SOURCE_DIR}/cd/data/ZAKO/LIST.TXT"
-    COMMENT "Preparing BulletML SH2 test assets and expected manifest"
+# Build bulletml parity test with native compiler (not Saturn SH-ELF)
+add_custom_command(
+    OUTPUT "${BULLETML_TEST_EXECUTABLE}"
+    COMMAND g++ -std=c++11 -Wall -Wextra -o "${BULLETML_TEST_EXECUTABLE}" "${BULLETML_TEST_SOURCE}"
+    DEPENDS "${BULLETML_TEST_SOURCE}"
+    COMMENT "Building bulletml parity test with native compiler"
     VERBATIM
 )
 
-add_custom_command(TARGET ${BULLETML_SH2_TEST_CD_NAME}.elf POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${BULLETML_SH2_TEST_CD_NAME}.elf>" "${BULLETML_SH2_TEST_ASSETS_DIR}/0.bin"
-    COMMENT "Converting BulletML SH2 test ELF to binary: ${BULLETML_SH2_TEST_ASSETS_DIR}/0.bin"
-    VERBATIM
+add_custom_target(bulletml_parity_ut_build ALL
+    DEPENDS "${BULLETML_TEST_EXECUTABLE}"
 )
-
-if(XORRISOFS_EXECUTABLE)
-    add_custom_target(${BULLETML_SH2_TEST_CD_NAME}_iso
-        DEPENDS ${BULLETML_SH2_TEST_CD_NAME}.elf ${BULLETML_SH2_TEST_CD_NAME}_assets
-        COMMAND ${XORRISOFS_EXECUTABLE}
-            --norock -quiet
-            -sysid "SEGA SATURN"
-            -volid "${BULLETML_SH2_TEST_CD_NAME}"
-            -volset "${BULLETML_SH2_TEST_CD_NAME}"
-            -publisher "SEGA ENTERPRISES, LTD."
-            -preparer "SEGA ENTERPRISES, LTD."
-            -appid "${BULLETML_SH2_TEST_CD_NAME}"
-            -abstract "NOT Abstracted by SEGA"
-            -copyright ""
-            -biblio ""
-            -generic-boot "${IPFILE}"
-            -full-iso9660-filenames
-            -o "${BULLETML_SH2_TEST_ISO}"
-            "${BULLETML_SH2_TEST_ASSETS_DIR}"
-        COMMENT "Building BulletML SH2 test ISO: ${BULLETML_SH2_TEST_ISO}"
-        VERBATIM
-    )
-endif()
-
-if(EXISTS "${ISO2RAW_EXECUTABLE}")
-    add_custom_target(${BULLETML_SH2_TEST_CD_NAME}_bin_cue
-        DEPENDS ${BULLETML_SH2_TEST_CD_NAME}_iso
-        COMMAND "${ISO2RAW_EXECUTABLE}" "${BULLETML_SH2_TEST_ISO}"
-        COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${BULLETML_SH2_TEST_CUE}" "${BULLETML_SH2_TEST_CD_NAME}.bin"
-        COMMENT "Creating BulletML SH2 test BIN/CUE"
-        VERBATIM
-    )
-endif()
 
 # ============================================================================
 # CTest Registration
@@ -939,7 +834,13 @@ add_test(
 set_tests_properties(sh2_collision_campaign PROPERTIES TIMEOUT 700)
 
 add_test(
-    NAME sh2_bulletml_parser_campaign
-    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_bulletml_campaign.sh" --emulator mednafen --strict
+    NAME bulletml_parity_test
+    COMMAND "${BULLETML_TEST_EXECUTABLE}"
 )
-set_tests_properties(sh2_bulletml_parser_campaign PROPERTIES TIMEOUT 700)
+set_tests_properties(bulletml_parity_test PROPERTIES TIMEOUT 60)
+
+add_test(
+    NAME bulletml_all_xml_recursive_test
+    COMMAND python3 "${CMAKE_SOURCE_DIR}/Tests/bulletml/test_all_xml_recursive.py"
+)
+set_tests_properties(bulletml_all_xml_recursive_test PROPERTIES TIMEOUT 120)
