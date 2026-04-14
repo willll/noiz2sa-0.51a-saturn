@@ -29,39 +29,20 @@ static constexpr int kDefaultBgG = 10;
 static constexpr int kDefaultBgB = 50;
 
 static constexpr int kCreditsRowStart = 9;
-static constexpr int kCreditsMaxCols = 34;
+static const char *const kCreditLine0[] = {
+    "Copyright 2002 Kenta Cho.",
+    "All rights reserved.",
+    "",
+    "Ported to SEGA Saturn by:",
+    "https://github.com/willll/",
+    "",
+    "Using:",
+    "SaturnRingLib",
+    "Ponesound-SRL",
+    "SCSP_poneSound",
+};
 
-static const char *kCreditLine0 = "Copyright 2002 Kenta Cho. All rights reserved.";
-static const char *kCreditLine1 = "Ported to SEGA Saturn by:";
-static const char *kCreditLine2 = "https://github.com/willll/";
-static const char *kCreditLine3 = "Using:";
-static const char *kCreditLine4 = "https://github.com/ReyeMe/SaturnRingLib";
-static const char *kCreditLine5 = "https://github.com/bimmerlabs/Ponesound-SRL";
-static const char *kCreditLine6 = "https://github.com/ponut64/SCSP_poneSound";
-
-static int printChunkedLine(int col, int row, const char *text, int maxCols)
-{
-    if (text == nullptr || text[0] == '\0')
-    {
-        return row;
-    }
-
-    const int cols = (maxCols > 0 && maxCols <= 63) ? maxCols : 34;
-    char chunk[64];
-    const size_t textLen = strlen(text);
-
-    for (size_t offset = 0; offset < textLen; offset += (size_t)cols)
-    {
-        const size_t remain = textLen - offset;
-        const size_t take = (remain < (size_t)cols) ? remain : (size_t)cols;
-        memcpy(chunk, text + offset, take);
-        chunk[take] = '\0';
-        SRL::Debug::Print(col, row, chunk);
-        row++;
-    }
-
-    return row;
-}
+static constexpr int kCreditLineCount = (int)(sizeof(kCreditLine0) / sizeof(kCreditLine0[0]));
 
 static void ensureRuntimeDefaults(LoadingLayout &layout)
 {
@@ -296,16 +277,10 @@ void LoadingScreen::Render(const char *step, int percent)
     SRL::Debug::Print(_layout.colLeft, _layout.rowPercent, percentLine);
     SRL::Debug::Print(_layout.colLeft, _layout.rowBar,     barLine);
     SRL::Debug::Print(_layout.colLeft, _layout.rowStep,    stepLine);
-    int creditsRow = kCreditsRowStart;
-    creditsRow = printChunkedLine(_layout.colLeft, creditsRow, kCreditLine0, kCreditsMaxCols);
-    creditsRow++;
-    creditsRow = printChunkedLine(_layout.colLeft, creditsRow, kCreditLine1, kCreditsMaxCols);
-    creditsRow = printChunkedLine(_layout.colLeft, creditsRow, kCreditLine2, kCreditsMaxCols);
-    creditsRow++;
-    creditsRow = printChunkedLine(_layout.colLeft, creditsRow, kCreditLine3, kCreditsMaxCols);
-    creditsRow = printChunkedLine(_layout.colLeft, creditsRow, kCreditLine4, kCreditsMaxCols);
-    creditsRow = printChunkedLine(_layout.colLeft, creditsRow, kCreditLine5, kCreditsMaxCols);
-    printChunkedLine(_layout.colLeft, creditsRow, kCreditLine6, kCreditsMaxCols);
+    for (int i = 0; i < kCreditLineCount; i++)
+    {
+        SRL::Debug::Print(_layout.colLeft, kCreditsRowStart + i, kCreditLine0[i]);
+    }
     SRL::Core::Synchronize();
 }
 
