@@ -121,52 +121,41 @@ public:
     }
     
     const char* getName() const { return name_; }
-    Name getNameAsName() const {
-        // Convert string name to enum
-        if (!name_) return bulletml;
-        switch (name_[0]) {
-            case 'b':
-                if (name_[1] == 'u' && name_[2] == 'l') {
-                    if (name_[6] == 'm') return bulletml; // bulletml
-                    if (name_[6] == 't') return bullet;   // bullet
-                    if (name_[6] == 'R') return bulletRef; // bulletRef
-                }
-                break;
-            case 'a':
-                if (name_[1] == 'c' && name_[2] == 't') {
-                    if (name_[6] == '\0') return action;  // action
-                    if (name_[6] == 'R') return actionRef; // actionRef
-                } else if (name_[1] == 'c' && name_[2] == 'c') {
-                    return accel; // accel
-                }
-                break;
-            case 'f':
-                if (name_[1] == 'i' && name_[2] == 'r') {
-                    if (name_[4] == '\0') return fire;    // fire
-                    if (name_[4] == 'R') return fireRef;   // fireRef
-                }
-                break;
-            case 'c':
-                if (name_[7] == 'D') return changeDirection;
-                if (name_[7] == 'S') return changeSpeed;
-                break;
-            case 'w': return wait;
-            case 'r': return repeat;
-            case 'v': 
-                if (name_[1] == 'a') return vanish;
-                if (name_[1] == 'e') return vertical;
-                break;
-            case 'h': return horizontal;
-            case 't':
-                if (name_[1] == 'e') return term;
-                if (name_[1] == 'i') return times;
-                break;
-            case 'd': return direction;
-            case 's':
-                if (name_[1] == 'p') return speed;
-                break;
-            case 'p': return param;
+    static bool matchesLiteral(const char* value, const char* literal) {
+        if (!value || !literal) {
+            return false;
         }
+        while (*value != '\0' && *literal != '\0') {
+            if (*value != *literal) {
+                return false;
+            }
+            ++value;
+            ++literal;
+        }
+        return *value == '\0' && *literal == '\0';
+    }
+    Name getNameAsName() const {
+        if (!name_) return bulletml;
+        if (matchesLiteral(name_, "bulletml")) return bulletml;
+        if (matchesLiteral(name_, "bullet")) return bullet;
+        if (matchesLiteral(name_, "action")) return action;
+        if (matchesLiteral(name_, "fire")) return fire;
+        if (matchesLiteral(name_, "changeDirection")) return changeDirection;
+        if (matchesLiteral(name_, "changeSpeed")) return changeSpeed;
+        if (matchesLiteral(name_, "accel")) return accel;
+        if (matchesLiteral(name_, "wait")) return wait;
+        if (matchesLiteral(name_, "repeat")) return repeat;
+        if (matchesLiteral(name_, "bulletRef")) return bulletRef;
+        if (matchesLiteral(name_, "actionRef")) return actionRef;
+        if (matchesLiteral(name_, "fireRef")) return fireRef;
+        if (matchesLiteral(name_, "vanish")) return vanish;
+        if (matchesLiteral(name_, "horizontal")) return horizontal;
+        if (matchesLiteral(name_, "vertical")) return vertical;
+        if (matchesLiteral(name_, "term")) return term;
+        if (matchesLiteral(name_, "times")) return times;
+        if (matchesLiteral(name_, "direction")) return direction;
+        if (matchesLiteral(name_, "speed")) return speed;
+        if (matchesLiteral(name_, "param")) return param;
         return bulletml;
     }
     
