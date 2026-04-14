@@ -22,3 +22,5 @@ void initBackground();
 void setStageBackground(int stage);
 void moveBackground();
 void drawBackground();
+unsigned int getBackgroundDebugBitmapHash();
+int getBackgroundDebugBoardCount();

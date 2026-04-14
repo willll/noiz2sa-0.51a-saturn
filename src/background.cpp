@@ -37,6 +37,13 @@ static int boardMx, boardMy;
 static int boardRepx, boardRepy;
 static int boardRepXn, boardRepYn;
 static constexpr uint16_t BACKGROUND_BASE_COLOR = 0xffff;
+static constexpr uint32_t BACKGROUND_HASH_OFFSET = 2166136261u;
+static constexpr uint32_t BACKGROUND_HASH_PRIME = 16777619u;
+
+static inline uint32_t hashBackgroundByte(uint32_t hash, uint8_t value)
+{
+  return (hash ^ value) * BACKGROUND_HASH_PRIME;
+}
 
 static void fillBackgroundSpan(uint16_t *dst, int count, uint16_t color)
 {
@@ -320,6 +327,21 @@ static void presentCompletedBackground()
   backgroundUploadedGeneration = backgroundRenderTask.GetGeneration();
 }
 
+static void refreshBackgroundBitmap()
+{
+  ensureBackgroundLayer();
+
+  if (backgroundBuffers[0] == nullptr)
+  {
+    return;
+  }
+
+  renderBackgroundBitmap(board, boardRepx, boardRepy, boardRepXn, boardRepYn, backgroundBuffers[0]);
+  uploadBackgroundBitmap(backgroundBuffers[0]);
+  backgroundRequestedGeneration++;
+  backgroundUploadedGeneration = backgroundRequestedGeneration;
+}
+
 void initBackground()
 {
   int i;
@@ -494,16 +516,11 @@ void setStageBackground(int bn)
     break;
   }
 
-  backgroundRequestedGeneration++;
-  renderBackgroundBitmap(board, boardRepx, boardRepy, boardRepXn, boardRepYn, backgroundBuffers[backgroundRequestedGeneration & 1u]);
-  uploadBackgroundBitmap(backgroundBuffers[backgroundRequestedGeneration & 1u]);
-  backgroundUploadedGeneration = backgroundRequestedGeneration;
+  refreshBackgroundBitmap();
 }
 
 void moveBackground()
 {
-  presentCompletedBackground();
-
   int i;
   Board *bd;
   for (i = 0; i < bdIdx; i++)
@@ -515,10 +532,35 @@ void moveBackground()
     bd->y &= (boardRepy - 1);
   }
 
-  submitBackgroundRender();
+  refreshBackgroundBitmap();
 }
 
 void drawBackground()
 {
-  presentCompletedBackground();
+}
+
+unsigned int getBackgroundDebugBitmapHash()
+{
+  ensureBackgroundLayer();
+
+  if (backgroundBuffers[0] == nullptr)
+  {
+    return 0u;
+  }
+
+  uint32_t hash = BACKGROUND_HASH_OFFSET;
+  const uint16_t *pixels = backgroundBuffers[0];
+  for (int i = 0; i < LAYER_WIDTH * LAYER_HEIGHT; i++)
+  {
+    const uint16_t value = pixels[i];
+    hash = hashBackgroundByte(hash, (uint8_t)(value & 0xff));
+    hash = hashBackgroundByte(hash, (uint8_t)((value >> 8) & 0xff));
+  }
+
+  return hash;
+}
+
+int getBackgroundDebugBoardCount()
+{
+  return bdIdx;
 }
