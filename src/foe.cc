@@ -322,7 +322,6 @@ void moveFoes()
                 playChunk(2);
               }
               removeFoeForced(fe);
-              removeFoeForced(fe);
               continue;
             }
             playChunk(1);

@@ -326,11 +326,31 @@ int initTitleAtr()
 
 void drawTitle()
 {
-  int i;
-  for (i = 0; i < 7; i++)
+  const char *title = "NOIZ2SA";
+  const int boxSize = 32 / SCREEN_DIVISOR;
+  const int step = 36 / SCREEN_DIVISOR;
+  const int totalWidth = 7 * step;
+  const int baseX = (160 - totalWidth) / 2;
+  const int baseY = 30 / SCREEN_DIVISOR;
+
+  for (int i = 0; title[i] != '\0'; i++)
   {
-    // Match GP32 v4 placement in the 160x240 game layer.
-    drawSprite(i, (2 + i * 46) / SCREEN_DIVISOR, 16 / SCREEN_DIVISOR);
+    const int x = baseX + i * step;
+    const int y = baseY;
+    drawBox(x, y, boxSize, boxSize, 1, 14, buf);
+
+    int idx = 37;
+    const char c = title[i];
+    if (c >= '0' && c <= '9')
+    {
+      idx = c - '0';
+    }
+    else if (c >= 'A' && c <= 'Z')
+    {
+      idx = c - 'A' + 10;
+    }
+
+    drawLetterBuf(idx, x, y, 12, 2, 15, 15, buf, 0);
   }
 }
 
