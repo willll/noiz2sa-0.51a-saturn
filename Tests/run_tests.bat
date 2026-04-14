@@ -1,11 +1,13 @@
 @goto(){
-  # Linux test runner script for SH2 collision unit tests
-  # Usage: ./run_tests.bat [kronos|mednafen|USBGamers]
+  # Linux test runner script for SH2 unit tests
+  # Usage: ./run_tests.bat [kronos|mednafen|USBGamers] [cue-path]
 
   if [ -z "$1" ]; then
-    echo "Usage: $0 [kronos|mednafen|USBGamers]"
+    echo "Usage: $0 [kronos|mednafen|USBGamers] [cue-path]"
     exit 1
   fi
+
+  cue_path="${2:-BuildDrop/noiz2sa_collision_ut.cue}"
 
   stop_emulator() {
     if [[ -n ${EMULATOR_PID:-} ]] && kill -0 "$EMULATOR_PID" 2>/dev/null; then
@@ -37,9 +39,9 @@
   trap cleanup EXIT
 
   if [ "$1" = "mednafen" ]; then
-    command="mednafen -sound 0 -ss.cart debug -force_module ss BuildDrop/noiz2sa_collision_ut.cue"
+    command="mednafen -sound 0 -ss.cart debug -force_module ss $cue_path"
   elif [ "$1" = "kronos" ]; then
-    command="kronos -a -ns -i BuildDrop/noiz2sa_collision_ut.cue"
+    command="kronos -a -ns -i $cue_path"
   elif [ "$1" = "USBGamers" ]; then
     if [ ! -f cd/data/0.bin ]; then
       echo "ERROR: cd/data/0.bin not found. Build tests first."
@@ -52,7 +54,7 @@
     exit 1
   fi
 
-  log="uts.log"
+  log="${UT_LOG_FILE:-uts.log}"
   match="***UT_END***"
 
   echo "Test command: $command"

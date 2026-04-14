@@ -800,6 +800,115 @@ if(EXISTS "${ISO2RAW_EXECUTABLE}")
     )
 endif()
 
+set(BACKGROUND_TEST_CD_NAME "noiz2sa_background_ut")
+set(BACKGROUND_TESTS_DIR "${CMAKE_SOURCE_DIR}/Tests")
+set(BACKGROUND_TEST_BUILD_DROP "${BACKGROUND_TESTS_DIR}/BuildDrop")
+set(BACKGROUND_TEST_ASSETS_DIR "${BACKGROUND_TESTS_DIR}/cd_background/data")
+set(BACKGROUND_TEST_ELF "${BACKGROUND_TEST_BUILD_DROP}/${BACKGROUND_TEST_CD_NAME}.elf")
+set(BACKGROUND_TEST_ISO "${BACKGROUND_TEST_BUILD_DROP}/${BACKGROUND_TEST_CD_NAME}.iso")
+set(BACKGROUND_TEST_BIN "${BACKGROUND_TEST_BUILD_DROP}/${BACKGROUND_TEST_CD_NAME}.bin")
+set(BACKGROUND_TEST_CUE "${BACKGROUND_TEST_BUILD_DROP}/${BACKGROUND_TEST_CD_NAME}.cue")
+set(BACKGROUND_TEST_MAP "${BACKGROUND_TEST_BUILD_DROP}/${BACKGROUND_TEST_CD_NAME}.map")
+
+file(MAKE_DIRECTORY "${BACKGROUND_TEST_BUILD_DROP}")
+file(MAKE_DIRECTORY "${BACKGROUND_TEST_ASSETS_DIR}")
+file(WRITE "${BACKGROUND_TEST_ASSETS_DIR}/ABS.TXT" "NOT Abstracted by SEGA\n")
+file(WRITE "${BACKGROUND_TEST_ASSETS_DIR}/BIB.TXT" "NOT Bibliographiced by SEGA\n")
+file(WRITE "${BACKGROUND_TEST_ASSETS_DIR}/CPY.TXT" "")
+
+set(BACKGROUND_TEST_SOURCES
+    ${CMAKE_SOURCE_DIR}/Tests/src/background_main.cxx
+    ${CMAKE_SOURCE_DIR}/src/background.cpp
+    ${CMAKE_SOURCE_DIR}/src/clrtbl.cpp
+)
+
+add_executable(${BACKGROUND_TEST_CD_NAME}.elf
+    "${SGL_PRELOADER_SOURCE}"
+    ${BACKGROUND_TEST_SOURCES}
+    ${SOURCES_SGL_SYSTEM}
+)
+
+set_target_properties(${BACKGROUND_TEST_CD_NAME}.elf PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${BACKGROUND_TEST_BUILD_DROP}"
+)
+
+target_include_directories(
+    ${BACKGROUND_TEST_CD_NAME}.elf PUBLIC
+    ${SRL_INSTALL_ROOT}/saturnringlib
+    ${CMAKE_SOURCE_DIR}/src/SDL
+    ${SRL_INSTALL_ROOT}/modules/sgl/INC
+    ${SRL_INSTALL_ROOT}/modules/dummy
+    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+    ${SRL_INSTALL_ROOT}/modules/tlsf
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/Tests/src
+)
+
+target_compile_options(${BACKGROUND_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
+    $<$<COMPILE_LANGUAGE:C>:${c_flags}>
+)
+
+target_compile_definitions(${BACKGROUND_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:bool=int>
+    $<$<COMPILE_LANGUAGE:C>:true=1>
+    $<$<COMPILE_LANGUAGE:C>:false=0>
+)
+
+target_link_options(${BACKGROUND_TEST_CD_NAME}.elf PUBLIC
+    "SHELL:-m2"
+    "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+    "SHELL:-Xlinker -Map -Xlinker ${BACKGROUND_TEST_MAP}"
+    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+)
+
+if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+    target_link_options(${BACKGROUND_TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+endif()
+
+srl_link_target(${BACKGROUND_TEST_CD_NAME}.elf)
+
+add_custom_command(TARGET ${BACKGROUND_TEST_CD_NAME}.elf POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${BACKGROUND_TEST_CD_NAME}.elf>" "${BACKGROUND_TEST_ASSETS_DIR}/0.bin"
+    COMMENT "Converting background test ELF to binary: ${BACKGROUND_TEST_ASSETS_DIR}/0.bin"
+    VERBATIM
+)
+
+if(XORRISOFS_EXECUTABLE)
+    add_custom_target(${BACKGROUND_TEST_CD_NAME}_iso
+        DEPENDS ${BACKGROUND_TEST_CD_NAME}.elf
+        COMMAND ${XORRISOFS_EXECUTABLE}
+            --norock -quiet
+            -sysid "SEGA SATURN"
+            -volid "${BACKGROUND_TEST_CD_NAME}"
+            -volset "${BACKGROUND_TEST_CD_NAME}"
+            -publisher "SEGA ENTERPRISES, LTD."
+            -preparer "SEGA ENTERPRISES, LTD."
+            -appid "${BACKGROUND_TEST_CD_NAME}"
+            -abstract "NOT Abstracted by SEGA"
+            -copyright ""
+            -biblio ""
+            -generic-boot "${IPFILE}"
+            -full-iso9660-filenames
+            -o "${BACKGROUND_TEST_ISO}"
+            "${BACKGROUND_TEST_ASSETS_DIR}"
+        COMMENT "Building background test ISO: ${BACKGROUND_TEST_ISO}"
+        VERBATIM
+    )
+endif()
+
+if(EXISTS "${ISO2RAW_EXECUTABLE}")
+    add_custom_target(${BACKGROUND_TEST_CD_NAME}_bin_cue
+        DEPENDS ${BACKGROUND_TEST_CD_NAME}_iso
+        COMMAND "${ISO2RAW_EXECUTABLE}" "${BACKGROUND_TEST_ISO}"
+        COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${BACKGROUND_TEST_CUE}" "${BACKGROUND_TEST_CD_NAME}.bin"
+        COMMENT "Creating background test BIN/CUE"
+        VERBATIM
+    )
+endif()
+
 enable_testing()
 
 # ============================================================================
@@ -832,6 +941,12 @@ add_test(
     COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_campaign.sh" --emulator mednafen --strict
 )
 set_tests_properties(sh2_collision_campaign PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME sh2_background_animation_campaign
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_background_campaign.sh" --emulator mednafen --strict
+)
+set_tests_properties(sh2_background_animation_campaign PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME bulletml_parity_test
