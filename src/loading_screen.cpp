@@ -28,7 +28,11 @@ static constexpr int kDefaultBgR = 20;
 static constexpr int kDefaultBgG = 10;
 static constexpr int kDefaultBgB = 50;
 
-static constexpr int kCreditsRowStart = 9;
+// Visible debug-text grid dimensions (Saturn VDP2 / SGL font: 8 px per tile,
+// 320×224 display → 40 columns, 28 rows).
+static constexpr int kDebugScreenCols = 40;
+static constexpr int kDebugScreenRows = 28;
+
 static const char *const kCreditLine0[] = {
     "Copyright 2002 Kenta Cho.",
     "All rights reserved.",
@@ -277,9 +281,17 @@ void LoadingScreen::Render(const char *step, int percent)
     SRL::Debug::Print(_layout.colLeft, _layout.rowPercent, percentLine);
     SRL::Debug::Print(_layout.colLeft, _layout.rowBar,     barLine);
     SRL::Debug::Print(_layout.colLeft, _layout.rowStep,    stepLine);
+    // Vertically centre the credits block in the space below the loading UI.
+    const int creditsContentStart = _layout.rowStep + 2;
+    const int creditsAvailableRows = kDebugScreenRows - creditsContentStart;
+    const int creditsTopPad = (creditsAvailableRows - kCreditLineCount) / 2;
+    const int creditsRowStart = creditsContentStart + (creditsTopPad > 0 ? creditsTopPad : 0);
+
     for (int i = 0; i < kCreditLineCount; i++)
     {
-        SRL::Debug::Print(_layout.colLeft, kCreditsRowStart + i, kCreditLine0[i]);
+        const int lineLen = (int)strlen(kCreditLine0[i]);
+        const int col = lineLen > 0 ? (kDebugScreenCols - lineLen) / 2 : 0;
+        SRL::Debug::Print((uint8_t)col, (uint8_t)(creditsRowStart + i), kCreditLine0[i]);
     }
     SRL::Core::Synchronize();
 }
