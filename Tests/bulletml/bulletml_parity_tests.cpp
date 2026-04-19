@@ -71,7 +71,6 @@ static void test_blb_magic_and_version()
 static void test_blb_header_structure()
 {
   // Validate header structure size and field offsets
-  BulletMLBLBHeader header;
   static_assert(sizeof(BulletMLBLBHeader) == 24, "Header size must be 24 bytes");
 
   // Verify alignment
