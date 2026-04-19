@@ -74,7 +74,7 @@ set(SRL_MAX_TEXTURES "75" CACHE STRING "Maximum textures")
 
 # Debug configuration
 option(DEBUG "Enable debug mode" OFF)
-set(SRL_LOG_LEVEL "TESTING" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
+set(SRL_LOG_LEVEL "TRACE" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
 set(SRL_LOG_OUTPUT "EMULATOR" CACHE STRING "Log output method")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
@@ -241,7 +241,7 @@ set(c_flags
     -m2
     -c
     -O3
-    -flto
+    -fno-lto
     -ffat-lto-objects
     -funroll-loops
     -fomit-frame-pointer
@@ -255,7 +255,7 @@ set(cxx_flags
     -m2
     -c
     -O3
-    -flto
+    -fno-lto
     -ffat-lto-objects
     -funroll-loops
     -fomit-frame-pointer
@@ -298,7 +298,7 @@ set(SOURCES_NOIZ2SA
   src/foecommand.cc
   src/barragemanager.cc
   src/SDL/SDL.cpp
-  )
+)
 
 # SGL Preloader - MUST be linked first (before all other object files)
 # Following shared.mk: PRELOADERSOURCES = $(SGLDIR)/SRC/preloader.cxx
@@ -456,7 +456,7 @@ target_compile_definitions(${CD_NAME}.elf PUBLIC
 target_link_options(${CD_NAME}.elf PUBLIC
     "SHELL:-m2"
     "SHELL:-L${SRL_SGL_DIR}/LIB"
-    "SHELL:-flto"
+    "SHELL:-fno-lto"
     "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
     "SHELL:-Xlinker -Map -Xlinker ${BUILD_MAP}"
     "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
@@ -472,7 +472,7 @@ if(NOT SRL_CUSTOM_LDFLAGS STREQUAL "")
     target_link_options(${CD_NAME}.elf PUBLIC "SHELL:${SRL_CUSTOM_LDFLAGS}")
 endif()
 
-target_link_libraries (${CD_NAME}.elf PUBLIC bulletml_binary )
+target_link_libraries (${CD_NAME}.elf PUBLIC bulletml_binary m )
 srl_link_target(${CD_NAME}.elf)
 
 # ============================================================================
@@ -922,6 +922,7 @@ set(BULLETML_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_TEST_NAME}")
 # Build bulletml parity test with native compiler (not Saturn SH-ELF)
 add_custom_command(
     OUTPUT "${BULLETML_TEST_EXECUTABLE}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/Tests"
     COMMAND g++ -std=c++11 -Wall -Wextra -o "${BULLETML_TEST_EXECUTABLE}" "${BULLETML_TEST_SOURCE}"
     DEPENDS "${BULLETML_TEST_SOURCE}"
     COMMENT "Building bulletml parity test with native compiler"
