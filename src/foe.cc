@@ -254,6 +254,13 @@ void moveFoes()
     if (foe[i].spc == NOT_EXIST)
       continue;
     fe = &(foe[i]);
+
+    if (fe->type < 0 || fe->type >= FOE_TYPE_MAX)
+    {
+      removeFoeForced(fe);
+      continue;
+    }
+
     if (fe->cmd)
     {
       if (fe->type == BOSS_TYPE)
@@ -276,8 +283,9 @@ void moveFoes()
         continue;
       }
     }
-    mx = ((sctbl[fe->d] * fe->spd) >> 8) + fe->vel.x;
-    my = -((sctbl[fe->d + 256] * fe->spd) >> 8) + fe->vel.y;
+    const int dir = fe->d & (DIV - 1);
+    mx = ((sctbl[dir] * fe->spd) >> 8) + fe->vel.x;
+    my = -((sctbl[(dir + 256) & (DIV - 1)] * fe->spd) >> 8) + fe->vel.y;
     fe->pos.x += mx;
     fe->pos.y += my;
     fe->mv.x = mx;
