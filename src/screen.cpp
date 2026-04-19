@@ -184,19 +184,139 @@ static void flushHardwareLineCommands()
   pendingLineCommandCount = 0;
 }
 
+
+
+static inline void drawHardwarePolygonDoubleSided(SRL::Math::Types::Vector2D points[4],
+                                                  const bool fill,
+                                                  const SRL::Types::HighColor &polyColor,
+                                                  const SRL::Math::Types::Fxp sort)
+{
+  SRL::Math::Types::Vector2D reversePoints[4] = {
+      points[0],
+      points[3],
+      points[2],
+      points[1]};
+
+  SRL::Scene2D::DrawPolygon(points, fill, polyColor, sort);
+  SRL::Scene2D::DrawPolygon(reversePoints, fill, polyColor, sort);
+}
+
+static bool drawHardwareThickLine(int x1, int y1, int x2, int y2, int width,
+                                  Canvas::Pixel fillColor, Canvas::Pixel borderColor,
+                                  int offsetX, int offsetY, int16_t sort)
+{
+  if (width <= 0)
+  {
+    return false;
+  }
+
+  const float dx = (float)(x2 - x1);
+  const float dy = (float)(y2 - y1);
+  const float len = sqrtf((dx * dx) + (dy * dy));
+  if (len <= 0.0001f)
+  {
+    return false;
+  }
+
+  const float nx = -dy / len;
+  const float ny = dx / len;
+
+  const float outerHalf = (float)width * 0.5f;
+  const float innerHalf = outerHalf - 1.0f;
+
+  const float sx1 = (float)(offsetX + x1 - (SCREEN_WIDTH / 2));
+  const float sy1 = (float)(offsetY + y1 - (SCREEN_HEIGHT / 2));
+  const float sx2 = (float)(offsetX + x2 - (SCREEN_WIDTH / 2));
+  const float sy2 = (float)(offsetY + y2 - (SCREEN_HEIGHT / 2));
+
+  SRL::Math::Types::Vector2D outerRect[4] = {
+      SRL::Math::Types::Vector2D(Fxp::Convert(sx1 + (nx * outerHalf)), Fxp::Convert(sy1 + (ny * outerHalf))),
+      SRL::Math::Types::Vector2D(Fxp::Convert(sx2 + (nx * outerHalf)), Fxp::Convert(sy2 + (ny * outerHalf))),
+      SRL::Math::Types::Vector2D(Fxp::Convert(sx2 - (nx * outerHalf)), Fxp::Convert(sy2 - (ny * outerHalf))),
+      SRL::Math::Types::Vector2D(Fxp::Convert(sx1 - (nx * outerHalf)), Fxp::Convert(sy1 - (ny * outerHalf)))};
+  drawHardwarePolygonDoubleSided(outerRect, true, color[borderColor], Fxp::Convert(sort));
+
+  if (innerHalf > 0.0f)
+  {
+    SRL::Math::Types::Vector2D innerRect[4] = {
+        SRL::Math::Types::Vector2D(Fxp::Convert(sx1 + (nx * innerHalf)), Fxp::Convert(sy1 + (ny * innerHalf))),
+        SRL::Math::Types::Vector2D(Fxp::Convert(sx2 + (nx * innerHalf)), Fxp::Convert(sy2 + (ny * innerHalf))),
+        SRL::Math::Types::Vector2D(Fxp::Convert(sx2 - (nx * innerHalf)), Fxp::Convert(sy2 - (ny * innerHalf))),
+        SRL::Math::Types::Vector2D(Fxp::Convert(sx1 - (nx * innerHalf)), Fxp::Convert(sy1 - (ny * innerHalf)))};
+    drawHardwarePolygonDoubleSided(innerRect, true, color[fillColor], Fxp::Convert(sort));
+  }
+
+  return true;
+}
+
 static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect, int dstX)
 {
-  if (panelLayerVram == nullptr || src == nullptr || dirtyRect.w == 0 || dirtyRect.h == 0)
+  if (panelLayerVram == nullptr || src == nullptr)
   {
     return;
   }
 
-  const uint8_t *srcRow = src + dirtyRect.x + (dirtyRect.y * PANEL_WIDTH);
-  uint8_t *dstRow = (uint8_t *)panelLayerVram + dstX + dirtyRect.x + (dirtyRect.y * PANEL_LAYER_WIDTH);
+  int srcX = dirtyRect.x;
+  int srcY = dirtyRect.y;
+  int copyW = dirtyRect.w;
+  int copyH = dirtyRect.h;
 
-  for (int row = 0; row < dirtyRect.h; row++)
+  if (copyW <= 0 || copyH <= 0)
   {
-    slDMACopy((void *)srcRow, dstRow, dirtyRect.w);
+    return;
+  }
+
+  if (srcX < 0)
+  {
+    copyW += srcX;
+    srcX = 0;
+  }
+  if (srcY < 0)
+  {
+    copyH += srcY;
+    srcY = 0;
+  }
+
+  if (srcX >= PANEL_WIDTH || srcY >= PANEL_HEIGHT)
+  {
+    return;
+  }
+
+  if (srcX + copyW > PANEL_WIDTH)
+  {
+    copyW = PANEL_WIDTH - srcX;
+  }
+  if (srcY + copyH > PANEL_HEIGHT)
+  {
+    copyH = PANEL_HEIGHT - srcY;
+  }
+
+  if (copyW <= 0 || copyH <= 0)
+  {
+    return;
+  }
+
+  int dstStartX = dstX + srcX;
+  if (dstStartX < 0 || dstStartX >= PANEL_LAYER_WIDTH)
+  {
+    return;
+  }
+  if (dstStartX + copyW > PANEL_LAYER_WIDTH)
+  {
+    copyW = PANEL_LAYER_WIDTH - dstStartX;
+  }
+
+  if (copyW <= 0)
+  {
+    return;
+  }
+
+  const uint8_t *srcRow = src + srcX + (srcY * PANEL_WIDTH);
+  uint8_t *dstRow = (uint8_t *)panelLayerVram + dstStartX + (srcY * PANEL_LAYER_WIDTH);
+
+  for (int row = 0; row < copyH; row++)
+  {
+    slDMACopy((void *)srcRow, dstRow, copyW);
     srcRow += PANEL_WIDTH;
     dstRow += PANEL_LAYER_WIDTH;
   }
@@ -205,17 +325,72 @@ static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &di
 
 static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect)
 {
-  if (panelLayerVram == nullptr || src == nullptr || dirtyRect.w == 0 || dirtyRect.h == 0)
+  if (panelLayerVram == nullptr || src == nullptr)
   {
     return;
   }
 
-  const uint8_t *srcRow = src + dirtyRect.x + (dirtyRect.y * LAYER_WIDTH);
-  uint8_t *dstRow = (uint8_t *)panelLayerVram + PANEL_LAYER_PLAYFIELD_X + dirtyRect.x + (dirtyRect.y * PANEL_LAYER_WIDTH);
+  int srcX = dirtyRect.x;
+  int srcY = dirtyRect.y;
+  int copyW = dirtyRect.w;
+  int copyH = dirtyRect.h;
 
-  for (int row = 0; row < dirtyRect.h; row++)
+  if (copyW <= 0 || copyH <= 0)
   {
-    slDMACopy((void *)srcRow, dstRow, dirtyRect.w);
+    return;
+  }
+
+  if (srcX < 0)
+  {
+    copyW += srcX;
+    srcX = 0;
+  }
+  if (srcY < 0)
+  {
+    copyH += srcY;
+    srcY = 0;
+  }
+
+  if (srcX >= LAYER_WIDTH || srcY >= LAYER_HEIGHT)
+  {
+    return;
+  }
+
+  if (srcX + copyW > LAYER_WIDTH)
+  {
+    copyW = LAYER_WIDTH - srcX;
+  }
+  if (srcY + copyH > LAYER_HEIGHT)
+  {
+    copyH = LAYER_HEIGHT - srcY;
+  }
+
+  if (copyW <= 0 || copyH <= 0)
+  {
+    return;
+  }
+
+  int dstStartX = PANEL_LAYER_PLAYFIELD_X + srcX;
+  if (dstStartX < 0 || dstStartX >= PANEL_LAYER_WIDTH)
+  {
+    return;
+  }
+  if (dstStartX + copyW > PANEL_LAYER_WIDTH)
+  {
+    copyW = PANEL_LAYER_WIDTH - dstStartX;
+  }
+
+  if (copyW <= 0)
+  {
+    return;
+  }
+
+  const uint8_t *srcRow = src + srcX + (srcY * LAYER_WIDTH);
+  uint8_t *dstRow = (uint8_t *)panelLayerVram + dstStartX + (srcY * PANEL_LAYER_WIDTH);
+
+  for (int row = 0; row < copyH; row++)
+  {
+    slDMACopy((void *)srcRow, dstRow, copyW);
     srcRow += LAYER_WIDTH;
     dstRow += PANEL_LAYER_WIDTH;
   }
@@ -234,9 +409,10 @@ static void refreshPanelLayer()
     SDL_Rect dirtyRect;
     dirtyRect.x = layer->dirtyX1;
     dirtyRect.y = layer->dirtyY1;
-    dirtyRect.w = (uint16_t)(layer->dirtyX2 - layer->dirtyX1);
-    dirtyRect.h = (uint16_t)(layer->dirtyY2 - layer->dirtyY1);
+    dirtyRect.w = layer->dirtyX2 - layer->dirtyX1;
+    dirtyRect.h = layer->dirtyY2 - layer->dirtyY1;
     uploadPlayfieldBitmapRegion(buf, dirtyRect);
+    SDL_ClearDirtyRect(layer);
   }
 
   if (lpanel->dirty)
@@ -244,8 +420,8 @@ static void refreshPanelLayer()
     SDL_Rect dirtyRect;
     dirtyRect.x = lpanel->dirtyX1;
     dirtyRect.y = lpanel->dirtyY1;
-    dirtyRect.w = (uint16_t)(lpanel->dirtyX2 - lpanel->dirtyX1);
-    dirtyRect.h = (uint16_t)(lpanel->dirtyY2 - lpanel->dirtyY1);
+    dirtyRect.w = lpanel->dirtyX2 - lpanel->dirtyX1;
+    dirtyRect.h = lpanel->dirtyY2 - lpanel->dirtyY1;
     uploadPanelBitmapRegion(lpbuf, dirtyRect, 0);
     SDL_ClearDirtyRect(lpanel);
   }
@@ -255,8 +431,8 @@ static void refreshPanelLayer()
     SDL_Rect dirtyRect;
     dirtyRect.x = rpanel->dirtyX1;
     dirtyRect.y = rpanel->dirtyY1;
-    dirtyRect.w = (uint16_t)(rpanel->dirtyX2 - rpanel->dirtyX1);
-    dirtyRect.h = (uint16_t)(rpanel->dirtyY2 - rpanel->dirtyY1);
+    dirtyRect.w = rpanel->dirtyX2 - rpanel->dirtyX1;
+    dirtyRect.h = rpanel->dirtyY2 - rpanel->dirtyY1;
     uploadPanelBitmapRegion(rpbuf, dirtyRect, PANEL_LAYER_RIGHT_X);
     SDL_ClearDirtyRect(rpanel);
   }
@@ -762,9 +938,26 @@ void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Ca
   ly = abs(y2 - y1);
 
   // Fast Saturn path: bullet wake lines are safe to emit in active gameplay only.
-  if (width == 1 && buf == l1buf && status == IN_GAME)
+  if (buf == l1buf && status == IN_GAME)
   {
-    queueHardwareLineCommand(x1, y1, x2, y2, color);
+    if (width == 1)
+    {
+      queueHardwareLineCommand(x1, y1, x2, y2, color);
+    }
+    else
+    {
+      drawHardwareThickLine(
+          x1,
+          y1,
+          x2,
+          y2,
+          width,
+          color,
+          color,
+          layerRect.x,
+          layerRect.y,
+          500);
+    }
     return;
   }
 
@@ -879,6 +1072,25 @@ void drawThickLine(int x1, int y1, int x2, int y2,
   ly = abs(y2 - y1);
   width1 = width - 2;
 
+  // Hardware path for gameplay thick lines keeps this effect off the software framebuffer.
+  if (status == IN_GAME)
+  {
+    if (drawHardwareThickLine(
+            x1,
+            y1,
+            x2,
+            y2,
+            width,
+            color1,
+            color2,
+            layerRect.x,
+            layerRect.y,
+            500))
+    {
+      return;
+    }
+  }
+
   if (lx < ly)
   {
     if (ly == 0)
@@ -940,8 +1152,7 @@ void drawThickLine(int x1, int y1, int x2, int y2,
 void drawBox(int x, int y, int width, int height,
              Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
-  int i, j;
-  Canvas::Pixel cl;
+  int i;
   int ptr;
 
   x -= width >> 1;
@@ -953,27 +1164,26 @@ void drawBox(int x, int y, int width, int height,
   if (y + height > LAYER_HEIGHT) { height = LAYER_HEIGHT - y; }
   if (height <= 1) return;
 
-  ptr = x + y * LAYER_WIDTH;
+  ptr = x + y * pitch;
   memset(&(buf[ptr]), color2, width);
   y++;
   for (i = 0; i < height - 2; i++, y++)
   {
-    ptr = x + y * LAYER_WIDTH;
-    buf[ptr] = color2;
-    ptr++;
+    ptr = x + y * pitch;
+    buf[ptr] = color2; ptr++;
     memset(&(buf[ptr]), color1, width - 2);
     ptr += width - 2;
     buf[ptr] = color2;
   }
-  ptr = x + y * LAYER_WIDTH;
+  ptr = x + y * pitch;
   memset(&(buf[ptr]), color2, width);
+  SDL_SetSurfaceDirty(layer);
 }
 
 void drawBoxPanel(int x, int y, int width, int height,
                   Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
-  int i, j;
-  Canvas::Pixel cl;
+  int i;
   int ptr;
 
   x -= width >> 1;
@@ -991,22 +1201,20 @@ void drawBoxPanel(int x, int y, int width, int height,
   for (i = 0; i < height - 2; i++, y++)
   {
     ptr = x + y * PANEL_WIDTH;
-    buf[ptr] = color2;
-    ptr++;
+    buf[ptr] = color2; ptr++;
     memset(&(buf[ptr]), color1, width - 2);
     ptr += width - 2;
     buf[ptr] = color2;
   }
   ptr = x + y * PANEL_WIDTH;
   memset(&(buf[ptr]), color2, width);
-
   if (buf == lpbuf)
   {
-    SDL_MarkDirtyRect(lpanel, x, y - height + 1, width, height);
+    SDL_SetSurfaceDirty(lpanel);
   }
   else if (buf == rpbuf)
   {
-    SDL_MarkDirtyRect(rpanel, x, y - height + 1, width, height);
+    SDL_SetSurfaceDirty(rpanel);
   }
 }
 
