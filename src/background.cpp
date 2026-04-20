@@ -257,16 +257,26 @@ static void ensureBackgroundLayer()
       BACKGROUND_BITMAP_WIDTH,
       BACKGROUND_BITMAP_HEIGHT);
 
+  // CPU-side render buffers: use LWRAM (1MB, ~856KB free after screen alloc).
+  // HWRAM heap is only ~159KB total and is consumed by BulletML parse trees;
+  // these 2×76KB buffers must come from LWRAM to avoid exhausting it.
+  SRL::Logger::LogInfo("[BACKGROUND] HWRAM free before bg buffers: %lu LWRAM free: %lu",
+    (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace(),
+    (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
   for (int i = 0; i < 2; i++)
   {
-    backgroundBuffers[i] = (uint16_t *)SRL::Memory::HighWorkRam::Malloc(LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t));
+    const size_t bufSize = LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t);
+    backgroundBuffers[i] = (uint16_t *)SRL::Memory::LowWorkRam::Malloc(bufSize);
     if (backgroundBuffers[i] == nullptr)
     {
-      SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate CPU background buffer %d", i);
+      SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate CPU background buffer %d (LWRAM free=%lu)",
+        i, (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
       SRL::System::Exit(1);
     }
-    memset(backgroundBuffers[i], 0, LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t));
+    memset(backgroundBuffers[i], 0, bufSize);
   }
+  SRL::Logger::LogInfo("[BACKGROUND] bg buffers allocated OK: LWRAM free now %lu",
+    (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
 
   SRL::VDP2::NBG0::SetCellAddress(backgroundLayerVram, backgroundLayerVramSize);
   SRL::VDP2::VRAM::Blank(backgroundLayerVram, backgroundLayerVramSize);
