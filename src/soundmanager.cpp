@@ -69,10 +69,10 @@ void closeSound() {
 
 #if NOIZ2SA_ENABLE_SOUND == 1
 #  if SRL_USE_SGL_SOUND_DRIVER == 1
-  SRL::Logger::LogDebug("[SOUND] closeSound: Stopping CDDA (SGL)");
+  SRL::Logger::LogInfo("[CDDA] closeSound: stop request (backend=SGL)");
   SRL::Sound::Cdda::StopPause();
   for (int i = 0; i < CHUNK_NUM; i++) {
-    sglChunkExists[i] = false;
+  SRL::Logger::LogInfo("[CDDA] closeSound: stop request (backend=Ponesound)");
     sglChunkFileName[i][0] = '\0';
     if (sglChunks[i] != nullptr) {
       delete sglChunks[i];
@@ -99,6 +99,7 @@ void loadSounds() {
 
 #if NOIZ2SA_ENABLE_SOUND == 0
   SRL::Logger::LogDebug("[SOUND] loadSounds: sound disabled at compile time");
+  SRL::Logger::LogInfo("[CDDA] initSound: volume set to 7 (backend=SGL)");
   return;
 #else
   int loaded = 0;
@@ -127,12 +128,15 @@ void loadSounds() {
       SRL::Cd::File fallback(fallbackName);
       if (fallback.Exists()) selectedName = fallbackName;
     }
+  SRL::Logger::LogInfo("[CDDA] playMusic request: idx=%d useAudio=%d", idx, useAudio);
 
     if (selectedName == nullptr) {
       SRL::Logger::LogWarning("[SOUND] loadSounds (SGL): %s and %s not found on disc", normalizedName, fallbackName);
+  SRL::Logger::LogInfo("[CDDA] playSingle(track=%u, loop=true) backend=SGL", track);
       continue;
     }
 
+  SRL::Logger::LogInfo("[CDDA] playSingle(track=%u, loop=true) backend=Ponesound", track);
     snprintf(sglChunkFileName[i], sizeof(sglChunkFileName[i]), "%s", selectedName);
     SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loading %s", sglChunkFileName[i]);
 
@@ -145,8 +149,10 @@ void loadSounds() {
 #  else
 #    if NOIZ2SA_ENABLE_PCM_SFX == 0
   SRL::Logger::LogWarning("[SOUND] Ponesound PCM SFX disabled (NOIZ2SA_ENABLE_PCM_SFX=0)");
+  SRL::Logger::LogInfo("[CDDA] stop/pause backend=SGL");
   for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
 #    else
+  SRL::Logger::LogInfo("[CDDA] stop backend=Ponesound");
   uint8_t* rawBuffers[CHUNK_NUM] = {nullptr};
   int32_t rawSizes[CHUNK_NUM] = {0};
 
@@ -159,8 +165,10 @@ void loadSounds() {
 
     SRL::Cd::File file(name);
     if (!file.Open()) {
+  SRL::Logger::LogInfo("[CDDA] stop/pause backend=SGL");
       SRL::Logger::LogWarning("[SOUND] loadSounds (Ponesound): Failed to open %s", name);
       continue;
+  SRL::Logger::LogInfo("[CDDA] stop backend=Ponesound");
     }
 
     rawSizes[i] = file.Size.Bytes;
@@ -187,7 +195,15 @@ void loadSounds() {
     SRL::Ponesound::Sound::Driver::Initialize(SRL::Ponesound::ADXMode::ADX2304);
     SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
     SRL::Ponesound::CD::SetVolume(7);
-    SRL::Logger::LogInfo("[SOUND] Ponesound vblank tick enabled");
+    // Set CDDA stereo pan to centre (0x0F = centre in the SCSP 5-bit DIPAN scale).
+    // The lower 5 bits of the vol/pan byte were 0 (from SNDRAM clear); 0 = full-left,
+    // which would collapse both channels to the left speaker on real hardware.
+    // pan 0x1F = full-left for left CD channel (slot 16); 0x0F = full-right for right CD channel (slot 17)
+    // SCSP slot reg +0x16 EffectVolume: bits[7:5]=level, bits[4:0]=pan
+    // pan=0x1F: pan_which=1 + panv=0 => outvol[LEFT]=basev, outvol[RIGHT]=0 (left only)
+    // pan=0x0F: pan_which=0 + panv=0 => outvol[LEFT]=0,    outvol[RIGHT]=basev (right only)
+    SRL::Ponesound::CD::SetPan(0x1F, 0x0F);
+    SRL::Logger::LogInfo("[SOUND] Ponesound CDDA vol=7 pan=centre(0x0F)");
     ponesoundDriverInitialized = true;
   }
 
@@ -356,6 +372,16 @@ void playChunk(int idx) {
   }
   SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
   SRL::Ponesound::Pcm::Play(chunk[idx], SRL::Ponesound::PlayMode::Volatile, 7);
+#  endif
+#endif
+}
+
+void soundTick() {
+#if NOIZ2SA_ENABLE_SOUND == 1
+#  if SRL_USE_SGL_SOUND_DRIVER == 0
+  if (useAudio && ponesoundDriverInitialized) {
+    SRL::Ponesound::Sound::Driver::Tick();
+  }
 #  endif
 #endif
 }

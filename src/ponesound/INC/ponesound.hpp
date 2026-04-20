@@ -275,6 +275,13 @@ namespace SRL::Ponesound
 		static inline uint16_t driverMasterVolume = 0;
 		static inline int16_t numberOfPCMs = 0;
 		static inline bool sdrvTickEnabled = false;
+		static inline uint32_t sdrvTickCount = 0;
+		// Shadow the desired CDDA vol/pan values. The M68K driver may reset these
+		// bytes when it processes a start=1 tick, so we re-assert them every vblank.
+		static inline uint8_t shadowCddaLeftVolPan  = 0x00;  // set by SetVolume/SetPan
+		static inline uint8_t shadowCddaRightVolPan = 0x00;
+		static inline uint32_t cdMonitorTicks = 0;  // >0 = log CDC status each vblank
+
 
 		static inline constexpr int16_t adxCoeficientTable[8][2] =
 		{
@@ -296,16 +303,57 @@ namespace SRL::Ponesound
 			{
 				return;
 			}
+			// Re-assert desired CDDA vol/pan every tick.
+			// The M68K driver resets these bytes when processing start=1,
+			// so we must rewrite them each vblank to keep the intended values.
+			if (shadowCddaLeftVolPan != 0 || shadowCddaRightVolPan != 0)
+			{
+				m68kCommands.cddaLeftChannelVolPan  = shadowCddaLeftVolPan;
+				m68kCommands.cddaRightChannelVolPan = shadowCddaRightVolPan;
+			}
+			if (sdrvTickCount == 0)
+			{
+				SRL::Logger::LogInfo("[PSND] vblank FIRST FIRE pcmCtrl=0x%08x L=0x%02x R=0x%02x",
+					(uint32_t)m68kCommands.pcmCtrl,
+					(uint32_t)m68kCommands.cddaLeftChannelVolPan,
+					(uint32_t)m68kCommands.cddaRightChannelVolPan);
+			}
+			sdrvTickCount++;
             m68kCommands.start = 1;
+			// Periodic CDC status logging after CD::Play is called
+			if (cdMonitorTicks > 0)
+			{
+				CdcStat cst2;
+				int32_t e2 = CDC_GetPeriStat(&cst2);
+				const uint16_t slot16ev = *reinterpret_cast<volatile uint16_t*>(0x25B00216);
+				const uint16_t slot17ev = *reinterpret_cast<volatile uint16_t*>(0x25B00236);
+				const uint16_t slot16ctl = *reinterpret_cast<volatile uint16_t*>(0x25B00200);
+				const uint16_t slot17ctl = *reinterpret_cast<volatile uint16_t*>(0x25B00220);
+				SRL::Logger::LogInfo("[CDC] vbl#%u e=%d st=0x%02x fl=0x%02x tno=%u fad=%d ctl16=0x%04x ctl17=0x%04x ev16=0x%04x ev17=0x%04x",
+					(uint32_t)sdrvTickCount,
+					(int32_t)e2,
+					(uint32_t)cst2.status,
+					(uint32_t)cst2.report.flgrep,
+					(uint32_t)cst2.report.tno,
+					(int32_t)cst2.report.fad,
+					(uint32_t)slot16ctl,
+					(uint32_t)slot17ctl,
+					(uint32_t)slot16ev,
+					(uint32_t)slot17ev);
+				cdMonitorTicks--;
+			}
         }
 
 		static void LoadDriver(int32_t masterAdxFrequency)
 		{
 			SRL::Logger::LogInfo("Ponesound::LoadDriver start");
-			*(uint8_t*)(0x25B00400) = 0x02;
-			SRL::Logger::LogInfo("Ponesound::LoadDriver M68K reset written");
 
-            // clear sound ram
+			// Disable the M68K via SMPC before touching SNDRAM.
+			// Must come before the SNDRAM clear so we don't corrupt a running driver.
+			SRL::SMPC::DisableSoundCPU();
+			SRL::Logger::LogInfo("Ponesound::LoadDriver sound CPU disabled");
+
+            // Clear sound RAM now that M68K is stopped.
  			for (int32_t i = 0; i < 0x80000; i += 4)
 			{
 				*(uint32_t*)(SNDRAM + i) = 0x00000000;
@@ -316,15 +364,15 @@ namespace SRL::Ponesound
 		    if (file.Open())
 		    {
 		    	SRL::Logger::LogInfo("Ponesound::LoadDriver SDRV.BIN opened size=%d", file.Size.Bytes);
-                SRL::SMPC::DisableSoundCPU();
-                SRL::Logger::LogInfo("Ponesound::LoadDriver sound CPU disabled");
                 file.Read(file.Size.Bytes, (void*)SNDRAM);
                 SRL::Logger::LogInfo("Ponesound::LoadDriver SDRV.BIN read to SNDRAM");
                 m68kCommands.driverAdxCoeficient1 = adxCoeficientTable[masterAdxFrequency][0];
                 m68kCommands.driverAdxCoeficient2 = adxCoeficientTable[masterAdxFrequency][1];
+                // Close the file BEFORE enabling the M68K so the CD block is free.
+                file.Close();
+                SRL::Logger::LogInfo("Ponesound::LoadDriver SDRV.BIN file closed");
                 SRL::SMPC::EnableSoundCPU();
                 SRL::Logger::LogInfo("Ponesound::LoadDriver sound CPU enabled");
-                file.Close();
             }
             else
             {
@@ -339,6 +387,15 @@ namespace SRL::Ponesound
 			while (i) { i = i - 1; }
 			SRL::Logger::LogInfo("Ponesound::LoadDriver delay done numberOfPCMs=0");
 			numberOfPCMs = 0;
+			// ---- driver post-init state dump ----
+			SRL::Logger::LogInfo("[PSND] cmdBlock=0x%08x pcmCtrl=0x%08x start=%u",
+				(uint32_t)&m68kCommands,
+				(uint32_t)m68kCommands.pcmCtrl,
+				(uint32_t)m68kCommands.start);
+			SRL::Logger::LogInfo("[PSND] volpan L=0x%02x R=0x%02x scspWorkAddr=0x%08x",
+				(uint32_t)m68kCommands.cddaLeftChannelVolPan,
+				(uint32_t)m68kCommands.cddaRightChannelVolPan,
+				(uint32_t)scspWorkAddr);
 		}
 
 		static int16_t CalculateBytesPerBlank(int32_t sampleRate, bool is8Bit, bool isPAL)
@@ -370,6 +427,11 @@ namespace SRL::Ponesound
 				(uint32_t)m68kCommands.pcmCtrl
 			);
 
+			if (m68kCommands.pcmCtrl == nullptr)
+			{
+				SRL::Logger::LogFatal("[PSND] RegisterPcm: pcmCtrl is NULL (M68K not ready), idx=%d", numberOfPCMs);
+				return -7;
+			}
 			volatile PCM::CTRL *ctrl = &m68kCommands.pcmCtrl[numberOfPCMs];
 			volatile uint8_t *ctrlBytes = reinterpret_cast<volatile uint8_t *>(ctrl);
 			volatile uint16_t *ctrlWords = reinterpret_cast<volatile uint16_t *>(ctrl);
@@ -460,6 +522,15 @@ namespace SRL::Ponesound
 			static void SetTickEnabled(bool enabled)
 			{
 				sdrvTickEnabled = enabled;
+			}
+
+			/** @brief Manually run one driver tick.
+			 *  Useful when the main loop is in fallback pacing and vblank callbacks
+			 *  are not being dispatched regularly.
+			 */
+			static void Tick()
+			{
+				SdrvVblankRq();
 			}
 
 			/** @brief Set master volume
@@ -849,6 +920,9 @@ namespace SRL::Ponesound
             uint8_t volume = 7) // 15?
             {
 				if (sound < 0) return;
+				SRL::Logger::LogInfo("[PSND] Pcm::Play id=%d mode=%d vol=%u addr=0x%08x",
+					(int32_t)sound, (int32_t)mode, (uint32_t)volume,
+					(uint32_t)&m68kCommands.pcmCtrl[sound]);
 				m68kCommands.pcmCtrl[sound].sh2Permit = 1;
 				m68kCommands.pcmCtrl[sound].volume = volume;
 				m68kCommands.pcmCtrl[sound].loopType = mode;
@@ -870,28 +944,39 @@ namespace SRL::Ponesound
 			 */
 			static void SetVolume(const uint8_t volume)
 			{
-				uint8_t newvol = m68kCommands.cddaLeftChannelVolPan & 0x1F;
+				uint8_t newvol = shadowCddaLeftVolPan & 0x1F;  // keep shadow pan bits
 				newvol |= ((volume & 0x7) << 5);
-				m68kCommands.cddaLeftChannelVolPan = newvol;
-
-				newvol = m68kCommands.cddaRightChannelVolPan & 0x1F;
+				shadowCddaLeftVolPan  = newvol;
+				newvol = shadowCddaRightVolPan & 0x1F;
 				newvol |= ((volume & 0x7) << 5);
-				m68kCommands.cddaRightChannelVolPan = newvol;
+				shadowCddaRightVolPan = newvol;
+				m68kCommands.cddaLeftChannelVolPan  = shadowCddaLeftVolPan;
+				m68kCommands.cddaRightChannelVolPan = shadowCddaRightVolPan;
+				SRL::Logger::LogInfo("[PSND] CD::SetVolume v=%u shadow L=0x%02x R=0x%02x",
+					(uint32_t)(volume & 0x7),
+					(uint32_t)shadowCddaLeftVolPan,
+					(uint32_t)shadowCddaRightVolPan);
 			}
 
 			/** @brief Set CD playback stereo pan
-			 *  @param left Left channel volume (7 is max)
-			 *  @param right Right channel volume (7 is max)
+			 *  @param left  Left  channel pan (0x00=full-left, 0x0F=centre, 0x1F=full-right)
+			 *  @param right Right channel pan (same scale)
 			 */
 			static void SetPan(const uint8_t left, const uint8_t right)
 			{
-				uint8_t newvol = m68kCommands.cddaLeftChannelVolPan & 0x1F;
-				newvol |= ((left & 0x7) << 5);
-				m68kCommands.cddaLeftChannelVolPan = newvol;
-
-				newvol = m68kCommands.cddaRightChannelVolPan & 0x1F;
-				newvol |= ((right & 0x7) << 5);
-				m68kCommands.cddaRightChannelVolPan = newvol;
+				uint8_t newvol = shadowCddaLeftVolPan & 0xE0;  // keep shadow volume bits
+				newvol |= (left & 0x1F);                       // pan in lower 5 bits
+				shadowCddaLeftVolPan  = newvol;
+				newvol = shadowCddaRightVolPan & 0xE0;
+				newvol |= (right & 0x1F);
+				shadowCddaRightVolPan = newvol;
+				m68kCommands.cddaLeftChannelVolPan  = shadowCddaLeftVolPan;
+				m68kCommands.cddaRightChannelVolPan = shadowCddaRightVolPan;
+				SRL::Logger::LogInfo("[PSND] CD::SetPan pan L=%u R=%u shadow L=0x%02x R=0x%02x",
+					(uint32_t)(left & 0x1F),
+					(uint32_t)(right & 0x1F),
+					(uint32_t)shadowCddaLeftVolPan,
+					(uint32_t)shadowCddaRightVolPan);
 			}
 
 			/** @brief Play range of tracks
@@ -901,6 +986,19 @@ namespace SRL::Ponesound
 			 */
 			static void Play(const int32_t fromTrack, const int32_t toTrack, const bool loop = false)
 			{
+				// Re-assert shadow before issuing CDC play
+				m68kCommands.cddaLeftChannelVolPan  = shadowCddaLeftVolPan;
+				m68kCommands.cddaRightChannelVolPan = shadowCddaRightVolPan;
+
+				// Poll CD status — log it so we can see if the drive is ready
+				CdcStat cst;
+				int32_t statErr = CDC_GetPeriStat(&cst);
+				SRL::Logger::LogInfo("[PSND] CD::Play track=%d-%d loop=%d L=0x%02x R=0x%02x stat_err=%d",
+					(int32_t)fromTrack, (int32_t)toTrack, (int32_t)loop,
+					(uint32_t)m68kCommands.cddaLeftChannelVolPan,
+					(uint32_t)m68kCommands.cddaRightChannelVolPan,
+					(int32_t)statErr);
+
 				CdcPly ply;
 
                 // Start track
@@ -916,7 +1014,31 @@ namespace SRL::Ponesound
                 // Set loop mode
                 CDC_PLY_PMODE(&ply) = CDC_PM_DFL | (loop ? 0xf : 0); // 0xf = infinite repetitions
 
-                CDC_CdPlay(&ply);
+                int32_t playErr = CDC_CdPlay(&ply);
+				SRL::Logger::LogInfo("[PSND] CDC_CdPlay ret=%d", (int32_t)playErr);
+				// Enable periodic CDC status logging for next 10 vblanks
+				cdMonitorTicks = 10;
+
+				// Also poll CDC status from the main thread so diagnostics do not
+				// depend on interrupt-context logging behavior.
+				const uint32_t tickBefore = sdrvTickCount;
+				for (int32_t i = 0; i < 10; i++)
+				{
+					CdcStat cst2;
+					int32_t e2 = CDC_GetPeriStat(&cst2);
+					SRL::Logger::LogInfo("[CDC-POLL] i=%d tick=%u e=%d st=0x%02x fl=0x%02x tno=%u fad=%d",
+						i,
+						(uint32_t)sdrvTickCount,
+						(int32_t)e2,
+						(uint32_t)cst2.status,
+						(uint32_t)cst2.report.flgrep,
+						(uint32_t)cst2.report.tno,
+						(int32_t)cst2.report.fad);
+					for (volatile int32_t spin = 0; spin < 100000; spin++)
+					{
+					}
+				}
+				SRL::Logger::LogInfo("[CDC-POLL] tick delta during Play=%u", (uint32_t)(sdrvTickCount - tickBefore));
 			}
 
 			/** @brief Play a single track
@@ -931,6 +1053,7 @@ namespace SRL::Ponesound
 			 */
 			static void Stop()
 			{
+				SRL::Logger::LogInfo("[PSND] CD::Stop");
 				CdcPos poswk;
 				poswk.ptype = CDC_PTYPE_DFL;
 				CDC_CdSeek(&poswk);

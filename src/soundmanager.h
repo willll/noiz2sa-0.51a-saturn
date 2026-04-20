@@ -16,3 +16,4 @@ void playMusic(int idx);
 void fadeMusic();
 void stopMusic();
 void playChunk(int idx);
+void soundTick();
