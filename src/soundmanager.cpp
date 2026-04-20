@@ -216,7 +216,7 @@ void loadSounds() {
       continue;
     }
 
-    chunk[i] = SRL::Ponesound::Pcm::LoadPcmFromMemory(rawBuffers[i], rawSizes[i], SRL::Ponesound::BitDepth::PCM8, 15360);
+    chunk[i] = SRL::Ponesound::Pcm::LoadPcmFromMemory(rawBuffers[i], rawSizes[i], SRL::Ponesound::BitDepth::PCM16, 32000);
     delete[] rawBuffers[i];
     rawBuffers[i] = nullptr;
 
