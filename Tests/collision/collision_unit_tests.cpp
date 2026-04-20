@@ -27,25 +27,42 @@ static bool movingBulletHitsShip(const Vector &bulletPos,
                                  const Vector &shipPos,
                                  int shipHitWidth)
 {
-  Vector bmv = bulletPos;
-  vctSub(&bmv, (Vector *)&bulletPrevPos);
-  const float inaa = vctInnerProduct(&bmv, &bmv);
-  if (inaa <= 1.0f)
+  const double startX = (double)bulletPrevPos.x;
+  const double startY = (double)bulletPrevPos.y;
+  const double deltaX = (double)(bulletPos.x - bulletPrevPos.x);
+  const double deltaY = (double)(bulletPos.y - bulletPrevPos.y);
+  const double shipX = (double)shipPos.x;
+  const double shipY = (double)shipPos.y;
+  const double lengthSquared = deltaX * deltaX + deltaY * deltaY;
+
+  if (lengthSquared <= 1.0)
   {
-    return false;
+    const double pointX = shipX - startX;
+    const double pointY = shipY - startY;
+    return (pointX * pointX + pointY * pointY) <= (double)shipHitWidth;
   }
 
-  Vector sofs = shipPos;
-  vctSub(&sofs, (Vector *)&bulletPrevPos);
-  const float inab = vctInnerProduct(&bmv, &sofs);
-  const float ht = inab / inaa;
-  if (ht <= 0.0f || ht >= 1.0f)
+  double t = ((shipX - startX) * deltaX + (shipY - startY) * deltaY) / lengthSquared;
+  if (t < 0.0)
   {
-    return false;
+    t = 0.0;
+  }
+  else if (t > 1.0)
+  {
+    t = 1.0;
   }
 
-  const float hd = vctInnerProduct(&sofs, &sofs) - inab * inab / inaa / inaa;
-  return hd >= 0.0f && hd < (float)shipHitWidth;
+  const double nearestX = startX + deltaX * t;
+  const double nearestY = startY + deltaY * t;
+  const double distX = shipX - nearestX;
+  const double distY = shipY - nearestY;
+  return (distX * distX + distY * distY) <= (double)shipHitWidth;
+}
+
+static bool shouldDestroyShipNow(int status)
+{
+  // Invincibility has been removed; only in-game state can consume a life.
+  return status == 1;
 }
 
 static int g_failed = 0;
@@ -206,47 +223,76 @@ static void test_movingBulletHitsShip_full_coverage()
 {
   const int shipHitWidth = 512 * 512;
 
-  // Swept bullet segment crosses ship AABB.
+  // Ship on the segment.
   Vector prev{0, 0};
   Vector cur{1000, 0};
   Vector ship{200, 0};
   EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // No overlap with ship AABB.
+  // Zero-length motion falls back to point-hit.
   prev = {0, 0};
   cur = {0, 0};
-  ship = {700, 0};
-  EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
+  ship = {200, 0};
+  EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // Miss due to X separation.
+  // Ship far from segment should miss.
   prev = {1000, 0};
   cur = {2000, 0};
   ship = {500, 600};
   EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // Miss due to far end X separation.
+  // Ship beyond segment endpoint should miss.
   prev = {0, 0};
   cur = {1000, 0};
   ship = {2600, 0};
   EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // Parallel pass with Y outside ship AABB.
+  // Parallel pass outside hit radius should miss.
   prev = {-2000, 1000};
   cur = {2000, 1000};
   ship = {0, 0};
   EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
-  // Endpoint overlap still counts.
+  // Endpoint contact should count.
   prev = {0, 0};
-  cur = {0, 0};
-  ship = {200, 0};
+  cur = {1000, 0};
+  ship = {0, 200};
+  EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
+
+  // End endpoint contact should also count.
+  prev = {0, 0};
+  cur = {1000, 0};
+  ship = {1000, 200};
+  EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
+
+  // Segment-middle proximity: catches cases missed by ppos-centered checks.
+  prev = {-2000, 0};
+  cur = {2000, 0};
+  ship = {0, 300};
+  EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
+
+  // Just outside hit radius should miss.
+  prev = {0, 0};
+  cur = {1000, 0};
+  ship = {300, 520};
   EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
 
   // Large-coordinate overlap remains stable.
   prev = {120000, 70000};
   cur = {121200, 70000};
   ship = {120600, 70100};
-  EXPECT_FALSE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
+  EXPECT_TRUE(movingBulletHitsShip(cur, prev, ship, shipHitWidth));
+}
+
+static void test_destroyShip_no_invincibility_behavior()
+{
+  const int TITLE = 0;
+  const int IN_GAME = 1;
+  const int GAMEOVER = 2;
+
+  EXPECT_FALSE(shouldDestroyShipNow(TITLE));
+  EXPECT_TRUE(shouldDestroyShipNow(IN_GAME));
+  EXPECT_FALSE(shouldDestroyShipNow(GAMEOVER));
 }
 
 int main()
@@ -260,6 +306,7 @@ int main()
   test_shotHitsFoe_full_coverage();
   test_shotHitsFoeSwept_tunneling();
   test_movingBulletHitsShip_full_coverage();
+  test_destroyShip_no_invincibility_behavior();
 
   if (g_failed != 0)
   {

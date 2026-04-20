@@ -397,12 +397,19 @@ static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect
   slDMAWait();
 }
 
-static void refreshPanelLayer()
+static bool refreshPanelLayer()
 {
   if (panelLayerVram == nullptr)
   {
-    return;
+    return false;
   }
+
+  if (!layer->dirty && !lpanel->dirty && !rpanel->dirty)
+  {
+    return false;
+  }
+
+  bool uploaded = false;
 
   if (layer->dirty)
   {
@@ -413,6 +420,7 @@ static void refreshPanelLayer()
     dirtyRect.h = layer->dirtyY2 - layer->dirtyY1;
     uploadPlayfieldBitmapRegion(buf, dirtyRect);
     SDL_ClearDirtyRect(layer);
+    uploaded = true;
   }
 
   if (lpanel->dirty)
@@ -424,6 +432,7 @@ static void refreshPanelLayer()
     dirtyRect.h = lpanel->dirtyY2 - lpanel->dirtyY1;
     uploadPanelBitmapRegion(lpbuf, dirtyRect, 0);
     SDL_ClearDirtyRect(lpanel);
+    uploaded = true;
   }
 
   if (rpanel->dirty)
@@ -435,7 +444,10 @@ static void refreshPanelLayer()
     dirtyRect.h = rpanel->dirtyY2 - rpanel->dirtyY1;
     uploadPanelBitmapRegion(rpbuf, dirtyRect, PANEL_LAYER_RIGHT_X);
     SDL_ClearDirtyRect(rpanel);
+    uploaded = true;
   }
+
+  return uploaded;
 }
 
 static void initPanelLayer(const int16_t paletteBank)
@@ -472,7 +484,7 @@ Digital *gamepad = nullptr;
 
 static void loadSprites()
 {
-  SRL::Logger::LogInfo("[SPRITE] Beginning sprite loading sequence");
+  SRL::Logger::LogDebug("[SPRITE] Beginning sprite loading sequence");
 
   int i;
   char name[256];
@@ -495,7 +507,7 @@ static void loadSprites()
     snprintf(step, sizeof(step), "Loading sprite %d/%d", i + 1, SPRITE_NUM);
     updateLoadingProgress(step, 10 + ((i + 1) * 14) / SPRITE_NUM);
 
-    SRL::Logger::LogInfo("[SPRITE] Loading sprite %d: %s", i, spriteFile[i]);
+    SRL::Logger::LogTrace("[SPRITE] Loading sprite %d: %s", i, spriteFile[i]);
 
     // Load TGA file directly from IMAGES directory (already changed via ChangeDir above)
     strcpy(name, spriteFile[i]);
@@ -579,7 +591,7 @@ static void loadSprites()
   color[0].Red = color[0].Green = color[0].Blue = 31;
   SDL_SetColors(video, color, 0, 1);
 
-  SRL::Logger::LogInfo("[SPRITE] Sprite loading complete: %d sprites loaded", SPRITE_NUM);
+  SRL::Logger::LogDebug("[SPRITE] Sprite loading complete: %d sprites loaded", SPRITE_NUM);
 }
 
 void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
@@ -805,15 +817,25 @@ void flipScreen()
 {
   static uint32_t flipCounter = 0;
 
-  refreshPanelLayer();
+  const uint32_t panelStartUs = SDL_GetProfileMicros();
+  const bool panelUploaded = refreshPanelLayer();
+  const uint32_t timePanelUs = SDL_GetProfileMicros() - panelStartUs;
 
-  uint32_t blitStartUs = SDL_GetProfileMicros();
-  SDL_BlitSurface(layer, nullptr, video, &layerRect);
-  uint32_t timeLayerUs = SDL_GetProfileMicros() - blitStartUs;
+  uint32_t timeLayerUs = 0;
+  if (layer->dirty)
+  {
+    const uint32_t blitStartUs = SDL_GetProfileMicros();
+    SDL_BlitSurface(layer, nullptr, video, &layerRect);
+    timeLayerUs = SDL_GetProfileMicros() - blitStartUs;
+  }
 
-  const uint32_t hwLineStartUs = SDL_GetProfileMicros();
-  flushHardwareLineCommands();
-  const uint32_t timeHwLineUs = SDL_GetProfileMicros() - hwLineStartUs;
+  uint32_t timeHwLineUs = 0;
+  if (pendingLineCommandCount > 0)
+  {
+    const uint32_t hwLineStartUs = SDL_GetProfileMicros();
+    flushHardwareLineCommands();
+    timeHwLineUs = SDL_GetProfileMicros() - hwLineStartUs;
+  }
   
   SDL_Flip(video);
 
@@ -826,16 +848,32 @@ void flipScreen()
     uint32_t uploadUs = 0;
     uint32_t drawUs = 0;
     SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadUs, &drawUs);
-    SRL::Logger::LogWarning(
-      "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
-        (unsigned long)flipCounter,
-      (unsigned long)timeLayerUs,
-      (unsigned long)timeHwLineUs,
-      (unsigned long)0,
-        (unsigned long)calls,
-        (unsigned long)uploads,
-      (unsigned long)uploadUs,
-      (unsigned long)drawUs);
+    if (calls == 0)
+    {
+      SRL::Logger::LogWarning(
+          "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
+          (unsigned long)flipCounter,
+          (unsigned long)timeLayerUs,
+          (unsigned long)timeHwLineUs,
+          (unsigned long)(panelUploaded ? timePanelUs : 0),
+          (unsigned long)calls,
+          (unsigned long)uploads,
+          (unsigned long)uploadUs,
+          (unsigned long)drawUs);
+    }
+    else
+    {
+      SRL::Logger::LogDebug(
+          "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
+          (unsigned long)flipCounter,
+          (unsigned long)timeLayerUs,
+          (unsigned long)timeHwLineUs,
+          (unsigned long)(panelUploaded ? timePanelUs : 0),
+          (unsigned long)calls,
+          (unsigned long)uploads,
+          (unsigned long)uploadUs,
+          (unsigned long)drawUs);
+    }
     SDL_ResetBlitStats();
   }
 

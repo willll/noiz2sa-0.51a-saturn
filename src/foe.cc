@@ -30,6 +30,7 @@
 
 #define FOE_MAX 1024
 #define FOE_TYPE_MAX 4
+#define SHIP_HIT_WIDTH (512 * 512)
 
 static Foe foe[FOE_MAX];
 int foeCnt, enNum[FOE_TYPE_MAX];
@@ -39,6 +40,45 @@ static unsigned long bulletSpawnedNormal = 0;
 static unsigned long bulletSpawnFailed = 0;
 static unsigned long bulletRemovedOffscreen = 0;
 static unsigned long bulletRemovedHitShip = 0;
+
+static bool bulletHitsShip(const Foe *fe)
+{
+  // Use closest-point distance to the swept segment [ppos, pos].
+  // This prevents tunneling for fast bullets and includes endpoint contacts.
+  const double startX = (double)fe->ppos.x;
+  const double startY = (double)fe->ppos.y;
+  const double deltaX = (double)(fe->pos.x - fe->ppos.x);
+  const double deltaY = (double)(fe->pos.y - fe->ppos.y);
+  const double shipX = (double)ship.pos.x;
+  const double shipY = (double)ship.pos.y;
+  const double lengthSquared = deltaX * deltaX + deltaY * deltaY;
+
+  if (lengthSquared <= 1.0)
+  {
+    const double pointX = shipX - startX;
+    const double pointY = shipY - startY;
+    const double distSq = pointX * pointX + pointY * pointY;
+    return distSq <= (double)SHIP_HIT_WIDTH;
+  }
+
+  double t = ((shipX - startX) * deltaX + (shipY - startY) * deltaY) / lengthSquared;
+  if (t < 0.0)
+  {
+    t = 0.0;
+  }
+  else if (t > 1.0)
+  {
+    t = 1.0;
+  }
+
+  const double nearestX = startX + deltaX * t;
+  const double nearestY = startY + deltaY * t;
+  const double distX = shipX - nearestX;
+  const double distY = shipY - nearestY;
+  const double distSq = distX * distX + distY * distY;
+
+  return distSq <= (double)SHIP_HIT_WIDTH;
+}
 
 static void removeFoeForcedNoDeleteCmd(Foe *fe)
 {
@@ -230,8 +270,6 @@ static int foeScanSize[] = {
 #define SHOT_SCAN_HEIGHT (SHOT_HEIGHT * 256 * SCAN_HEIGHT / LAYER_HEIGHT / 2)
 static int enemyScore[] = {500, 1000, 5000, 50000};
 
-#define SHIP_HIT_WIDTH 512 * 512
-
 int processSpeedDownBulletsNum = DEFAULT_SPEED_DOWN_BULLETS_NUM;
 int insanespeed = 0;
 int nowait = 0;
@@ -246,9 +284,6 @@ void moveFoes()
   int bossActiveBulletNum = 0;
   int mx, my;
   int wl;
-  Vector bmv, sofs;
-  float ht, hd, inab, inaa;
-
   for (i = 0; i < FOE_MAX; i++)
   {
     if (foe[i].spc == NOT_EXIST)
@@ -352,25 +387,12 @@ void moveFoes()
         bossActiveBulletNum++;
       }
 
-      // Check if the bullet hits the ship.
-      bmv = fe->pos;
-      vctSub(&bmv, &(fe->ppos));
-      inaa = vctInnerProduct(&bmv, &bmv);
-      if (inaa > 1.0f)
+      const bool didHit = bulletHitsShip(fe);
+
+      if (didHit)
       {
-        sofs = ship.pos;
-        vctSub(&sofs, &(fe->ppos));
-        inab = vctInnerProduct(&bmv, &sofs);
-        ht = inab / inaa;
-        if (ht > 0.0f && ht < 1.0f)
-        {
-          hd = vctInnerProduct(&sofs, &sofs) - inab * inab / inaa / inaa;
-          if (hd >= 0 && hd < SHIP_HIT_WIDTH)
-          {
-            bulletRemovedHitShip++;
-            destroyShip();
-          }
-        }
+        bulletRemovedHitShip++;
+        destroyShip();
       }
     }
     if (fe->ppos.x < 0 || fe->ppos.x >= SCAN_WIDTH_8 ||

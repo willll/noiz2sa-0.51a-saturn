@@ -35,8 +35,6 @@ Ship ship;
 #define SHIP_SLOW_DOWN (64 / SCREEN_DIVISOR)
 // #define SHIP_SLOW_DOWN (insanespeed ? 64 : (64 / SCREEN_DIVISOR))
 
-#define SHIP_INVINCIBLE_CNT_BASE 240
-
 void initShip()
 {
   ship.pos.x = (SCAN_WIDTH / 2) << 8;
@@ -44,9 +42,7 @@ void initShip()
   ship.cnt = 0;
   ship.shotCnt = -1;
   ship.speed = SHIP_SPEED;
-  ship.invCnt = SHIP_INVINCIBLE_CNT_BASE * (100 - scene) / 100;
-  if (ship.invCnt < 0)
-    ship.invCnt = 0;
+  ship.invCnt = 0;
 }
 
 #define SHOT_INTERVAL 3
@@ -155,8 +151,7 @@ void moveShip()
   }
 
   ship.cnt++;
-  if (ship.invCnt > 0)
-    ship.invCnt--;
+  ship.invCnt = 0;
 }
 
 #define SHIP_DRAW_WIDTH (6 / SCREEN_DIVISOR)
@@ -167,17 +162,10 @@ void drawShip()
 {
   int x, y, d;
   int i;
-  int ic;
   x = (ship.pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
   y = (ship.pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
   d = (ship.cnt * 8) & (DIV / 8 - 1);
   d -= DIV / 4;
-  ic = ship.invCnt & 31;
-  if (ic > 0 && ic < 16)
-  {
-    drawBox(x, y, SHIP_DRAW_WIDTH, SHIP_DRAW_WIDTH, 16 * 2 - 1, 16 * 4 - 5, buf);
-    return;
-  }
   for (i = 0; i < 4; i++)
   {
     d &= (DIV - 1);
@@ -197,8 +185,10 @@ void drawShip()
 
 void destroyShip()
 {
-  if (status != IN_GAME || ship.invCnt > 0)
+  if (status != IN_GAME)
+  {
     return;
+  }
   addShipFrag(&(ship.pos));
   playChunk(4);
   resetBonusScore();
@@ -208,9 +198,7 @@ void destroyShip()
   }
   else
   {
-    ship.invCnt = SHIP_INVINCIBLE_CNT_BASE * (100 - scene) / 100;
-    if (ship.invCnt < 0)
-      ship.invCnt = 0;
+    ship.invCnt = 0;
     clearFoesZako();
   }
 }
