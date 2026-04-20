@@ -157,6 +157,8 @@ void initTitle()
   SRL::Logger::LogDebug("[TITLE] Game objects initialized");
 
   setStageBackground(1);
+  SRL::Logger::LogInfo("[CDDA] TITLE: forcing menu BGM playMusic(0)");
+  playMusic(0);
   initTitleStage(stg);
   showScore();
   clearRPanel();
@@ -185,6 +187,7 @@ void initGame(int stg)
   if (stg < STAGE_NUM)
   {
     setStageBackground(stg % 5 + 1);
+    SRL::Logger::LogInfo("[CDDA] IN_GAME: playMusic(%d) for stage=%d", stg % 5 + 1, stg);
     playMusic(stg % 5 + 1);
     SRL::Logger::LogDebug("[GAME] Stage %d: Background/Music set to %d", stg, stg % 5 + 1);
   }
@@ -193,11 +196,13 @@ void initGame(int stg)
     if (!insane)
     {
       setStageBackground(0);
+      SRL::Logger::LogInfo("[CDDA] IN_GAME endless-normal: playMusic(0)");
       playMusic(0);
     }
     else
     {
       setStageBackground(6);
+      SRL::Logger::LogInfo("[CDDA] IN_GAME endless-insane: playMusic(6)");
       playMusic(6);
       SRL::Logger::LogInfo("[GAME] Endless stage: INSANE mode activated");
     }
@@ -593,6 +598,8 @@ int main()
     else
     {
       SRL::Input::Management::RefreshPeripherals();
+      // Keep Ponesound command pump alive when synchronized vblank is bypassed.
+      soundTick();
     }
   #endif
     uint32_t timeSyncUs = SDL_GetProfileMicros() - phaseStartUs;
