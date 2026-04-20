@@ -317,6 +317,7 @@ static int mnp;
 
 int initTitleAtr()
 {
+  SRL::Logger::LogInfo("[CDDA] initTitleAtr: stopMusic()");
   stopMusic();
   titleCnt = 0;
   slcStg = hiScore.stage;
@@ -512,6 +513,7 @@ void initGameoverAtr()
 {
   goCnt = 0;
   mnp = 0;
+  SRL::Logger::LogInfo("[CDDA] initGameoverAtr: fadeMusic()");
   fadeMusic();
 }
 
@@ -552,6 +554,7 @@ void initStageClearAtr()
 {
   scCnt = 0;
   mnp = 0;
+  SRL::Logger::LogInfo("[CDDA] initStageClearAtr: fadeMusic()");
   fadeMusic();
 }
 
