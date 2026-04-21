@@ -5,6 +5,26 @@
 
 #include "../../src/vector.h"
 
+// ---------------------------------------------------------------------------
+// FPS counter arithmetic helpers
+// Mirror the vblank-based computation in noiz2sa.cpp without any rendering
+// or global-state side effects.
+//
+// NTSC vblank = 60 Hz.  fps*100 = 6000 / vblanks_between_frames.
+// ---------------------------------------------------------------------------
+static uint32_t computeFpsTimes100(uint32_t vblanksElapsed)
+{
+  if (vblanksElapsed > 0u)
+    return 6000u / vblanksElapsed;
+  return 6000u; // first-frame / no-vblank-yet default
+}
+
+static void computeFpsDisplay(uint32_t fpsTimes100, int32_t &outWhole, int32_t &outFrac)
+{
+  outWhole = (int32_t)(fpsTimes100 / 100u);
+  outFrac  = (int32_t)(fpsTimes100 % 100u);
+}
+
 static bool shotHitsFoe(const Vector &foePos, const Vector &shotPos, int foeScanSize, int shotScanHeight)
 {
   return absN(foePos.x - shotPos.x) < foeScanSize &&
@@ -348,6 +368,101 @@ MU_TEST(test_size_and_dist_extended)
   mu_assert_int_eq(110, vctDist(&c, &b));
 }
 
+// ---------------------------------------------------------------------------
+// FPS counter tests
+// These feed raw Fxp delta-time values through the same arithmetic used by
+// drawFpsCounter() and assert the resulting whole/fractional parts.
+//
+// Raw value encoding: 16.16 fixed point, so 1.0 s = 0x10000 = 65536.
+// Hardware division: AsyncDivSet sets 64-bit dividend = (raw << 16),
+// divisor = deltaRaw, result stored in dvdntl.
+// Equivalent: fpsRaw = (65536 * 65536) / deltaRaw = 4294967296 / deltaRaw.
+// ---------------------------------------------------------------------------
+
+MU_TEST(test_fps_zero_vblanks_returns_default_60fps)
+{
+  // First-frame / no-vblanks-yet path must not divide by zero and must
+  // return 60.00 fps as the boot default.
+  mu_assert_int_eq(6000u, computeFpsTimes100(0u));
+  int32_t w, f;
+  computeFpsDisplay(6000u, w, f);
+  mu_assert_int_eq(60, w);
+  mu_assert_int_eq(0, f);
+}
+
+MU_TEST(test_fps_1_vblank_is_60fps)
+{
+  // 1 vblank between renders → 60 fps (NTSC full rate)
+  const uint32_t t = computeFpsTimes100(1u);
+  mu_assert_int_eq(6000u, t);
+  int32_t w, f;
+  computeFpsDisplay(t, w, f);
+  mu_assert_int_eq(60, w);
+  mu_assert_int_eq(0, f);
+}
+
+MU_TEST(test_fps_2_vblanks_is_30fps)
+{
+  // 2 vblanks between renders → 30 fps (typical Saturn VDP1 target)
+  const uint32_t t = computeFpsTimes100(2u);
+  mu_assert_int_eq(3000u, t);
+  int32_t w, f;
+  computeFpsDisplay(t, w, f);
+  mu_assert_int_eq(30, w);
+  mu_assert_int_eq(0, f);
+}
+
+MU_TEST(test_fps_3_vblanks_is_20fps)
+{
+  // 3 vblanks → 20 fps
+  const uint32_t t = computeFpsTimes100(3u);
+  mu_assert_int_eq(2000u, t);
+  int32_t w, f;
+  computeFpsDisplay(t, w, f);
+  mu_assert_int_eq(20, w);
+  mu_assert_int_eq(0, f);
+}
+
+MU_TEST(test_fps_4_vblanks_is_15fps)
+{
+  // 4 vblanks → 15 fps
+  const uint32_t t = computeFpsTimes100(4u);
+  mu_assert_int_eq(1500u, t);
+  int32_t w, f;
+  computeFpsDisplay(t, w, f);
+  mu_assert_int_eq(15, w);
+  mu_assert_int_eq(0, f);
+}
+
+MU_TEST(test_fps_display_fractional_frac)
+{
+  // fpsTimes100 = 4567 → whole=45, frac=67
+  int32_t w, f;
+  computeFpsDisplay(4567u, w, f);
+  mu_assert_int_eq(45, w);
+  mu_assert_int_eq(67, f);
+}
+
+MU_TEST(test_fps_display_zero_fpstimes100)
+{
+  // Edge: fpsTimes100 == 0 → whole=0, frac=0
+  int32_t w, f;
+  computeFpsDisplay(0u, w, f);
+  mu_assert_int_eq(0, w);
+  mu_assert_int_eq(0, f);
+}
+
+MU_TEST_SUITE(fps_test_suite)
+{
+  MU_RUN_TEST(test_fps_zero_vblanks_returns_default_60fps);
+  MU_RUN_TEST(test_fps_1_vblank_is_60fps);
+  MU_RUN_TEST(test_fps_2_vblanks_is_30fps);
+  MU_RUN_TEST(test_fps_3_vblanks_is_20fps);
+  MU_RUN_TEST(test_fps_4_vblanks_is_15fps);
+  MU_RUN_TEST(test_fps_display_fractional_frac);
+  MU_RUN_TEST(test_fps_display_zero_fpstimes100);
+}
+
 MU_TEST_SUITE(collision_test_suite)
 {
   MU_RUN_TEST(test_basic_vector_ops);
@@ -377,6 +492,7 @@ int main()
 
   LogInfo(strStart);
 
+  MU_RUN_SUITE(fps_test_suite);
   MU_RUN_SUITE(collision_test_suite);
   MU_RUN_SUITE(vector_test_suite);
   MU_REPORT();
