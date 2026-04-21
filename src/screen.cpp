@@ -847,8 +847,9 @@ void flipScreen()
     uint32_t uploadPixels = 0;
     uint32_t uploadUs = 0;
     uint32_t drawUs = 0;
+    const bool expectedBlitWork = layer->dirty || (pendingLineCommandCount > 0) || panelUploaded;
     SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadUs, &drawUs);
-    if (calls == 0)
+    if (calls == 0 && expectedBlitWork)
     {
       SRL::Logger::LogWarning(
           "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
