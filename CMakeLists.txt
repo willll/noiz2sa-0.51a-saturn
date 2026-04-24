@@ -297,7 +297,6 @@ set(SOURCES_NOIZ2SA
   src/foe.cc
   src/foecommand.cc
   src/barragemanager.cc
-  src/SDL/SDL.cpp
 )
 
 # SGL Preloader - MUST be linked first (before all other object files)
@@ -355,21 +354,36 @@ set(BUILD_ISO "${BUILD_DROP}/${CD_NAME}.iso")
 set(BUILD_BIN "${BUILD_DROP}/${CD_NAME}.bin")
 set(BUILD_CUE "${BUILD_DROP}/${CD_NAME}.cue")
 set(BUILD_MAP "${BUILD_DROP}/${CD_NAME}.map")
+set(BUILD_IPBIN "${BUILD_DROP}/IP.BIN")
 
-# Locate IP.BIN (system boot sector)
-if(SRL_IPBIN)
-    set(IPFILE "${SRL_IPBIN}")
-else()
-    if(EXISTS "${CMAKE_SOURCE_DIR}/cd/data/IP.BIN")
-        set(IPFILE "${CMAKE_SOURCE_DIR}/cd/data/IP.BIN")
-    elseif(EXISTS "${SRL_SGL_DIR}/IP.BIN")
-        set(IPFILE "${SRL_SGL_DIR}/IP.BIN")
-    elseif(EXISTS "${SRL_INSTALL_ROOT}/resources/IP.BIN")
-        set(IPFILE "${SRL_INSTALL_ROOT}/resources/IP.BIN")
-    else()
-        set(IPFILE "${SRL_SGL_DIR}/../../resources/IP.BIN")
-    endif()
+# Generate IP.BIN using IPMaker for this project.
+set(ip_maker_verbose "")
+if(CMAKE_VERBOSE_MAKEFILE)
+    set(ip_maker_verbose "-v")
 endif()
+
+set(SATURN_IPMAKER_EXECUTABLE "$ENV{SATURN_IPMAKER}/IPMaker")
+if(NOT EXISTS "${SATURN_IPMAKER_EXECUTABLE}")
+    find_program(SATURN_IPMAKER_EXECUTABLE IPMaker)
+endif()
+
+if(NOT SATURN_IPMAKER_EXECUTABLE)
+    message(FATAL_ERROR "IPMaker not found. Set SATURN_IPMAKER or add IPMaker to PATH.")
+endif()
+
+add_custom_command(
+    OUTPUT "${BUILD_IPBIN}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILD_DROP}"
+    COMMAND "${SATURN_IPMAKER_EXECUTABLE}"
+    ARGS ${ip_maker_verbose} -o "${BUILD_IPBIN}" -t ${CD_NAME} -p 2
+    COMMENT "Generating IP.BIN with IPMaker"
+    VERBATIM
+)
+
+add_custom_target(generate_project_ip_bin DEPENDS "${BUILD_IPBIN}")
+
+set(IPFILE "${BUILD_IPBIN}")
 
 # Find xorrisofs for ISO creation (required for Saturn CD generation)
 find_program(XORRISOFS_EXECUTABLE xorrisofs)
@@ -570,7 +584,7 @@ endif()
 # Create ISO using xorrisofs
 if(XORRISOFS_EXECUTABLE)
     add_custom_target(create_iso
-        DEPENDS ${CD_NAME}.elf
+        DEPENDS ${CD_NAME}.elf generate_project_ip_bin
         COMMAND ${CMAKE_COMMAND} -E echo "Creating ISO image with xorrisofs..."
         COMMAND ${XORRISOFS_EXECUTABLE}
             --norock -quiet 
@@ -905,6 +919,113 @@ if(EXISTS "${ISO2RAW_EXECUTABLE}")
         COMMAND "${ISO2RAW_EXECUTABLE}" "${BACKGROUND_TEST_ISO}"
         COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${BACKGROUND_TEST_CUE}" "${BACKGROUND_TEST_CD_NAME}.bin"
         COMMENT "Creating background test BIN/CUE"
+        VERBATIM
+    )
+endif()
+
+set(BULLETML_SH2_TEST_CD_NAME "noiz2sa_bulletml_ut")
+set(BULLETML_SH2_TESTS_DIR "${CMAKE_SOURCE_DIR}/Tests")
+set(BULLETML_SH2_TEST_BUILD_DROP "${BULLETML_SH2_TESTS_DIR}/BuildDrop")
+set(BULLETML_SH2_TEST_ASSETS_DIR "${BULLETML_SH2_TESTS_DIR}/cd_bulletml/data")
+set(BULLETML_SH2_TEST_ELF "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.elf")
+set(BULLETML_SH2_TEST_ISO "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.iso")
+set(BULLETML_SH2_TEST_BIN "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.bin")
+set(BULLETML_SH2_TEST_CUE "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.cue")
+set(BULLETML_SH2_TEST_MAP "${BULLETML_SH2_TEST_BUILD_DROP}/${BULLETML_SH2_TEST_CD_NAME}.map")
+
+file(MAKE_DIRECTORY "${BULLETML_SH2_TEST_BUILD_DROP}")
+file(MAKE_DIRECTORY "${BULLETML_SH2_TEST_ASSETS_DIR}")
+file(WRITE "${BULLETML_SH2_TEST_ASSETS_DIR}/ABS.TXT" "NOT Abstracted by SEGA\n")
+file(WRITE "${BULLETML_SH2_TEST_ASSETS_DIR}/BIB.TXT" "NOT Bibliographiced by SEGA\n")
+file(WRITE "${BULLETML_SH2_TEST_ASSETS_DIR}/CPY.TXT" "")
+
+set(BULLETML_SH2_TEST_SOURCES
+    ${CMAKE_SOURCE_DIR}/Tests/src/bulletml_main.cxx
+)
+
+add_executable(${BULLETML_SH2_TEST_CD_NAME}.elf
+    "${SGL_PRELOADER_SOURCE}"
+    ${BULLETML_SH2_TEST_SOURCES}
+    ${SOURCES_SGL_SYSTEM}
+)
+
+set_target_properties(${BULLETML_SH2_TEST_CD_NAME}.elf PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${BULLETML_SH2_TEST_BUILD_DROP}"
+)
+
+target_include_directories(
+    ${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
+    ${SRL_INSTALL_ROOT}/saturnringlib
+    ${CMAKE_SOURCE_DIR}/src/bulletml_binary
+    ${CMAKE_SOURCE_DIR}/src/SDL
+    ${SRL_INSTALL_ROOT}/modules/sgl/INC
+    ${SRL_INSTALL_ROOT}/modules/dummy
+    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+    ${SRL_INSTALL_ROOT}/modules/tlsf
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/Tests/src
+)
+
+target_compile_options(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
+    $<$<COMPILE_LANGUAGE:C>:${c_flags}>
+)
+
+target_compile_definitions(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:bool=int>
+    $<$<COMPILE_LANGUAGE:C>:true=1>
+    $<$<COMPILE_LANGUAGE:C>:false=0>
+)
+
+target_link_options(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
+    "SHELL:-m2"
+    "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+    "SHELL:-Xlinker -Map -Xlinker ${BULLETML_SH2_TEST_MAP}"
+    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+)
+
+if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+    target_link_options(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+endif()
+
+srl_link_target(${BULLETML_SH2_TEST_CD_NAME}.elf)
+
+add_custom_command(TARGET ${BULLETML_SH2_TEST_CD_NAME}.elf POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${BULLETML_SH2_TEST_CD_NAME}.elf>" "${BULLETML_SH2_TEST_ASSETS_DIR}/0.bin"
+    COMMENT "Converting bulletml test ELF to binary: ${BULLETML_SH2_TEST_ASSETS_DIR}/0.bin"
+    VERBATIM
+)
+
+if(XORRISOFS_EXECUTABLE)
+    add_custom_target(${BULLETML_SH2_TEST_CD_NAME}_iso
+        DEPENDS ${BULLETML_SH2_TEST_CD_NAME}.elf
+        COMMAND ${XORRISOFS_EXECUTABLE}
+            --norock -quiet
+            -sysid "SEGA SATURN"
+            -volid "${BULLETML_SH2_TEST_CD_NAME}"
+            -volset "${BULLETML_SH2_TEST_CD_NAME}"
+            -publisher "SEGA ENTERPRISES, LTD."
+            -preparer "SEGA ENTERPRISES, LTD."
+            -appid "${BULLETML_SH2_TEST_CD_NAME}"
+            -abstract "NOT Abstracted by SEGA"
+            -copyright ""
+            -biblio ""
+            -generic-boot "${IPFILE}"
+            -full-iso9660-filenames
+            -o "${BULLETML_SH2_TEST_ISO}"
+            "${BULLETML_SH2_TEST_ASSETS_DIR}"
+        COMMENT "Building bulletml test ISO: ${BULLETML_SH2_TEST_ISO}"
+        VERBATIM
+    )
+endif()
+
+if(EXISTS "${ISO2RAW_EXECUTABLE}")
+    add_custom_target(${BULLETML_SH2_TEST_CD_NAME}_bin_cue
+        DEPENDS ${BULLETML_SH2_TEST_CD_NAME}_iso
+        COMMAND "${ISO2RAW_EXECUTABLE}" "${BULLETML_SH2_TEST_ISO}"
+        COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${BULLETML_SH2_TEST_CUE}" "${BULLETML_SH2_TEST_CD_NAME}.bin"
+        COMMENT "Creating bulletml test BIN/CUE"
         VERBATIM
     )
 endif()
