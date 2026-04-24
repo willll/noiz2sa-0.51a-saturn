@@ -25,9 +25,11 @@
 
 #ifdef __cplusplus
 
+#include <srl.hpp>
 #include <srl_log.hpp>
 
 using namespace SRL::Logger;
+using SRL::Math::Types::Fxp;
 
 extern "C"
 {
@@ -53,8 +55,8 @@ extern "C"
 	static uint32_t suite_error_counter = 0;
 
 	/*  Timers */
-	static double minunit_real_timer = 0;
-	static double minunit_proc_timer = 0;
+	static Fxp minunit_real_timer = 0;
+	static Fxp minunit_proc_timer = 0;
 
 	/*  Last message */
 	static char minunit_last_message[MINUNIT_MESSAGE_LEN];
@@ -115,14 +117,14 @@ extern "C"
 
 /*  Report */
 #define MU_REPORT() MU__SAFE_BLOCK(                                                                                    \
-	double minunit_end_real_timer;                                                                                     \
-	double minunit_end_proc_timer;                                                                                     \
+	Fxp minunit_end_real_timer;                                                                                     \
+	Fxp minunit_end_proc_timer;                                                                                     \
 	Log::LogPrint<LogLevels::INFO>("%d tests, %d assertions, %d failures", minunit_run, minunit_assert, minunit_fail); \
 	minunit_end_real_timer = mu_timer_real();                                                                          \
 	minunit_end_proc_timer = mu_timer_cpu();                                                                           \
-	Log::LogPrint<LogLevels::INFO>("Finished in %.8f seconds (real) %.8f seconds (proc)",                              \
-								   minunit_end_real_timer - minunit_real_timer,                                        \
-								   minunit_end_proc_timer - minunit_proc_timer);)
+	Log::LogPrint<LogLevels::INFO>("Finished in %d seconds (real) %d seconds (proc)",                                    \
+								   (minunit_end_real_timer - minunit_real_timer).As<int>(),                                \
+								   (minunit_end_proc_timer - minunit_proc_timer).As<int>());)
 #define MU_EXIT_CODE minunit_fail
 
 /*  Assertions */
@@ -161,14 +163,13 @@ extern "C"
 	})
 
 #define mu_assert_double_eq(expected, result) MU__SAFE_BLOCK(                                                                                                                                                                               \
-	double minunit_tmp_e;                                                                                                                                                                                                                   \
-	double minunit_tmp_r;                                                                                                                                                                                                                   \
+	Fxp minunit_tmp_e;                                                                                                                                                                                                                   \
+	Fxp minunit_tmp_r;                                                                                                                                                                                                                   \
 	minunit_assert++;                                                                                                                                                                                                                       \
 	minunit_tmp_e = (expected);                                                                                                                                                                                                             \
 	minunit_tmp_r = (result);                                                                                                                                                                                                               \
-	if (fabs(minunit_tmp_e - minunit_tmp_r) > MINUNIT_EPSILON) {                                                                                                                                                                            \
-		int minunit_significant_figures = 1 - log10(MINUNIT_EPSILON);                                                                                                                                                                       \
-		(void)snprintf(minunit_last_message, MINUNIT_MESSAGE_LEN, "%s failed:\n\t%s:%d: %.*g expected but was %.*g", __func__, __FILE__, __LINE__, minunit_significant_figures, minunit_tmp_e, minunit_significant_figures, minunit_tmp_r); \
+	if ((minunit_tmp_e - minunit_tmp_r).Abs() > Fxp::Convert(MINUNIT_EPSILON)) {                                                                                                                                                          \
+		(void)snprintf(minunit_last_message, MINUNIT_MESSAGE_LEN, "%s failed:\n\t%s:%d: %d expected but was %d", __func__, __FILE__, __LINE__, minunit_tmp_e.As<int>(), minunit_tmp_r.As<int>()); \
 		minunit_status = 1;                                                                                                                                                                                                                 \
 		return;                                                                                                                                                                                                                             \
 	})
@@ -200,7 +201,7 @@ extern "C"
 	 * The returned real time is only useful for computing an elapsed time
 	 * between two calls to this function.
 	 */
-	static double mu_timer_real(void)
+	static Fxp mu_timer_real(void)
 	{
 
 		return -1.0; /* Failed. */
@@ -210,7 +211,7 @@ extern "C"
 	 * Returns the amount of CPU time used by the current process,
 	 * in seconds, or -1.0 if an error occurred.
 	 */
-	static double mu_timer_cpu(void)
+	static Fxp mu_timer_cpu(void)
 	{
 		return -1; /* Failed. */
 	}

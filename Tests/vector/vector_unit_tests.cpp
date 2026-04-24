@@ -56,9 +56,9 @@ static void test_inner_product_large_values()
   Vector b{120000, 50000};
 
   // 120000*120000 + (-50000*50000) = 11900000000
-  const float dot = vctInnerProduct(&a, &b);
-  EXPECT_TRUE(dot > 1.18e10f);
-  EXPECT_TRUE(dot < 1.20e10f);
+  const long long dot = vctInnerProduct(&a, &b);
+  EXPECT_TRUE(dot > 11800000000LL);
+  EXPECT_TRUE(dot < 12000000000LL);
 }
 
 static void test_get_element_projection()

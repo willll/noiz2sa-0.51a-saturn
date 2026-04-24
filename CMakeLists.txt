@@ -99,6 +99,7 @@ option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" ON)
 set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=half, 4=quarter)")
 set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
 option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
+option(NOIZ2SA_DEBUG_AUTOSTART_SMOKE "Debug-only: auto-start gameplay from title for deterministic smoke runs" OFF)
 
 # Background color after loading
 set(NOIZ2SA_POST_LOAD_BG_COLOR "BLUE" CACHE STRING "Background color after loading completes")
@@ -466,6 +467,10 @@ target_compile_definitions(${CD_NAME}.elf PUBLIC
     $<$<COMPILE_LANGUAGE:C>:true=1>
     $<$<COMPILE_LANGUAGE:C>:false=0>
 )
+
+if(NOIZ2SA_DEBUG_AUTOSTART_SMOKE)
+    target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_DEBUG_AUTOSTART_SMOKE=1)
+endif()
 
 target_link_options(${CD_NAME}.elf PUBLIC
     "SHELL:-m2"
