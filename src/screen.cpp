@@ -692,6 +692,9 @@ static void makeSmokeBuf()
 
 void initSDL()
 {
+  // Initialize SDL timing wrappers so SDL_GetTicks()/profiling APIs advance in-game.
+  SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK);
+
   videoSurface = SRL_Surface(-1, SCREEN_WIDTH, SCREEN_HEIGHT);
   layerSurface = SRL_Surface(-1, LAYER_WIDTH, LAYER_HEIGHT);
   lpanelSurface = SRL_Surface(-1, PANEL_WIDTH, PANEL_HEIGHT);
@@ -813,6 +816,11 @@ void markPlayfieldDirty()
   SDL_SetSurfaceDirty(layer);
 }
 
+void markPlayfieldDirtyRect(int x, int y, int width, int height)
+{
+  SDL_MarkDirtyRect(layer, x, y, width, height);
+}
+
 void flipScreen()
 {
   static uint32_t flipCounter = 0;
@@ -848,8 +856,9 @@ void flipScreen()
     uint32_t uploadUs = 0;
     uint32_t drawUs = 0;
     const bool expectedBlitWork = layer->dirty || (pendingLineCommandCount > 0) || panelUploaded;
+    const bool panelOnlyWork = (!layer->dirty && pendingLineCommandCount == 0 && panelUploaded);
     SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadUs, &drawUs);
-    if (calls == 0 && expectedBlitWork)
+    if (calls == 0 && expectedBlitWork && !panelOnlyWork)
     {
       SRL::Logger::LogWarning(
           "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
@@ -864,7 +873,7 @@ void flipScreen()
     }
     else
     {
-      SRL::Logger::LogDebug(
+        SRL::Logger::LogInfo(
           "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
           (unsigned long)flipCounter,
           (unsigned long)timeLayerUs,

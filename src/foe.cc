@@ -33,6 +33,9 @@
 #define SHIP_HIT_WIDTH (512 * 512)
 
 static Foe foe[FOE_MAX];
+static int foeActiveIndices[FOE_MAX];
+static int foeActivePos[FOE_MAX];
+static int foeActiveCount = 0;
 int foeCnt, enNum[FOE_TYPE_MAX];
 
 static unsigned long bulletSpawnedActive = 0;
@@ -40,6 +43,40 @@ static unsigned long bulletSpawnedNormal = 0;
 static unsigned long bulletSpawnFailed = 0;
 static unsigned long bulletRemovedOffscreen = 0;
 static unsigned long bulletRemovedHitShip = 0;
+
+static inline int getFoeIndex(const Foe *fe)
+{
+  return (int)(fe - foe);
+}
+
+static inline void markFoeSlotActive(const Foe *fe)
+{
+  const int idx = getFoeIndex(fe);
+  if (foeActivePos[idx] >= 0)
+  {
+    return;
+  }
+
+  foeActivePos[idx] = foeActiveCount;
+  foeActiveIndices[foeActiveCount++] = idx;
+}
+
+static void removeFoeSlotActive(const Foe *fe)
+{
+  const int idx = getFoeIndex(fe);
+  const int activePos = foeActivePos[idx];
+  if (activePos < 0)
+  {
+    return;
+  }
+
+  const int lastPos = foeActiveCount - 1;
+  const int lastIdx = foeActiveIndices[lastPos];
+  foeActiveIndices[activePos] = lastIdx;
+  foeActivePos[lastIdx] = activePos;
+  foeActivePos[idx] = -1;
+  foeActiveCount = lastPos;
+}
 
 static bool bulletHitsShip(const Foe *fe)
 {
@@ -94,6 +131,7 @@ static void removeFoeForcedNoDeleteCmd(Foe *fe)
     enNum[fe->type]--;
   }
   fe->spc = NOT_EXIST;
+  removeFoeSlotActive(fe);
 }
 
 static void removeFoeForced(Foe *fe)
@@ -115,9 +153,11 @@ void removeFoe(Foe *fe)
 
 void initFoes()
 {
-  int i, j;
+  int i;
+  foeActiveCount = 0;
   for (i = 0; i < FOE_MAX; i++)
   {
+    foeActivePos[i] = -1;
     removeFoeForced(&(foe[i]));
   }
   foeCnt = 0;
@@ -134,11 +174,12 @@ void initFoes()
 
 void closeFoes()
 {
-  int i, j;
-  for (i = 0; i < FOE_MAX; i++)
+  int i;
+  for (i = 0; i < foeActiveCount; i++)
   {
-    if (foe[i].cmd)
-      delete foe[i].cmd;
+    Foe *fe = &(foe[foeActiveIndices[i]]);
+    if (fe->cmd)
+      delete fe->cmd;
   }
 }
 
@@ -152,12 +193,12 @@ static Foe *getNextFoe()
     foeIdx--;
     if (foeIdx < 0)
       foeIdx = FOE_MAX - 1;
-    if (foe[i].spc == NOT_EXIST)
+    if (foe[foeIdx].spc == NOT_EXIST)
       break;
   }
   if (i >= FOE_MAX)
     return nullptr;
-  return &(foe[i]);
+  return &(foe[foeIdx]);
 }
 
 Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
@@ -185,6 +226,8 @@ Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
   fe->cnt = 0;
   fe->color = 0;
   fe->hit = 0;
+
+  markFoeSlotActive(fe);
 
   foeCnt++;
   enNum[type]++;
@@ -223,6 +266,7 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
   fe->type = 0;
   fe->cnt = 0;
   fe->color = color;
+  markFoeSlotActive(fe);
   bulletSpawnedActive++;
 }
 
@@ -244,6 +288,7 @@ void addFoeNormalBullet(Vector *pos, Fxp rank, int d, int spd, int color)
   fe->type = 0;
   fe->cnt = 0;
   fe->color = color;
+  markFoeSlotActive(fe);
   bulletSpawnedNormal++;
 }
 
@@ -253,16 +298,21 @@ static void wipeBullets(Vector *pos, int width)
 {
   int i;
   Foe *fe;
-  for (i = 0; i < FOE_MAX; i++)
+  for (i = 0; i < foeActiveCount;)
   {
-    if (foe[i].spc != ACTIVE_BULLET && foe[i].spc != BULLET)
+    fe = &(foe[foeActiveIndices[i]]);
+    if (fe->spc != ACTIVE_BULLET && fe->spc != BULLET)
+    {
+      i++;
       continue;
-    fe = &(foe[i]);
+    }
     if (vctDist(pos, &(fe->pos)) < width)
     {
       addBonus(&(fe->pos), &(fe->mv));
       removeFoeForced(fe);
+      continue;
     }
+    i++;
   }
 }
 
@@ -290,11 +340,9 @@ void moveFoes()
   int bossActiveBulletNum = 0;
   int mx, my;
   int wl;
-  for (i = 0; i < FOE_MAX; i++)
+  for (i = 0; i < foeActiveCount;)
   {
-    if (foe[i].spc == NOT_EXIST)
-      continue;
-    fe = &(foe[i]);
+    fe = &(foe[foeActiveIndices[i]]);
 
     if (fe->type < 0 || fe->type >= FOE_TYPE_MAX)
     {
@@ -412,6 +460,7 @@ void moveFoes()
       continue;
     }
     foeNum++;
+    i++;
   }
 
   // A game speed becomes slow as many bullets appears.
@@ -429,11 +478,9 @@ void clearFoes()
 {
   int i;
   Foe *fe;
-  for (i = 0; i < FOE_MAX; i++)
+  for (i = 0; i < foeActiveCount;)
   {
-    if (foe[i].spc == NOT_EXIST)
-      continue;
-    fe = &(foe[i]);
+    fe = &(foe[foeActiveIndices[i]]);
     addClearFrag(&(fe->pos), &(fe->mv));
     removeFoeForced(fe);
   }
@@ -443,12 +490,15 @@ void clearFoesZako()
 {
   int i;
   Foe *fe;
-  for (i = 0; i < FOE_MAX; i++)
+  for (i = 0; i < foeActiveCount;)
   {
-    if (foe[i].spc == NOT_EXIST ||
-        foe[i].type == BOSS_TYPE || foe[i].spc == BOSS_ACTIVE_BULLET)
+    fe = &(foe[foeActiveIndices[i]]);
+    if (fe->spc == NOT_EXIST ||
+        fe->type == BOSS_TYPE || fe->spc == BOSS_ACTIVE_BULLET)
+    {
+      i++;
       continue;
-    fe = &(foe[i]);
+    }
     addClearFrag(&(fe->pos), &(fe->mv));
     removeFoeForced(fe);
   }
@@ -459,11 +509,11 @@ void drawBulletsWake()
   int i;
   Foe *fe;
   int x, y, sx, sy;
-  for (i = 0; i < FOE_MAX; i++)
+  for (i = 0; i < foeActiveCount; i++)
   {
-    if (foe[i].spc == NOT_EXIST || foe[i].spc == FOE || foe[i].cnt >= 64)
+    fe = &(foe[foeActiveIndices[i]]);
+    if (fe->spc == NOT_EXIST || fe->spc == FOE || fe->cnt >= 64)
       continue;
-    fe = &(foe[i]);
     x = (fe->pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
     y = (fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
     sx = (fe->spos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
@@ -484,11 +534,11 @@ void drawFoes()
   int x, y, px, py;
   int sz, cl1, cl2;
   int d, md, di;
-  for (i = 0; i < FOE_MAX; i++)
+  for (i = 0; i < foeActiveCount; i++)
   {
-    if (foe[i].spc != FOE)
+    fe = &(foe[foeActiveIndices[i]]);
+    if (fe->spc != FOE)
       continue;
-    fe = &(foe[i]);
     x = (fe->pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
     y = (fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
     if (fe->cnt < 16)
@@ -559,6 +609,11 @@ static void drawBox3x3(int x, int y,
   if (height <= 1)
     return;
 
+  const int dirtyX = x;
+  const int dirtyY = y;
+  const int dirtyWidth = width;
+  const int dirtyHeight = height;
+
   ptr = x + y * LAYER_WIDTH;
   target[ptr] = color2;
   target[ptr + 1] = color2;
@@ -579,6 +634,11 @@ static void drawBox3x3(int x, int y,
     if (width > 2)
       target[ptr + 2] = color2;
   }
+
+  if (target == buf)
+  {
+    markPlayfieldDirtyRect(dirtyX, dirtyY, dirtyWidth, dirtyHeight);
+  }
 }
 
 void drawBullets()
@@ -588,11 +648,11 @@ void drawBullets()
   int x, y;
   int bc;
   int drawnBulletNum = 0;
-  for (i = 0; i < FOE_MAX; i++)
+  for (i = 0; i < foeActiveCount; i++)
   {
-    if (foe[i].spc == NOT_EXIST || foe[i].spc == FOE)
+    fe = &(foe[foeActiveIndices[i]]);
+    if (fe->spc == NOT_EXIST || fe->spc == FOE)
       continue;
-    fe = &(foe[i]);
     bc = fe->color % BULLET_COLOR_NUM;
     x = ((fe->pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8) - (BULLET_WIDTH / 2);
     y = ((fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8) - (BULLET_WIDTH / 2);

@@ -200,15 +200,18 @@ static void uploadBackgroundBitmap(const uint16_t *src)
     return;
   }
 
+  // Use SCU Level-0 DMA (B-Bus path to VDP2 VRAM, ~80 MB/s) instead of the
+  // SH2 on-chip DMAC (local bus, ~30 MB/s).  One dispatch per row is still
+  // needed because the source stride (LAYER_WIDTH*2 = 320 B) differs from the
+  // VDP2 bitmap container stride (BACKGROUND_BITMAP_WIDTH*2 = 1024 B).
   const uint8_t *srcRow = (const uint8_t *)src;
   uint8_t *dstRow = (uint8_t *)backgroundLayerVram + (BACKGROUND_SCREEN_X * (int)sizeof(uint16_t));
   for (int row = 0; row < LAYER_HEIGHT; row++)
   {
-    slDMACopy((void *)srcRow, dstRow, LAYER_WIDTH * sizeof(uint16_t));
+    DMA_ScuMemCopy((void *)srcRow, dstRow, LAYER_WIDTH * sizeof(uint16_t));
     srcRow += LAYER_WIDTH * sizeof(uint16_t);
     dstRow += BACKGROUND_BITMAP_WIDTH * sizeof(uint16_t);
   }
-  slDMAWait();
 
   if (!backgroundUploadLogged)
   {
@@ -542,11 +545,12 @@ void moveBackground()
     bd->y &= (boardRepy - 1);
   }
 
-  refreshBackgroundBitmap();
+  submitBackgroundRender();
 }
 
 void drawBackground()
 {
+  presentCompletedBackground();
 }
 
 unsigned int getBackgroundDebugBitmapHash()
