@@ -3,6 +3,7 @@
 
 #include "minunit.h"
 
+#include "../../src/SDL/SDL.h"
 #include "../../src/vector.h"
 
 // ---------------------------------------------------------------------------
@@ -84,6 +85,21 @@ static bool shouldDestroyShipNow(int status)
 {
   // Invincibility has been removed; only in-game state can consume a life.
   return status == 1;
+}
+
+static SRL_Surface makeTestSurface(int width, int height)
+{
+  SRL_Surface surface;
+  surface.w = width;
+  surface.h = height;
+  surface.pixels = nullptr;
+  surface.textureIndex = -1;
+  surface.dirty = false;
+  surface.dirtyX1 = (int16_t)width;
+  surface.dirtyY1 = (int16_t)height;
+  surface.dirtyX2 = 0;
+  surface.dirtyY2 = 0;
+  return surface;
 }
 
 using namespace SRL::Types;
@@ -368,6 +384,137 @@ MU_TEST(test_size_and_dist_extended)
   mu_assert_int_eq(110, vctDist(&c, &b));
 }
 
+MU_TEST(test_sdl_copy_bytes)
+{
+  uint8_t src[5] = {1, 2, 3, 4, 5};
+  uint8_t dst[5] = {0, 0, 0, 0, 0};
+  SDL_CopyBytes(dst, src, 5);
+  mu_assert_int_eq(1, dst[0]);
+  mu_assert_int_eq(2, dst[1]);
+  mu_assert_int_eq(3, dst[2]);
+  mu_assert_int_eq(4, dst[3]);
+  mu_assert_int_eq(5, dst[4]);
+}
+
+MU_TEST(test_sdl_dirty_rect_helpers)
+{
+  SRL_Surface surface = makeTestSurface(32, 24);
+
+  SDL_SetSurfaceDirty(&surface);
+  mu_check(surface.dirty);
+  mu_assert_int_eq(0, surface.dirtyX1);
+  mu_assert_int_eq(0, surface.dirtyY1);
+  mu_assert_int_eq(32, surface.dirtyX2);
+  mu_assert_int_eq(24, surface.dirtyY2);
+
+  SDL_ClearDirtyRect(&surface);
+  mu_check(!surface.dirty);
+  mu_assert_int_eq(32, surface.dirtyX1);
+  mu_assert_int_eq(24, surface.dirtyY1);
+  mu_assert_int_eq(0, surface.dirtyX2);
+  mu_assert_int_eq(0, surface.dirtyY2);
+
+  SDL_MarkDirtyRect(&surface, 4, 5, 8, 6);
+  mu_check(surface.dirty);
+  mu_assert_int_eq(4, surface.dirtyX1);
+  mu_assert_int_eq(5, surface.dirtyY1);
+  mu_assert_int_eq(12, surface.dirtyX2);
+  mu_assert_int_eq(11, surface.dirtyY2);
+
+  SDL_MarkDirtyRect(&surface, 2, 3, 4, 4);
+  mu_assert_int_eq(2, surface.dirtyX1);
+  mu_assert_int_eq(3, surface.dirtyY1);
+  mu_assert_int_eq(12, surface.dirtyX2);
+  mu_assert_int_eq(11, surface.dirtyY2);
+
+  SDL_MarkDirtyRect(&surface, -4, -3, 6, 6);
+  mu_assert_int_eq(0, surface.dirtyX1);
+  mu_assert_int_eq(0, surface.dirtyY1);
+
+  SDL_MarkDirtyRect(&surface, 100, 100, 5, 5);
+  mu_assert_int_eq(0, surface.dirtyX1);
+  mu_assert_int_eq(0, surface.dirtyY1);
+}
+
+MU_TEST(test_sdl_init_and_stub_functions)
+{
+  mu_assert_int_eq(0, SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK));
+  mu_assert_int_eq(0, SDL_InitSubSystem(SDL_INIT_VIDEO));
+  mu_check(strcmp(SDL_GetError(), "SDL stub") == 0);
+
+  SRL::Types::HighColor color = HighColor(0, 0, 0);
+  SRL_Surface surface = makeTestSurface(16, 16);
+  mu_assert_int_eq(0, SDL_SetColors(&surface, &color, 0, 1));
+  mu_assert_int_eq(0, SDL_FillRect(&surface, nullptr, 0));
+  mu_assert_int_eq(0, SDL_Flip(&surface));
+}
+
+MU_TEST(test_sdl_blit_palette_and_stats_helpers)
+{
+  mu_assert_int_eq(0, SDL_Init(SDL_INIT_VIDEO));
+
+  SDL_SetBlitPaletteBank(0);
+  mu_check(SDL_RefreshBlitPaletteCache());
+
+  const uint32_t hash1 = SDL_HashPalette();
+  const uint32_t hash2 = SDL_HashPalette();
+  mu_assert_int_eq(hash1, hash2);
+
+  SDL_ResetBlitStats();
+  uint32_t calls = 99;
+  uint32_t uploads = 99;
+  uint32_t uploadPixels = 99;
+  uint32_t uploadUs = 99;
+  uint32_t drawUs = 99;
+  SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadUs, &drawUs);
+  mu_assert_int_eq(0, calls);
+  mu_assert_int_eq(0, uploads);
+  mu_assert_int_eq(0, uploadPixels);
+  mu_assert_int_eq(0, uploadUs);
+  mu_assert_int_eq(0, drawUs);
+}
+
+MU_TEST(test_sdl_blit_surface_safe_error_paths)
+{
+  SRL_Surface src = makeTestSurface(16, 16);
+  SRL_Surface dst = makeTestSurface(320, 240);
+  SDL_Rect rect = {1, 1, 8, 8};
+
+  mu_assert_int_eq(-1, SDL_BlitSurface(nullptr, nullptr, &dst, nullptr));
+  mu_assert_int_eq(-1, SDL_BlitSurface(&src, nullptr, nullptr, nullptr));
+
+  // Smoke-test the partial-source-rect rejection path without asserting the
+  // exact backend failure order beyond "must not succeed".
+  mu_check(SDL_BlitSurface(&src, &rect, &dst, nullptr) != 0);
+}
+
+MU_TEST(test_sdl_time_wrappers_are_safe_and_monotonic)
+{
+  mu_assert_int_eq(0, SDL_Init(SDL_INIT_VIDEO));
+
+  const uint32_t ticks1 = SDL_GetTicks();
+  const uint32_t ticks2 = SDL_GetTicks();
+  mu_check(ticks2 >= ticks1);
+
+  const uint32_t prof1 = SDL_GetProfileMicros();
+  const uint32_t prof2 = SDL_GetProfileMicros();
+  mu_check(prof2 >= prof1);
+
+  // In Mednafen the underlying timer may stall, so only verify the zero-delay
+  // fast path here to avoid hanging the campaign.
+  SDL_Delay(0);
+}
+
+MU_TEST_SUITE(sdl_wrapper_test_suite)
+{
+  MU_RUN_TEST(test_sdl_copy_bytes);
+  MU_RUN_TEST(test_sdl_dirty_rect_helpers);
+  MU_RUN_TEST(test_sdl_init_and_stub_functions);
+  MU_RUN_TEST(test_sdl_blit_palette_and_stats_helpers);
+  MU_RUN_TEST(test_sdl_blit_surface_safe_error_paths);
+  MU_RUN_TEST(test_sdl_time_wrappers_are_safe_and_monotonic);
+}
+
 // ---------------------------------------------------------------------------
 // FPS counter tests
 // These feed raw Fxp delta-time values through the same arithmetic used by
@@ -492,6 +639,7 @@ int main()
 
   LogInfo(strStart);
 
+  MU_RUN_SUITE(sdl_wrapper_test_suite);
   MU_RUN_SUITE(fps_test_suite);
   MU_RUN_SUITE(collision_test_suite);
   MU_RUN_SUITE(vector_test_suite);

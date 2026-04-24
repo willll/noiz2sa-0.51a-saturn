@@ -34,7 +34,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
+prepare_mednafen_test_files() {
+  local mednafen_base="${MEDNAFEN_BASE_DIR:-/opt/saturn/mednafen}"
+  local pgconfig_dir="$mednafen_base/pgconfig"
+  local cheats_dir="$mednafen_base/cheats"
+  local cue_base
+
+  cue_base="$(basename "$CUE" .cue)"
+
+  mkdir -p "$pgconfig_dir" "$cheats_dir"
+  : > "$mednafen_base/ss.cfg"
+  : > "$pgconfig_dir/${cue_base}.ss.cfg"
+  : > "$cheats_dir/ss.cht"
+}
+
 if [[ "$EMULATOR" == "mednafen" ]]; then
+  prepare_mednafen_test_files
   CMD="mednafen -sound 0 -ss.cart debug -force_module ss $CUE"
 elif [[ "$EMULATOR" == "kronos" ]]; then
   CMD="kronos -a -ns -i $CUE"

@@ -38,7 +38,25 @@
 
   trap cleanup EXIT
 
+  prepare_mednafen_test_files() {
+    local mednafen_base="${MEDNAFEN_BASE_DIR:-/opt/saturn/mednafen}"
+    local pgconfig_dir="$mednafen_base/pgconfig"
+    local cheats_dir="$mednafen_base/cheats"
+    local cue_base
+
+    cue_base="$(basename "$cue_path" .cue)"
+
+    mkdir -p "$pgconfig_dir" "$cheats_dir"
+    : > "$mednafen_base/ss.cfg"
+    : > "$pgconfig_dir/${cue_base}.ss.cfg"
+    : > "$cheats_dir/ss.cht"
+
+    # Do not create an SBI placeholder: an empty SBI is treated as malformed
+    # patch data by Mednafen and causes startup failure.
+  }
+
   if [ "$1" = "mednafen" ]; then
+    prepare_mednafen_test_files
     command="mednafen -sound 0 -ss.cart debug -force_module ss $cue_path"
   elif [ "$1" = "kronos" ]; then
     command="kronos -a -ns -i $cue_path"
