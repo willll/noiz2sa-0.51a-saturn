@@ -45,39 +45,45 @@ static bool bulletHitsShip(const Foe *fe)
 {
   // Use closest-point distance to the swept segment [ppos, pos].
   // This prevents tunneling for fast bullets and includes endpoint contacts.
-  const double startX = (double)fe->ppos.x;
-  const double startY = (double)fe->ppos.y;
-  const double deltaX = (double)(fe->pos.x - fe->ppos.x);
-  const double deltaY = (double)(fe->pos.y - fe->ppos.y);
-  const double shipX = (double)ship.pos.x;
-  const double shipY = (double)ship.pos.y;
-  const double lengthSquared = deltaX * deltaX + deltaY * deltaY;
+  const int startX = fe->ppos.x;
+  const int startY = fe->ppos.y;
+  const int deltaX = fe->pos.x - fe->ppos.x;
+  const int deltaY = fe->pos.y - fe->ppos.y;
+  const int shipX = ship.pos.x;
+  const int shipY = ship.pos.y;
 
-  if (lengthSquared <= 1.0)
+  const long long lengthSquared = (long long)deltaX * (long long)deltaX +
+                                  (long long)deltaY * (long long)deltaY;
+
+  if (lengthSquared <= 1)
   {
-    const double pointX = shipX - startX;
-    const double pointY = shipY - startY;
-    const double distSq = pointX * pointX + pointY * pointY;
-    return distSq <= (double)SHIP_HIT_WIDTH;
+    const long long pointX = (long long)shipX - (long long)startX;
+    const long long pointY = (long long)shipY - (long long)startY;
+    const long long distSq = pointX * pointX + pointY * pointY;
+    return distSq <= (long long)SHIP_HIT_WIDTH;
   }
 
-  double t = ((shipX - startX) * deltaX + (shipY - startY) * deltaY) / lengthSquared;
-  if (t < 0.0)
+  const long long dot = ((long long)shipX - (long long)startX) * (long long)deltaX +
+                        ((long long)shipY - (long long)startY) * (long long)deltaY;
+
+  const long long tFpMax = 1LL << 16;
+  long long tFp = (dot << 16) / lengthSquared;
+  if (tFp < 0)
   {
-    t = 0.0;
+    tFp = 0;
   }
-  else if (t > 1.0)
+  else if (tFp > tFpMax)
   {
-    t = 1.0;
+    tFp = tFpMax;
   }
 
-  const double nearestX = startX + deltaX * t;
-  const double nearestY = startY + deltaY * t;
-  const double distX = shipX - nearestX;
-  const double distY = shipY - nearestY;
-  const double distSq = distX * distX + distY * distY;
+  const long long nearestX = (long long)startX + (((long long)deltaX * tFp) >> 16);
+  const long long nearestY = (long long)startY + (((long long)deltaY * tFp) >> 16);
+  const long long distX = (long long)shipX - nearestX;
+  const long long distY = (long long)shipY - nearestY;
+  const long long distSq = distX * distX + distY * distY;
 
-  return distSq <= (double)SHIP_HIT_WIDTH;
+  return distSq <= (long long)SHIP_HIT_WIDTH;
 }
 
 static void removeFoeForcedNoDeleteCmd(Foe *fe)
@@ -154,7 +160,7 @@ static Foe *getNextFoe()
   return &(foe[i]);
 }
 
-Foe *addFoe(int x, int y, double rank, int d, int spd, int type, int shield,
+Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
             BulletMLParserBLB *parser)
 {
   int i;
@@ -186,7 +192,7 @@ Foe *addFoe(int x, int y, double rank, int d, int spd, int type, int shield,
   return fe;
 }
 
-Foe *addFoeBossActiveBullet(int x, int y, double rank,
+Foe *addFoeBossActiveBullet(int x, int y, Fxp rank,
                             int d, int spd, BulletMLParserBLB *parser)
 {
   Foe *fe = addFoe(x, y, rank, d, spd, BOSS_TYPE, 0, parser);
@@ -198,7 +204,7 @@ Foe *addFoeBossActiveBullet(int x, int y, double rank,
   return fe;
 }
 
-void addFoeActiveBullet(Vector *pos, double rank,
+void addFoeActiveBullet(Vector *pos, Fxp rank,
                         int d, int spd, int color, BulletMLState *state)
 {
   Foe *fe = getNextFoe();
@@ -220,7 +226,7 @@ void addFoeActiveBullet(Vector *pos, double rank,
   bulletSpawnedActive++;
 }
 
-void addFoeNormalBullet(Vector *pos, double rank, int d, int spd, int color)
+void addFoeNormalBullet(Vector *pos, Fxp rank, int d, int spd, int color)
 {
   Foe *fe = getNextFoe();
   if (!fe)

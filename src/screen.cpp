@@ -210,39 +210,39 @@ static bool drawHardwareThickLine(int x1, int y1, int x2, int y2, int width,
     return false;
   }
 
-  const float dx = (float)(x2 - x1);
-  const float dy = (float)(y2 - y1);
-  const float len = sqrtf((dx * dx) + (dy * dy));
-  if (len <= 0.0001f)
+  const Fxp dx = Fxp::Convert(x2 - x1);
+  const Fxp dy = Fxp::Convert(y2 - y1);
+  const Fxp len = (dx * dx + dy * dy).Sqrt();
+  if (len <= Fxp::Convert(0.0001f))
   {
     return false;
   }
 
-  const float nx = -dy / len;
-  const float ny = dx / len;
+  const Fxp nx = -dy / len;
+  const Fxp ny = dx / len;
 
-  const float outerHalf = (float)width * 0.5f;
-  const float innerHalf = outerHalf - 1.0f;
+  const Fxp outerHalf = Fxp::Convert(width) * 0.5f;
+  const Fxp innerHalf = outerHalf - 1.0f;
 
-  const float sx1 = (float)(offsetX + x1 - (SCREEN_WIDTH / 2));
-  const float sy1 = (float)(offsetY + y1 - (SCREEN_HEIGHT / 2));
-  const float sx2 = (float)(offsetX + x2 - (SCREEN_WIDTH / 2));
-  const float sy2 = (float)(offsetY + y2 - (SCREEN_HEIGHT / 2));
+  const Fxp sx1 = Fxp::Convert(offsetX + x1 - (SCREEN_WIDTH / 2));
+  const Fxp sy1 = Fxp::Convert(offsetY + y1 - (SCREEN_HEIGHT / 2));
+  const Fxp sx2 = Fxp::Convert(offsetX + x2 - (SCREEN_WIDTH / 2));
+  const Fxp sy2 = Fxp::Convert(offsetY + y2 - (SCREEN_HEIGHT / 2));
 
   SRL::Math::Types::Vector2D outerRect[4] = {
-      SRL::Math::Types::Vector2D(Fxp::Convert(sx1 + (nx * outerHalf)), Fxp::Convert(sy1 + (ny * outerHalf))),
-      SRL::Math::Types::Vector2D(Fxp::Convert(sx2 + (nx * outerHalf)), Fxp::Convert(sy2 + (ny * outerHalf))),
-      SRL::Math::Types::Vector2D(Fxp::Convert(sx2 - (nx * outerHalf)), Fxp::Convert(sy2 - (ny * outerHalf))),
-      SRL::Math::Types::Vector2D(Fxp::Convert(sx1 - (nx * outerHalf)), Fxp::Convert(sy1 - (ny * outerHalf)))};
+      SRL::Math::Types::Vector2D(sx1 + (nx * outerHalf), sy1 + (ny * outerHalf)),
+      SRL::Math::Types::Vector2D(sx2 + (nx * outerHalf), sy2 + (ny * outerHalf)),
+      SRL::Math::Types::Vector2D(sx2 - (nx * outerHalf), sy2 - (ny * outerHalf)),
+      SRL::Math::Types::Vector2D(sx1 - (nx * outerHalf), sy1 - (ny * outerHalf))};
   drawHardwarePolygonDoubleSided(outerRect, true, color[borderColor], Fxp::Convert(sort));
 
-  if (innerHalf > 0.0f)
+  if (innerHalf > Fxp::Convert(0))
   {
     SRL::Math::Types::Vector2D innerRect[4] = {
-        SRL::Math::Types::Vector2D(Fxp::Convert(sx1 + (nx * innerHalf)), Fxp::Convert(sy1 + (ny * innerHalf))),
-        SRL::Math::Types::Vector2D(Fxp::Convert(sx2 + (nx * innerHalf)), Fxp::Convert(sy2 + (ny * innerHalf))),
-        SRL::Math::Types::Vector2D(Fxp::Convert(sx2 - (nx * innerHalf)), Fxp::Convert(sy2 - (ny * innerHalf))),
-        SRL::Math::Types::Vector2D(Fxp::Convert(sx1 - (nx * innerHalf)), Fxp::Convert(sy1 - (ny * innerHalf)))};
+        SRL::Math::Types::Vector2D(sx1 + (nx * innerHalf), sy1 + (ny * innerHalf)),
+        SRL::Math::Types::Vector2D(sx2 + (nx * innerHalf), sy2 + (ny * innerHalf)),
+        SRL::Math::Types::Vector2D(sx2 - (nx * innerHalf), sy2 - (ny * innerHalf)),
+        SRL::Math::Types::Vector2D(sx1 - (nx * innerHalf), sy1 - (ny * innerHalf))};
     drawHardwarePolygonDoubleSided(innerRect, true, color[fillColor], Fxp::Convert(sort));
   }
 
@@ -1263,7 +1263,7 @@ int drawNum(int n, int x, int y, int s, int c1, int c2)
   for (;;)
   {
     drawLetter(n % 10, x, y, s, 1, c1, c2, lpbuf);
-    // y += (s*1.8f) / (float)SCREEN_DIVISOR;
+    // y += (s*1.8f) / (Fxp)SCREEN_DIVISOR;
     y += s; // (s*480) >> 9;
     n /= 10;
     if (n <= 0)
@@ -1282,14 +1282,14 @@ int drawNumRight(int n, int x, int y, int s, int c1, int c2)
     {
       n -= d * nd;
       drawLetter(nd % 10, x, y, s, 3, c1, c2, rpbuf);
-      y += (s * 1.7f) / (float)SCREEN_DIVISOR;
+      y += ((Fxp::Convert(s) * 1.7f) / Fxp::Convert(SCREEN_DIVISOR)).As<int>();
       drawn = 1;
     }
   }
   if (!drawn)
   {
     drawLetter(0, x, y, s, 3, c1, c2, rpbuf);
-    y += (s * 1.7f) / (float)SCREEN_DIVISOR;
+    y += ((Fxp::Convert(s) * 1.7f) / Fxp::Convert(SCREEN_DIVISOR)).As<int>();
   }
   return y;
 }
@@ -1299,7 +1299,7 @@ int drawNumCenter(int n, int x, int y, int s, int c1, int c2)
   for (;;)
   {
     drawLetterBuf(n % 10, x, y, s, 2, c1, c2, buf, 0);
-    x -= (s * 1.7f) / (float)SCREEN_DIVISOR;
+    x -= ((Fxp::Convert(s) * 1.7f) / Fxp::Convert(SCREEN_DIVISOR)).As<int>();
     n /= 10;
     if (n <= 0)
       break;

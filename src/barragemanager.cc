@@ -194,9 +194,9 @@ void closeBarragemanager() {
 int scene;
 int endless, insane;
 static int sceneCnt;
-static float level, levelInc;
+static Fxp level, levelInc;
 
-void initBarrages(int seed, float startLevel, float li) {
+void initBarrages(int seed, Fxp startLevel, Fxp li) {
   int n1, n2, rn;
 
   SRL::Logger::LogDebug("[BARRAGE] Initializing barrage sequences: seed=%d, startLevel=%.2f, levelInc=%.2f", seed, startLevel, li);
@@ -233,7 +233,7 @@ void initBarrages(int seed, float startLevel, float li) {
       barrageQueue[i][n2] = tb;
     }
     for ( int j=0 ; j<bn ; j++ ) {
-      barrageQueue[i][j]->maxRank = (float)(nextRandInt(&rnd)%70)/100 + 0.3f;
+      barrageQueue[i][j]->maxRank = Fxp::Convert((int)(nextRandInt(&rnd) % 70)) / 100 + 0.3f;
       barrageQueue[i][j]->frq = 1;
     }
   }
@@ -251,7 +251,7 @@ void initBarrages(int seed, float startLevel, float li) {
  */
 static void rollBarragePattern(Barrage *br[], int brNum) {
   Barrage *tbr;
-  int n = (int)((float)brNum/((float)(nextRandInt(&rnd)%32)/32+1)+0.5f);
+  int n = (Fxp::Convert(brNum) / (Fxp::Convert((int)(nextRandInt(&rnd) % 32)) / 32 + 1) + 0.5f).As<int>();
   if ( n == 0 ) return;
   if ( n > brNum ) n = brNum;
   tbr = br[0];
@@ -273,7 +273,7 @@ static int quickAppType;
 /**
  * Make the barrage pattern of this scene.
  */
-void setBarrages(float level, int bm, int midMode) {
+void setBarrages(Fxp level, int bm, int midMode) {
   int bpn = 0, bn, i;
   int barrageMax, addFrqLoop = 0;
 

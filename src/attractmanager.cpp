@@ -233,7 +233,7 @@ void drawRPanel()
   {
     y = drawNumRight(stage + 1, 124 / SCREEN_DIVISOR, y, 24, 16 * 1 - 12, 16 * 1 - 3);
     drawLetter(38, 124 / SCREEN_DIVISOR, y, 24, 3, 16 * 1 - 12, 16 * 1 - 3, rpbuf);
-    y += (24 * 1.7f) / (float)SCREEN_DIVISOR;
+    y += ((Fxp::Convert(24) * 1.7f) / Fxp::Convert(SCREEN_DIVISOR)).As<int>();
     if (scene >= 10)
     {
       drawLetter('E' - 'A' + 10, 124 / SCREEN_DIVISOR, y, 24, 3, 16 * 1 - 12, 16 * 1 - 3, rpbuf);

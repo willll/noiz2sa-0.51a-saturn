@@ -2,6 +2,9 @@
 #define BULLETMLSTATE_HPP_
 
 #include <cstdint>
+#include <srl.hpp>
+
+using SRL::Math::Types::Fxp;
 
 class BulletMLParserBLB;
 class BulletMLNode;
@@ -12,7 +15,7 @@ public:
     BulletMLState(BulletMLParserBLB* parser,
                   BulletMLNode** nodes,
                   uint16_t node_count,
-                  const double* parameters,
+                  const Fxp* parameters,
                   uint16_t parameter_count)
         : parser_(parser),
           nodes_(nodes),
@@ -20,7 +23,7 @@ public:
           parameters_(nullptr),
           parameter_count_(0) {
         if (parameter_count > 0 && parameters) {
-            parameters_ = lwnew double[parameter_count];
+            parameters_ = lwnew Fxp[parameter_count];
             if (parameters_) {
                 for (uint16_t i = 0; i < parameter_count; ++i) {
                     parameters_[i] = parameters[i];
@@ -49,14 +52,14 @@ public:
     BulletMLNode** getNodes() const { return nodes_; }
     uint16_t getNodeCount() const { return node_count_; }
 
-    const double* getParameters() const { return parameters_; }
+    const Fxp* getParameters() const { return parameters_; }
     uint16_t getParameterCount() const { return parameter_count_; }
 
 private:
     BulletMLParserBLB* parser_;
     BulletMLNode** nodes_;
     uint16_t node_count_;
-    double* parameters_;
+    Fxp* parameters_;
     uint16_t parameter_count_;
 
     BulletMLState(const BulletMLState&);

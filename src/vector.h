@@ -12,6 +12,10 @@
 #ifndef DEF_VECTOR
 #define DEF_VECTOR
 
+#include <srl.hpp>
+
+using SRL::Math::Types::Fxp;
+
 #define absN(a) ((a) < 0 ? - (a) : (a))
 
 /* Wrapper struct for Vector2D to maintain API compatibility */
@@ -19,7 +23,7 @@ typedef struct {
   int x, y;
 } Vector;
 
-float vctInnerProduct(Vector *v1, Vector *v2); 
+long long vctInnerProduct(Vector *v1, Vector *v2);
 Vector vctGetElement(Vector *v1, Vector *v2);
 void vctAdd(Vector *v1, Vector *v2);
 void vctSub(Vector *v1, Vector *v2);

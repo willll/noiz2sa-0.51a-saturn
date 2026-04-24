@@ -10,7 +10,19 @@
  * @version $Revision: 1.1.1.1 $
  */
 
-static float spData[][16][5] = {{
+#include <srl.hpp>
+
+using SRL::Math::Types::Fxp;
+
+struct LetterStroke {
+    Fxp x;
+    Fxp y;
+    Fxp size;
+    Fxp length;
+    int deg;
+};
+
+static LetterStroke spData[][16] = {{
      {0, 1.15f, 0.65f, 0.3f, 0},
      {-0.6f, 0.55f, 0.65f, 0.3f, 90}, {0.6f, 0.55f, 0.65f, 0.3f, 90},
      {-0.6f, -0.55f, 0.65f, 0.3f, 90}, {0.6f, -0.55f, 0.65f, 0.3f, 90},

@@ -115,7 +115,13 @@ void quitLast()
 
 int status;
 
-static float stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1][3] = {
+struct StageParams {
+  int seed;
+  Fxp startLevel;
+  Fxp levelInc;
+};
+
+static StageParams stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1] = {
     {13, 0.5f, 0.12f},
     {2, 1.8f, 0.15f},
     {3, 3.2f, 0.1f},
@@ -136,7 +142,7 @@ static float stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1][3] = {
 void initTitleStage(int stg)
 {
   initFoes();
-  initBarrages(stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
+  initBarrages(stagePrm[stg].seed, stagePrm[stg].startLevel, stagePrm[stg].levelInc);
 }
 
 void initTitle()
@@ -180,9 +186,13 @@ void initGame(int stg)
   initBackground();
   SRL::Logger::LogDebug("[GAME] Stage %d: Game objects initialized", stg);
 
-  initBarrages(stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
+  initBarrages(stagePrm[stg].seed, stagePrm[stg].startLevel, stagePrm[stg].levelInc);
   initGameState(stg);
-  SRL::Logger::LogDebug("[GAME] Stage %d: Barrage initialized (enemies=%d, speed=%.2f, density=%.2f)", stg, (int)stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
+  SRL::Logger::LogDebug("[GAME] Stage %d: Barrage initialized (enemies=%d, speed=%d, density=%d)",
+                        stg,
+                        stagePrm[stg].seed,
+                        stagePrm[stg].startLevel.As<int>(),
+                        stagePrm[stg].levelInc.As<int>());
 
   if (stg < STAGE_NUM)
   {
@@ -390,6 +400,11 @@ static bool gUseFixedFramePacing = false;
 static uint32_t gFpsTimes100 = 0;
 static uint32_t gSyncCount = 0;
 
+#if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
+static int gAutoStartTitleFrames = 0;
+static bool gAutoStartTriggered = false;
+#endif
+
 static void drawFpsCounter()
 {
   const int32_t fpsWhole = (int32_t)(gFpsTimes100 / 100u);
@@ -468,6 +483,27 @@ int main()
 
   while (!done)
   {
+#if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
+    if (!gAutoStartTriggered)
+    {
+      if (status == TITLE)
+      {
+        gAutoStartTitleFrames++;
+        if (gAutoStartTitleFrames >= 120)
+        {
+          const int autoStage = 0;
+          SRL::Logger::LogWarning("[SMOKE] NOIZ2SA_DEBUG_AUTOSTART_SMOKE enabled - auto starting stage %d", autoStage);
+          initGame(autoStage);
+          gAutoStartTriggered = true;
+        }
+      }
+      else
+      {
+        gAutoStartTitleFrames = 0;
+      }
+    }
+#endif
+
     // Handle pause/unpause input
     if (gamepad && gamepad->IsConnected() && gamepad->WasPressed(SRL::Input::Digital::Button::START))
     {

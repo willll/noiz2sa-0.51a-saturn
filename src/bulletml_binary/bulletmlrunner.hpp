@@ -2,9 +2,12 @@
 #define BULLETMLRUNNER_HPP_
 
 #include <cstdint>
+#include <srl.hpp>
 
 #include "bulletmlparser_blb.hpp"
 #include <srl_log.hpp>
+
+using SRL::Math::Types::Fxp;
 
 class BulletMLRunnerImpl;
 
@@ -16,31 +19,31 @@ public:
     virtual ~BulletMLRunner();
 
     /// Get bullet direction (degrees)
-    virtual double getBulletDirection() { return 0.0; }
+    virtual Fxp getBulletDirection() { return Fxp::Convert(0); }
 
     /// Get aim direction (degrees)
-    virtual double getAimDirection() { return 0.0; }
+    virtual Fxp getAimDirection() { return Fxp::Convert(0); }
 
     /// Get bullet speed
-    virtual double getBulletSpeed() { return 0.0; }
+    virtual Fxp getBulletSpeed() { return Fxp::Convert(0); }
 
     /// Get default speed
-    virtual double getDefaultSpeed() { return 1.0; }
+    virtual Fxp getDefaultSpeed() { return Fxp::Convert(1); }
 
     /// Get difficulty rank [0..1]
-    virtual double getRank() { return 0.0; }
+    virtual Fxp getRank() { return Fxp::Convert(0); }
 
     /// Random source for formulas
-    virtual double getRand() { return 0.0; }
+    virtual Fxp getRand() { return Fxp::Convert(0); }
 
     /// Create a simple bullet
-    virtual void createSimpleBullet(double direction, double speed) {
+    virtual void createSimpleBullet(Fxp direction, Fxp speed) {
         (void)direction;
         (void)speed;
     }
 
     /// Create a bullet with action state
-    virtual void createBullet(BulletMLState* state, double direction, double speed) {
+    virtual void createBullet(BulletMLState* state, Fxp direction, Fxp speed) {
         (void)state;
         (void)direction;
         (void)speed;
@@ -53,12 +56,12 @@ public:
     virtual void doVanish() {}
 
     /// Optional motion/accel hooks
-    virtual void doChangeDirection(double) {}
-    virtual void doChangeSpeed(double) {}
-    virtual void doAccelX(double) {}
-    virtual void doAccelY(double) {}
-    virtual double getBulletSpeedX() { return 0.0; }
-    virtual double getBulletSpeedY() { return 0.0; }
+    virtual void doChangeDirection(Fxp) {}
+    virtual void doChangeSpeed(Fxp) {}
+    virtual void doAccelX(Fxp) {}
+    virtual void doAccelY(Fxp) {}
+    virtual Fxp getBulletSpeedX() { return Fxp::Convert(0); }
+    virtual Fxp getBulletSpeedY() { return Fxp::Convert(0); }
 
     /// Execute one frame worth of commands
     virtual void run();
@@ -102,10 +105,10 @@ public:
           has_dir_(false),
           has_prev_spd_(false),
           has_prev_dir_(false),
-          spd_(0.0),
-          dir_(0.0),
-          prev_spd_(0.0),
-          prev_dir_(0.0) {
+          spd_(Fxp::Convert(0)),
+          dir_(Fxp::Convert(0)),
+          prev_spd_(Fxp::Convert(0)),
+          prev_dir_(Fxp::Convert(0)) {
         if (!state || !runner_) {
             end_ = true;
             return;
@@ -238,7 +241,7 @@ private:
         int repeat_remaining;
 
         // param restore task fields
-        double* saved_params;
+        Fxp* saved_params;
         uint16_t saved_count;
         bool saved_owns;
     };
@@ -246,9 +249,9 @@ private:
     struct LinearChange {
         int start_turn;
         int end_turn;
-        double first;
-        double last;
-        double gradient;
+        Fxp first;
+        Fxp last;
+        Fxp gradient;
     };
 
     bool ensureTaskCapacity(uint16_t needed) {
@@ -313,7 +316,7 @@ private:
         return pushTask(t);
     }
 
-    bool pushPopParamsTask(double* saved_params, uint16_t saved_count, bool saved_owns) {
+    bool pushPopParamsTask(Fxp* saved_params, uint16_t saved_count, bool saved_owns) {
         Task t;
         t.type = TASK_POP_PARAMS;
         t.node = nullptr;
@@ -341,7 +344,7 @@ private:
         while (*p && isSpace(*p)) ++p;
     }
 
-    double parseNumberLiteral(const char*& p) const {
+    Fxp parseNumberLiteral(const char*& p) const {
         const char* start = p;
 
         if (*p == '+' || *p == '-') ++p;
@@ -365,17 +368,17 @@ private:
             ++q;
         }
 
-        double value = 0.0;
+        Fxp value = 0.0;
         while (isDigit(*q)) {
-            value = value * 10.0 + static_cast<double>(*q - '0');
+            value = value * 10.0 + Fxp::Convert(*q - '0');
             ++q;
         }
 
         if (*q == '.') {
             ++q;
-            double base = 0.1;
+            Fxp base = 0.1;
             while (isDigit(*q)) {
-                value += static_cast<double>(*q - '0') * base;
+                value += Fxp::Convert(*q - '0') * base;
                 base *= 0.1;
                 ++q;
             }
@@ -395,7 +398,7 @@ private:
                 exp = exp * 10 + (*q - '0');
                 ++q;
             }
-            double scale = 1.0;
+            Fxp scale = 1.0;
             while (exp-- > 0) scale *= 10.0;
             if (exp_neg) value /= scale;
             else value *= scale;
@@ -404,8 +407,8 @@ private:
         return neg ? -value : value;
     }
 
-    double parseExpression(const char*& p) {
-        double v = parseTerm(p);
+    Fxp parseExpression(const char*& p) {
+        Fxp v = parseTerm(p);
         while (true) {
             skipSpaces(p);
             if (*p == '+') {
@@ -421,8 +424,8 @@ private:
         return v;
     }
 
-    double parseTerm(const char*& p) {
-        double v = parseFactor(p);
+    Fxp parseTerm(const char*& p) {
+        Fxp v = parseFactor(p);
         while (true) {
             skipSpaces(p);
             if (*p == '*') {
@@ -430,7 +433,7 @@ private:
                 v *= parseFactor(p);
             } else if (*p == '/') {
                 ++p;
-                const double rhs = parseFactor(p);
+                const Fxp rhs = parseFactor(p);
                 if (rhs != 0.0) v /= rhs;
             } else {
                 break;
@@ -439,7 +442,7 @@ private:
         return v;
     }
 
-    double parseVariable(const char*& p) {
+    Fxp parseVariable(const char*& p) {
         if (*p != '$') return 0.0;
         ++p;
 
@@ -471,7 +474,7 @@ private:
         return 0.0;
     }
 
-    double parseFactor(const char*& p) {
+    Fxp parseFactor(const char*& p) {
         skipSpaces(p);
 
         if (*p == '\0') return 0.0;
@@ -486,7 +489,7 @@ private:
         }
         if (*p == '(') {
             ++p;
-            const double v = parseExpression(p);
+            const Fxp v = parseExpression(p);
             skipSpaces(p);
             if (*p == ')') ++p;
             return v;
@@ -503,7 +506,7 @@ private:
         return 0.0;
     }
 
-    double evalNodeValue(const BulletMLNode* node) {
+    Fxp evalNodeValue(const BulletMLNode* node) {
         if (!node) return 0.0;
         const char* s = node->getValue();
         if (!s || s[0] == '\0') return 0.0;
@@ -511,7 +514,7 @@ private:
         return parseExpression(p);
     }
 
-    void copyParameters(const double* src, uint16_t count) {
+    void copyParameters(const Fxp* src, uint16_t count) {
         if (owns_params_) {
             delete[] params_;
             owns_params_ = false;
@@ -521,7 +524,7 @@ private:
 
         if (!src || count == 0) return;
 
-        double* p = lwnew double[count];
+        Fxp* p = lwnew Fxp[count];
         if (!p) return;
         for (uint16_t i = 0; i < count; ++i) {
             p[i] = src[i];
@@ -557,10 +560,10 @@ private:
         has_dir_ = false;
     }
 
-    double getDirection(BulletMLNode* dir_node, bool update_prev) {
+    Fxp getDirection(BulletMLNode* dir_node, bool update_prev) {
         if (!dir_node) return runner_->getAimDirection();
 
-        double dir = evalNodeValue(dir_node);
+        Fxp dir = evalNodeValue(dir_node);
         bool is_default = true;
 
         const BulletMLNode::Type type = dir_node->getType();
@@ -597,10 +600,10 @@ private:
         return dir;
     }
 
-    double getSpeed(BulletMLNode* spd_node) {
+    Fxp getSpeed(BulletMLNode* spd_node) {
         if (!spd_node) return runner_->getDefaultSpeed();
 
-        double spd = evalNodeValue(spd_node);
+        Fxp spd = evalNodeValue(spd_node);
         const BulletMLNode::Type type = spd_node->getType();
         if (type != BulletMLNode::type_none) {
             if (type == BulletMLNode::type_relative) {
@@ -630,30 +633,30 @@ private:
         has_spd_ = true;
     }
 
-    static double linearValue(const LinearChange& lc, int turn) {
-        return lc.first + lc.gradient * static_cast<double>(turn - lc.start_turn);
+    static Fxp linearValue(const LinearChange& lc, int turn) {
+        return lc.first + lc.gradient * Fxp::Convert(turn - lc.start_turn);
     }
 
     static void setLinear(LinearChange& lc, bool& active,
                           int start_turn, int end_turn,
-                          double first, double last) {
+                          Fxp first, Fxp last) {
         lc.start_turn = start_turn;
         lc.end_turn = end_turn;
         lc.first = first;
         lc.last = last;
         if (end_turn != start_turn) {
-            lc.gradient = (last - first) / static_cast<double>(end_turn - start_turn);
+            lc.gradient = (last - first) / Fxp::Convert(end_turn - start_turn);
         } else {
             lc.gradient = 0.0;
         }
         active = true;
     }
 
-    static double absd(double v) {
+    static Fxp absd(Fxp v) {
         return (v < 0.0) ? -v : v;
     }
 
-    void calcChangeDirection(double direction, int term, bool seq) {
+    void calcChangeDirection(Fxp direction, int term, bool seq) {
         const int now = runner_->getTurn();
         if (term <= 0) {
             runner_->doChangeDirection(direction);
@@ -662,22 +665,22 @@ private:
         }
 
         const int final_turn = now + term;
-        const double first = runner_->getBulletDirection();
+        const Fxp first = runner_->getBulletDirection();
 
         if (seq) {
             setLinear(change_dir_, change_dir_active_, now, final_turn,
-                      first, first + direction * static_cast<double>(term));
+                      first, first + direction * Fxp::Convert(term));
             return;
         }
 
-        const double d1 = direction - first;
-        const double d2 = (d1 > 0.0) ? (d1 - 360.0) : (d1 + 360.0);
-        const double d = (absd(d1) < absd(d2)) ? d1 : d2;
+        const Fxp d1 = direction - first;
+        const Fxp d2 = (d1 > 0.0) ? (d1 - 360.0) : (d1 + 360.0);
+        const Fxp d = (absd(d1) < absd(d2)) ? d1 : d2;
 
         setLinear(change_dir_, change_dir_active_, now, final_turn, first, first + d);
     }
 
-    void calcChangeSpeed(double speed, int term) {
+    void calcChangeSpeed(Fxp speed, int term) {
         const int now = runner_->getTurn();
         if (term <= 0) {
             runner_->doChangeSpeed(speed);
@@ -688,7 +691,7 @@ private:
                   runner_->getBulletSpeed(), speed);
     }
 
-    void calcAccelX(double value, int term, BulletMLNode::Type type) {
+    void calcAccelX(Fxp value, int term, BulletMLNode::Type type) {
         const int now = runner_->getTurn();
         if (term <= 0) {
             runner_->doAccelX(value);
@@ -696,10 +699,10 @@ private:
             return;
         }
 
-        const double first = runner_->getBulletSpeedX();
-        double last = value;
+        const Fxp first = runner_->getBulletSpeedX();
+        Fxp last = value;
         if (type == BulletMLNode::type_sequence) {
-            last = first + value * static_cast<double>(term);
+            last = first + value * Fxp::Convert(term);
         } else if (type == BulletMLNode::type_relative) {
             last = first + value;
         }
@@ -707,7 +710,7 @@ private:
         setLinear(accel_x_, accel_x_active_, now, now + term, first, last);
     }
 
-    void calcAccelY(double value, int term, BulletMLNode::Type type) {
+    void calcAccelY(Fxp value, int term, BulletMLNode::Type type) {
         const int now = runner_->getTurn();
         if (term <= 0) {
             runner_->doAccelY(value);
@@ -715,10 +718,10 @@ private:
             return;
         }
 
-        const double first = runner_->getBulletSpeedY();
-        double last = value;
+        const Fxp first = runner_->getBulletSpeedY();
+        Fxp last = value;
         if (type == BulletMLNode::type_sequence) {
-            last = first + value * static_cast<double>(term);
+            last = first + value * Fxp::Convert(term);
         } else if (type == BulletMLNode::type_relative) {
             last = first + value;
         }
@@ -766,7 +769,7 @@ private:
         }
     }
 
-    double* collectRefParameters(BulletMLNode* ref_node, uint16_t& out_count) {
+    Fxp* collectRefParameters(BulletMLNode* ref_node, uint16_t& out_count) {
         out_count = 0;
         if (!ref_node) return nullptr;
 
@@ -774,7 +777,7 @@ private:
         if (param_nodes == 0) return nullptr;
 
         const uint16_t total = static_cast<uint16_t>(param_nodes + 1);
-        double* out = lwnew double[total];
+        Fxp* out = lwnew Fxp[total];
         if (!out) return nullptr;
 
         out[0] = 0.0;  // 1-based parameters
@@ -867,7 +870,7 @@ private:
             }
 
             case BulletMLNode::wait: {
-                int frame = static_cast<int>(evalNodeValue(node));
+                int frame = evalNodeValue(node).As<int>();
                 if (frame < 0) frame = 0;
                 wait_until_turn_ = runner_->getTurn() + frame;
                 return;
@@ -879,7 +882,7 @@ private:
                 if (!action) action = findChild(node, BulletMLNode::actionRef);
                 if (!times || !action) return;
 
-                int times_num = static_cast<int>(evalNodeValue(times));
+                int times_num = evalNodeValue(times).As<int>();
                 if (times_num <= 0) return;
 
                 pushRepeatTask(action, times_num - 1);
@@ -907,7 +910,7 @@ private:
                 }
 
                 uint16_t new_count = 0;
-                double* new_params = collectRefParameters(node, new_count);
+                Fxp* new_params = collectRefParameters(node, new_count);
 
                 if (!pushPopParamsTask(params_, param_count_, owns_params_)) {
                     delete[] new_params;
@@ -927,11 +930,11 @@ private:
                 BulletMLNode* dir_node = findChild(node, BulletMLNode::direction);
                 if (!term || !dir_node) return;
 
-                int t = static_cast<int>(evalNodeValue(term));
+                int t = evalNodeValue(term).As<int>();
                 if (t < 0) t = 0;
                 const BulletMLNode::Type type = dir_node->getType();
 
-                double d;
+                Fxp d;
                 if (type != BulletMLNode::type_sequence) d = getDirection(dir_node, false);
                 else d = evalNodeValue(dir_node);
                 calcChangeDirection(d, t, type == BulletMLNode::type_sequence);
@@ -943,13 +946,13 @@ private:
                 BulletMLNode* spd_node = findChild(node, BulletMLNode::speed);
                 if (!term || !spd_node) return;
 
-                int t = static_cast<int>(evalNodeValue(term));
+                int t = evalNodeValue(term).As<int>();
                 if (t < 0) t = 0;
                 const BulletMLNode::Type type = spd_node->getType();
 
-                double s;
+                Fxp s;
                 if (type != BulletMLNode::type_sequence) s = getSpeed(spd_node);
-                else s = evalNodeValue(spd_node) * static_cast<double>(t) + runner_->getBulletSpeed();
+                else s = evalNodeValue(spd_node) * Fxp::Convert(t) + runner_->getBulletSpeed();
 
                 calcChangeSpeed(s, t);
                 return;
@@ -958,7 +961,7 @@ private:
             case BulletMLNode::accel: {
                 BulletMLNode* term = findChild(node, BulletMLNode::term);
                 if (!term) return;
-                int t = static_cast<int>(evalNodeValue(term));
+                int t = evalNodeValue(term).As<int>();
                 if (t < 0) t = 0;
 
                 BulletMLNode* h = findChild(node, BulletMLNode::horizontal);
@@ -997,7 +1000,7 @@ private:
     uint16_t task_count_;
     uint16_t task_capacity_;
 
-    double* params_;
+    Fxp* params_;
     uint16_t param_count_;
     bool owns_params_;
 
@@ -1014,10 +1017,10 @@ private:
     bool has_dir_;
     bool has_prev_spd_;
     bool has_prev_dir_;
-    double spd_;
-    double dir_;
-    double prev_spd_;
-    double prev_dir_;
+    Fxp spd_;
+    Fxp dir_;
+    Fxp prev_spd_;
+    Fxp prev_dir_;
 
     BulletMLRunnerImpl(const BulletMLRunnerImpl&);
     BulletMLRunnerImpl& operator=(const BulletMLRunnerImpl&);
