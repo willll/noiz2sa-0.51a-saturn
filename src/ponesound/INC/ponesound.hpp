@@ -322,7 +322,7 @@ namespace SRL::Ponesound
 				const uint16_t slot17ev = *reinterpret_cast<volatile uint16_t*>(0x25B00236);
 				const uint16_t slot16ctl = *reinterpret_cast<volatile uint16_t*>(0x25B00200);
 				const uint16_t slot17ctl = *reinterpret_cast<volatile uint16_t*>(0x25B00220);
-				SRL::Logger::LogInfo("[CDC] vbl#%u e=%d st=0x%02x fl=0x%02x tno=%u fad=%d ctl16=0x%04x ctl17=0x%04x ev16=0x%04x ev17=0x%04x",
+				SRL::Logger::LogDebug("[CDC] vbl#%u e=%d st=0x%02x fl=0x%02x tno=%u fad=%d ctl16=0x%04x ctl17=0x%04x ev16=0x%04x ev17=0x%04x",
 					(uint32_t)sdrvTickCount,
 					(int32_t)e2,
 					(uint32_t)cst2.status,
@@ -495,9 +495,12 @@ namespace SRL::Ponesound
 				// Load driver
 				LoadDriver(mode);
 				sdrvTickEnabled = false;
-				SRL::Core::OnVblank += SdrvVblankRq;
-                // Set default volumes
-                SetMasterVolume(15);
+				// SdrvVblankRq is NOT registered via OnVblank: the Event<> vector
+				// can be corrupted if vblank fires during PCM loading.
+				// The main loop calls soundTick() -> Driver::Tick() after each
+				// SRL::Core::Synchronize() instead.
+				// Set default volumes
+				SetMasterVolume(15);
 				CD::SetVolume(15);
 			}
 
