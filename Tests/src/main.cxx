@@ -22,6 +22,47 @@ static uint32_t computeFpsTimes100(uint32_t vblanksElapsed)
   return 6000u; // first-frame / no-vblank-yet default
 }
 
+struct RealtimeFpsState
+{
+  uint32_t fpsTimes100;
+  uint32_t windowStartMs;
+  uint32_t renderedFrames;
+  bool initialized;
+  uint32_t syncCount;
+  uint32_t lastRenderSyncCount;
+};
+
+static uint32_t updateRealtimeFps(RealtimeFpsState &state, uint32_t nowMs)
+{
+  if (!state.initialized)
+  {
+    state.windowStartMs = nowMs;
+    state.renderedFrames = 0;
+    state.initialized = true;
+  }
+
+  state.renderedFrames++;
+  const uint32_t elapsedMs = nowMs - state.windowStartMs;
+  const uint32_t syncElapsed = state.syncCount - state.lastRenderSyncCount;
+  if (syncElapsed > 0u)
+  {
+    state.lastRenderSyncCount = state.syncCount;
+  }
+
+  if (elapsedMs >= 500u)
+  {
+    state.fpsTimes100 = (uint32_t)(((unsigned long long)state.renderedFrames * 100000ull) / elapsedMs);
+    state.windowStartMs = nowMs;
+    state.renderedFrames = 0;
+  }
+  else if (elapsedMs == 0u && state.fpsTimes100 == 0u && syncElapsed > 0u)
+  {
+    state.fpsTimes100 = 6000u / syncElapsed;
+  }
+
+  return state.fpsTimes100;
+}
+
 static void computeFpsDisplay(uint32_t fpsTimes100, int32_t &outWhole, int32_t &outFrac)
 {
   outWhole = (int32_t)(fpsTimes100 / 100u);
@@ -679,6 +720,16 @@ MU_TEST(test_sdl_time_wrappers_are_safe_and_monotonic)
   SDL_Delay(0);
 }
 
+MU_TEST(test_sdl_subsystem_init_bootstraps_timer)
+{
+  sdl_initialized = 0;
+  sdl_ticksStart = SRL::Tickstamp();
+  sdl_profilerStart = SRL::Tickstamp();
+
+  mu_assert_int_eq(0, SDL_InitSubSystem(SDL_INIT_JOYSTICK));
+  mu_assert_int_eq(1, sdl_initialized);
+}
+
 MU_TEST_SUITE(sdl_wrapper_test_suite)
 {
   MU_RUN_TEST(test_sdl_copy_bytes);
@@ -687,6 +738,7 @@ MU_TEST_SUITE(sdl_wrapper_test_suite)
   MU_RUN_TEST(test_sdl_blit_palette_and_stats_helpers);
   MU_RUN_TEST(test_sdl_blit_surface_safe_error_paths);
   MU_RUN_TEST(test_sdl_time_wrappers_are_safe_and_monotonic);
+  MU_RUN_TEST(test_sdl_subsystem_init_bootstraps_timer);
 }
 
 // ---------------------------------------------------------------------------
@@ -773,6 +825,65 @@ MU_TEST(test_fps_display_zero_fpstimes100)
   mu_assert_int_eq(0, f);
 }
 
+MU_TEST(test_realtime_fps_updates_from_elapsed_ms_window)
+{
+  RealtimeFpsState s{0u, 0u, 0u, true, 0u, 0u};
+
+  for (int i = 0; i < 29; ++i)
+  {
+    updateRealtimeFps(s, 490u);
+  }
+  mu_assert_int_eq(0u, s.fpsTimes100);
+
+  updateRealtimeFps(s, 500u);
+  mu_assert_int_eq(6000u, s.fpsTimes100);
+}
+
+MU_TEST(test_realtime_fps_window_start_zero_not_reinitialized)
+{
+  RealtimeFpsState s{0u, 0u, 0u, true, 0u, 0u};
+
+  for (int i = 0; i < 29; ++i)
+  {
+    updateRealtimeFps(s, 0u);
+  }
+  mu_assert_int_eq(0u, s.fpsTimes100);
+
+  updateRealtimeFps(s, 500u);
+  mu_assert_int_eq(6000u, s.fpsTimes100);
+}
+
+MU_TEST(test_realtime_fps_sync_fallback_when_ticks_stalled)
+{
+  RealtimeFpsState s{0u, 0u, 0u, true, 0u, 0u};
+
+  s.syncCount = 1u;
+  updateRealtimeFps(s, 0u);
+
+  mu_assert_int_eq(6000u, s.fpsTimes100);
+}
+
+MU_TEST(test_realtime_fps_preserves_nonzero_until_next_window)
+{
+  RealtimeFpsState s{6000u, 500u, 0u, true, 0u, 0u};
+
+  updateRealtimeFps(s, 750u);
+  mu_assert_int_eq(6000u, s.fpsTimes100);
+}
+
+MU_TEST(test_realtime_fps_recomputes_on_later_window)
+{
+  RealtimeFpsState s{6000u, 500u, 0u, true, 0u, 0u};
+
+  for (int i = 0; i < 9; ++i)
+  {
+    updateRealtimeFps(s, 999u);
+  }
+  updateRealtimeFps(s, 1000u);
+
+  mu_assert_int_eq(2000u, s.fpsTimes100);
+}
+
 MU_TEST_SUITE(fps_test_suite)
 {
   MU_RUN_TEST(test_fps_zero_vblanks_returns_default_60fps);
@@ -782,6 +893,11 @@ MU_TEST_SUITE(fps_test_suite)
   MU_RUN_TEST(test_fps_4_vblanks_is_15fps);
   MU_RUN_TEST(test_fps_display_fractional_frac);
   MU_RUN_TEST(test_fps_display_zero_fpstimes100);
+  MU_RUN_TEST(test_realtime_fps_updates_from_elapsed_ms_window);
+  MU_RUN_TEST(test_realtime_fps_window_start_zero_not_reinitialized);
+  MU_RUN_TEST(test_realtime_fps_sync_fallback_when_ticks_stalled);
+  MU_RUN_TEST(test_realtime_fps_preserves_nonzero_until_next_window);
+  MU_RUN_TEST(test_realtime_fps_recomputes_on_later_window);
 }
 
 MU_TEST_SUITE(collision_test_suite)
