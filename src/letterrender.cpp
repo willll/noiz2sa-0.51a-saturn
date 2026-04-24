@@ -17,20 +17,20 @@ void drawLetterBuf(int idx, int lx, int ly, int ltSize, int d,
                    Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf, int panel)
 {
   int i;
-  float x, y, length, size, t;
+  Fxp x, y, length, size, t;
   int deg;
 
   ltSize += (SCREEN_DIVISOR * SCREEN_DIVISOR) - 1;
 
   for (i = 0;; i++)
   {
-    deg = (int)spData[idx][i][4];
+    deg = spData[idx][i].deg;
     if (deg > 99990)
       break;
-    x = spData[idx][i][0] / (float)SCREEN_DIVISOR;
-    y = spData[idx][i][1] / (float)SCREEN_DIVISOR;
-    size = spData[idx][i][2] / (float)SCREEN_DIVISOR;
-    length = spData[idx][i][3] / (float)SCREEN_DIVISOR;
+    x = spData[idx][i].x / Fxp::Convert(SCREEN_DIVISOR);
+    y = spData[idx][i].y / Fxp::Convert(SCREEN_DIVISOR);
+    size = spData[idx][i].size / Fxp::Convert(SCREEN_DIVISOR);
+    length = spData[idx][i].length / Fxp::Convert(SCREEN_DIVISOR);
     size *= 1.3f;
     length *= 1.1f;
     switch (d)
@@ -62,26 +62,26 @@ void drawLetterBuf(int idx, int lx, int ly, int ltSize, int d,
     {
       if (deg < 45 || deg > 135)
       {
-        drawBoxPanel((int)(x * ltSize) + lx, (int)(y * ltSize) + ly,
-                     (int)(size * ltSize), (int)(length * ltSize), color1, color2, buf);
+        drawBoxPanel((x * Fxp::Convert(ltSize)).As<int>() + lx, (y * Fxp::Convert(ltSize)).As<int>() + ly,
+                     (size * Fxp::Convert(ltSize)).As<int>(), (length * Fxp::Convert(ltSize)).As<int>(), color1, color2, buf);
       }
       else
       {
-        drawBoxPanel((int)(x * ltSize) + lx, (int)(y * ltSize) + ly,
-                     (int)(length * ltSize), (int)(size * ltSize), color1, color2, buf);
+        drawBoxPanel((x * Fxp::Convert(ltSize)).As<int>() + lx, (y * Fxp::Convert(ltSize)).As<int>() + ly,
+                     (length * Fxp::Convert(ltSize)).As<int>(), (size * Fxp::Convert(ltSize)).As<int>(), color1, color2, buf);
       }
     }
     else
     {
       if (deg <= 45 || deg > 135)
       {
-        drawBox((int)(x * ltSize) + lx, (int)(y * ltSize) + ly,
-                (int)(size * ltSize), (int)(length * ltSize), color1, color2, buf);
+        drawBox((x * Fxp::Convert(ltSize)).As<int>() + lx, (y * Fxp::Convert(ltSize)).As<int>() + ly,
+          (size * Fxp::Convert(ltSize)).As<int>(), (length * Fxp::Convert(ltSize)).As<int>(), color1, color2, buf);
       }
       else
       {
-        drawBox((int)(x * ltSize) + lx, (int)(y * ltSize) + ly,
-                (int)(length * ltSize), (int)(size * ltSize), color1, color2, buf);
+        drawBox((x * Fxp::Convert(ltSize)).As<int>() + lx, (y * Fxp::Convert(ltSize)).As<int>() + ly,
+          (length * Fxp::Convert(ltSize)).As<int>(), (size * Fxp::Convert(ltSize)).As<int>(), color1, color2, buf);
       }
     }
   }
@@ -138,16 +138,16 @@ void drawStringBuf(const char *str, int lx, int ly, int ltSize, int d,
     switch (d)
     {
     case 0:
-      x -= ltSize * 1.7f / (float)SCREEN_DIVISOR;
+      x -= ((Fxp::Convert(ltSize) * 1.7f) / Fxp::Convert(SCREEN_DIVISOR)).As<int>();
       break;
     case 1:
-      y -= ltSize * 1.7f / (float)SCREEN_DIVISOR;
+      y -= ((Fxp::Convert(ltSize) * 1.7f) / Fxp::Convert(SCREEN_DIVISOR)).As<int>();
       break;
     case 2:
-      x += ltSize * 1.7f / (float)SCREEN_DIVISOR;
+      x += ((Fxp::Convert(ltSize) * 1.7f) / Fxp::Convert(SCREEN_DIVISOR)).As<int>();
       break;
     case 3:
-      y += ltSize * 1.7f / (float)SCREEN_DIVISOR;
+      y += ((Fxp::Convert(ltSize) * 1.7f) / Fxp::Convert(SCREEN_DIVISOR)).As<int>();
       break;
     }
   }

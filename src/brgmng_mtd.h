@@ -10,10 +10,14 @@
  * @version $Revision: 1.2 $
  */
 
+#include <srl.hpp>
+
+using SRL::Math::Types::Fxp;
+
 void initBarragemanager();
 void closeBarragemanager();
-void initBarrages(int seed, float startLevel, float li);
-void setBarrages(float level, int bm, int midMode);
+void initBarrages(int seed, Fxp startLevel, Fxp li);
+void setBarrages(Fxp level, int bm, int midMode);
 void addBullets();
 void addBossBullet();
 void bossDestroied();

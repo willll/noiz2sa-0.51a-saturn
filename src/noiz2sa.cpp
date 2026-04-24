@@ -115,7 +115,13 @@ void quitLast()
 
 int status;
 
-static float stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1][3] = {
+struct StageParams {
+  int seed;
+  Fxp startLevel;
+  Fxp levelInc;
+};
+
+static StageParams stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1] = {
     {13, 0.5f, 0.12f},
     {2, 1.8f, 0.15f},
     {3, 3.2f, 0.1f},
@@ -136,7 +142,7 @@ static float stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1][3] = {
 void initTitleStage(int stg)
 {
   initFoes();
-  initBarrages(stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
+  initBarrages(stagePrm[stg].seed, stagePrm[stg].startLevel, stagePrm[stg].levelInc);
 }
 
 void initTitle()
@@ -180,9 +186,13 @@ void initGame(int stg)
   initBackground();
   SRL::Logger::LogDebug("[GAME] Stage %d: Game objects initialized", stg);
 
-  initBarrages(stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
+  initBarrages(stagePrm[stg].seed, stagePrm[stg].startLevel, stagePrm[stg].levelInc);
   initGameState(stg);
-  SRL::Logger::LogDebug("[GAME] Stage %d: Barrage initialized (enemies=%d, speed=%.2f, density=%.2f)", stg, (int)stagePrm[stg][0], stagePrm[stg][1], stagePrm[stg][2]);
+  SRL::Logger::LogDebug("[GAME] Stage %d: Barrage initialized (enemies=%d, speed=%d, density=%d)",
+                        stg,
+                        stagePrm[stg].seed,
+                        stagePrm[stg].startLevel.As<int>(),
+                        stagePrm[stg].levelInc.As<int>());
 
   if (stg < STAGE_NUM)
   {
@@ -231,45 +241,139 @@ void initStageClear()
   SRL::Logger::LogInfo("[STATE] STAGE_CLEAR screen ready - Stage Completed!");
 }
 
+// Structure to hold move-phase subsystem timings (microseconds)
+struct MovePhaseTimings {
+  uint32_t titleMenu;
+  uint32_t gameOver;
+  uint32_t stageClear;
+  uint32_t pause;
+  uint32_t background;
+  uint32_t addBullets;
+  uint32_t shots;
+  uint32_t ship;
+  uint32_t foes;
+  uint32_t frags;
+  uint32_t bonuses;
+};
+
+// Global accumulator for move-phase subsystem timings (reset every 60 frames)
+static MovePhaseTimings gMovePhaseTimings{};
+static uint32_t gMovePhaseFrameCount = 0;
+
 static void move()
 {
+  uint32_t phaseStart;
+  
   switch (status)
   {
   case TITLE:
+    phaseStart = SDL_GetProfileMicros();
     moveTitleMenu();
+    gMovePhaseTimings.titleMenu += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveBackground();
+    gMovePhaseTimings.background += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     addBullets();
+    gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveFoes();
+    gMovePhaseTimings.foes += SDL_GetProfileMicros() - phaseStart;
     break;
+    
   case IN_GAME:
+    phaseStart = SDL_GetProfileMicros();
     moveBackground();
+    gMovePhaseTimings.background += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     addBullets();
+    gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveShots();
+    gMovePhaseTimings.shots += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveShip();
+    gMovePhaseTimings.ship += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveFoes();
+    gMovePhaseTimings.foes += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveFrags();
+    gMovePhaseTimings.frags += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveBonuses();
+    gMovePhaseTimings.bonuses += SDL_GetProfileMicros() - phaseStart;
     break;
+    
   case GAMEOVER:
+    phaseStart = SDL_GetProfileMicros();
     moveGameover();
+    gMovePhaseTimings.gameOver += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveBackground();
+    gMovePhaseTimings.background += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     addBullets();
+    gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveShots();
+    gMovePhaseTimings.shots += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveFoes();
+    gMovePhaseTimings.foes += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveFrags();
+    gMovePhaseTimings.frags += SDL_GetProfileMicros() - phaseStart;
     break;
+    
   case STAGE_CLEAR:
+    phaseStart = SDL_GetProfileMicros();
     moveStageClear();
+    gMovePhaseTimings.stageClear += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveBackground();
+    gMovePhaseTimings.background += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveShots();
+    gMovePhaseTimings.shots += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveShip();
+    gMovePhaseTimings.ship += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveFrags();
+    gMovePhaseTimings.frags += SDL_GetProfileMicros() - phaseStart;
+    
+    phaseStart = SDL_GetProfileMicros();
     moveBonuses();
+    gMovePhaseTimings.bonuses += SDL_GetProfileMicros() - phaseStart;
     break;
+    
   case PAUSE:
+    phaseStart = SDL_GetProfileMicros();
     movePause();
+    gMovePhaseTimings.pause += SDL_GetProfileMicros() - phaseStart;
     break;
   }
+  
+  gMovePhaseFrameCount++;
 }
 
 static void draw()
@@ -351,9 +455,6 @@ static void draw()
     break;
   }
 
-  // Foreground primitives (shots/ship/UI) are drawn after blendScreen().
-  // Force a layer refresh so these late writes are guaranteed to upload.
-  markPlayfieldDirty();
 }
 
 static int accframe = 0;
@@ -388,7 +489,16 @@ static uint32_t gInGameRenderCounter = 0;
 static uint32_t gStalledTickFrames = 0;
 static bool gUseFixedFramePacing = false;
 static uint32_t gFpsTimes100 = 0;
+static uint32_t gFpsWindowStartMs = 0;
+static uint32_t gRenderedFramesInWindow = 0;
+static bool gFpsWindowInitialized = false;
 static uint32_t gSyncCount = 0;
+static uint32_t gLastRenderSyncCount = 0;
+
+#if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
+static int gAutoStartTitleFrames = 0;
+static bool gAutoStartTriggered = false;
+#endif
 
 static void drawFpsCounter()
 {
@@ -464,10 +574,38 @@ int main()
 
   SRL::Logger::LogInfo("[MAIN] Main game loop starting");
 
+  gFpsTimes100 = 0u;
+  gFpsWindowStartMs = SDL_GetTicks();
+  gRenderedFramesInWindow = 0;
+  gFpsWindowInitialized = true;
+  gSyncCount = 0;
+  gLastRenderSyncCount = 0;
+
   //playMusic(7);
 
   while (!done)
   {
+#if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
+    if (!gAutoStartTriggered)
+    {
+      if (status == TITLE)
+      {
+        gAutoStartTitleFrames++;
+        if (gAutoStartTitleFrames >= 120)
+        {
+          const int autoStage = 0;
+          SRL::Logger::LogWarning("[SMOKE] NOIZ2SA_DEBUG_AUTOSTART_SMOKE enabled - auto starting stage %d", autoStage);
+          initGame(autoStage);
+          gAutoStartTriggered = true;
+        }
+      }
+      else
+      {
+        gAutoStartTitleFrames = 0;
+      }
+    }
+#endif
+
     // Handle pause/unpause input
     if (gamepad && gamepad->IsConnected() && gamepad->WasPressed(SRL::Input::Digital::Button::START))
     {
@@ -541,11 +679,30 @@ int main()
         prvTickCount = nowTick;
       }
     }
-    else if (frame > 5)
+    else if (frame > 1)
     {
-      SRL::Logger::LogWarning("[TIMING] Frame skip detected: %d frames (tick: %ld)", frame, nowTick);
-      frame = 5;
-      prvTickCount = nowTick;
+      // Default behavior favors consistent responsiveness over catch-up bursts.
+      // Large catch-up steps can cause a feedback slowdown on slower emulator hosts.
+      if (accframe)
+      {
+        if (frame > 5)
+        {
+          SRL::Logger::LogWarning("[TIMING] Frame skip detected: %d frames (tick: %ld)", frame, nowTick);
+          frame = 5;
+        }
+        prvTickCount += frame * interval;
+      }
+      else
+      {
+        static uint32_t sBacklogDropCount = 0;
+        sBacklogDropCount++;
+        if ((sBacklogDropCount % 120u) == 1u)
+        {
+          SRL::Logger::LogDebug("[TIMING] Dropping backlog: frame=%d tick=%ld drops=%lu", frame, nowTick, (unsigned long)sBacklogDropCount);
+        }
+        frame = 1;
+        prvTickCount = nowTick;
+      }
     }
     else
     {
@@ -591,21 +748,36 @@ int main()
       flipScreen();
       timeFlipUs = SDL_GetProfileMicros() - phaseStartUs;
 
-      // Update FPS from completed synchronized presents since the previous
-      // rendered frame. This avoids SRL::Core::OnVblank callback registration,
-      // which is unsafe here because SRL event vectors allocate before the
-      // project heap is initialized.
+      // Realtime FPS based on rendered frames and elapsed milliseconds.
+      // SDL_GetTicks() has stable behavior across emulator/hardware paths.
       {
-        static uint32_t sLastSyncCount = 0;
-        const uint32_t elapsed = gSyncCount - sLastSyncCount;
-        sLastSyncCount = gSyncCount;
-        if (elapsed > 0u)
+        const uint32_t nowMs = SDL_GetTicks();
+
+        if (!gFpsWindowInitialized)
         {
-          gFpsTimes100 = 6000u / elapsed;
+          gFpsWindowStartMs = nowMs;
+          gRenderedFramesInWindow = 0;
+          gFpsWindowInitialized = true;
         }
-        else if (gFpsTimes100 == 0u)
+
+        gRenderedFramesInWindow++;
+        const uint32_t elapsedMs = nowMs - gFpsWindowStartMs;
+        const uint32_t syncElapsed = gSyncCount - gLastRenderSyncCount;
+        if (syncElapsed > 0u)
         {
-          gFpsTimes100 = 6000u; // first-frame boot default
+          gLastRenderSyncCount = gSyncCount;
+        }
+
+        if (elapsedMs >= 500u)
+        {
+          gFpsTimes100 = (uint32_t)(((unsigned long long)gRenderedFramesInWindow * 100000ull) / elapsedMs);
+          gFpsWindowStartMs = nowMs;
+          gRenderedFramesInWindow = 0;
+        }
+        else if (elapsedMs == 0u && gFpsTimes100 == 0u && syncElapsed > 0u)
+        {
+          // Fallback when SDL ticks are stalled: infer FPS from vblank sync cadence.
+          gFpsTimes100 = 6000u / syncElapsed;
         }
       }
 
@@ -643,7 +815,7 @@ int main()
     if ((frameCount % 60) == 0)
     {
       const uint32_t fpsTimes100 = gFpsTimes100;
-      SRL::Logger::LogDebug(
+      SRL::Logger::LogInfo(
                           "[PERF_US] move=%lu smoke=%lu draw=%lu flip=%lu sync=%lu total=%lu fps=%lu.%02lu tick_ms=%lu frame=%d render=%d rdiv=%lu fixed=%d stalled=%lu status=%d dbuf_off=%d",
           (unsigned long)timeMoveUs,
           (unsigned long)timeSmokeUs,
@@ -661,6 +833,30 @@ int main()
               (unsigned long)gStalledTickFrames,
                   status,
                   NOIZ2SA_DISABLE_DOUBLE_BUFFER);
+      
+      // Log move-phase subsystem breakdown if any frames were processed
+      if (gMovePhaseFrameCount > 0)
+      {
+        const uint32_t avgFrames = gMovePhaseFrameCount;
+        SRL::Logger::LogInfo(
+                            "[PERF_MOVE] f=%lu bg=%lu add=%lu sh=%lu ship=%lu foes=%lu fr=%lu bn=%lu t=%lu go=%lu sc=%lu p=%lu",
+            (unsigned long)avgFrames,
+            (unsigned long)gMovePhaseTimings.background,
+            (unsigned long)gMovePhaseTimings.addBullets,
+            (unsigned long)gMovePhaseTimings.shots,
+            (unsigned long)gMovePhaseTimings.ship,
+            (unsigned long)gMovePhaseTimings.foes,
+            (unsigned long)gMovePhaseTimings.frags,
+            (unsigned long)gMovePhaseTimings.bonuses,
+            (unsigned long)gMovePhaseTimings.titleMenu,
+            (unsigned long)gMovePhaseTimings.gameOver,
+            (unsigned long)gMovePhaseTimings.stageClear,
+            (unsigned long)gMovePhaseTimings.pause);
+        
+        // Reset accumulators for next 60-frame window
+        gMovePhaseTimings = MovePhaseTimings{};
+        gMovePhaseFrameCount = 0;
+      }
     }
 
   }

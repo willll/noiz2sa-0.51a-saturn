@@ -62,6 +62,7 @@ void initSDL();
 void closeSDL();
 void blendScreen();
 void markPlayfieldDirty();
+void markPlayfieldDirtyRect(int x, int y, int width, int height);
 void flipScreen();
 void clearScreen();
 void clearLPanel();

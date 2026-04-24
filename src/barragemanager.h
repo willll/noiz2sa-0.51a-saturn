@@ -12,7 +12,10 @@
 #ifndef BARRAGEMANAGER_H_
 #define BARRAGEMANAGER_H_
 
+#include <srl.hpp>
 #include "bulletml_binary/bulletmlparser_blb.hpp"
+
+using SRL::Math::Types::Fxp;
 
 #define BARRAGE_TYPE_NUM 3
 #define BARRAGE_MAX 16
@@ -21,7 +24,7 @@
 
 typedef struct {
   BulletMLParserBLB *bulletml;
-  double maxRank, rank;
+  Fxp maxRank, rank;
   int type;
   int frq;
 } Barrage;

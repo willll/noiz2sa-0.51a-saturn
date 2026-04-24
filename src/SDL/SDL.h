@@ -206,7 +206,14 @@ static inline int SDL_Init(uint32_t flags) {
     
     return 0; 
 }
-static inline int SDL_InitSubSystem(uint32_t flags) { (void)flags; return 0; }
+static inline int SDL_InitSubSystem(uint32_t flags) {
+    // Some code paths initialize only SDL subsystems; bootstrap timing there too.
+    if (!sdl_initialized)
+    {
+        SDL_Init(flags);
+    }
+    return 0;
+}
 static inline const char* SDL_GetError(void) { return "SDL stub"; }
 
 static inline void SDL_SetBlitPaletteBank(int16_t paletteBank)
@@ -455,7 +462,7 @@ static inline int SDL_Flip(SRL_Surface* screen) { (void)screen; return 0; }
 
 static inline uint32_t SDL_GetTicks(void) {
     if (!sdl_initialized) {
-        return 0;
+        SDL_Init(0);
     }
 
     const SRL::Tickstamp elapsed = SRL::Timer::Capture() - sdl_ticksStart;
@@ -465,7 +472,7 @@ static inline uint32_t SDL_GetTicks(void) {
 
 static inline uint32_t SDL_GetProfileMicros(void) {
     if (!sdl_initialized) {
-        return 0;
+        SDL_Init(0);
     }
 
     const SRL::Tickstamp elapsed = SRL::Timer::Capture() - sdl_profilerStart;

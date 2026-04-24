@@ -27,36 +27,39 @@ static bool movingBulletHitsShip(const Vector &bulletPos,
                                  const Vector &shipPos,
                                  int shipHitWidth)
 {
-  const double startX = (double)bulletPrevPos.x;
-  const double startY = (double)bulletPrevPos.y;
-  const double deltaX = (double)(bulletPos.x - bulletPrevPos.x);
-  const double deltaY = (double)(bulletPos.y - bulletPrevPos.y);
-  const double shipX = (double)shipPos.x;
-  const double shipY = (double)shipPos.y;
-  const double lengthSquared = deltaX * deltaX + deltaY * deltaY;
+  const int startX = bulletPrevPos.x;
+  const int startY = bulletPrevPos.y;
+  const int deltaX = bulletPos.x - bulletPrevPos.x;
+  const int deltaY = bulletPos.y - bulletPrevPos.y;
+  const int targetX = shipPos.x;
+  const int targetY = shipPos.y;
+  const long long lengthSquared = (long long)deltaX * (long long)deltaX +
+                                  (long long)deltaY * (long long)deltaY;
 
-  if (lengthSquared <= 1.0)
+  if (lengthSquared <= 1)
   {
-    const double pointX = shipX - startX;
-    const double pointY = shipY - startY;
-    return (pointX * pointX + pointY * pointY) <= (double)shipHitWidth;
+    const long long pointX = (long long)targetX - (long long)startX;
+    const long long pointY = (long long)targetY - (long long)startY;
+    return (pointX * pointX + pointY * pointY) <= (long long)shipHitWidth;
   }
 
-  double t = ((shipX - startX) * deltaX + (shipY - startY) * deltaY) / lengthSquared;
-  if (t < 0.0)
+  const long long dot = ((long long)targetX - (long long)startX) * (long long)deltaX +
+                        ((long long)targetY - (long long)startY) * (long long)deltaY;
+  long long tFp = (dot << 16) / lengthSquared;
+  if (tFp < 0)
   {
-    t = 0.0;
+    tFp = 0;
   }
-  else if (t > 1.0)
+  else if (tFp > (1LL << 16))
   {
-    t = 1.0;
+    tFp = (1LL << 16);
   }
 
-  const double nearestX = startX + deltaX * t;
-  const double nearestY = startY + deltaY * t;
-  const double distX = shipX - nearestX;
-  const double distY = shipY - nearestY;
-  return (distX * distX + distY * distY) <= (double)shipHitWidth;
+  const long long nearestX = (long long)startX + (((long long)deltaX * tFp) >> 16);
+  const long long nearestY = (long long)startY + (((long long)deltaY * tFp) >> 16);
+  const long long distX = (long long)targetX - nearestX;
+  const long long distY = (long long)targetY - nearestY;
+  return (distX * distX + distY * distY) <= (long long)shipHitWidth;
 }
 
 static bool shouldDestroyShipNow(int status)
@@ -153,9 +156,9 @@ static void test_vctInnerProduct_large_values_no_overflow()
 {
   Vector a{120000, 0};
   Vector b{120000, 0};
-  const float dot = vctInnerProduct(&a, &b);
-  EXPECT_TRUE(dot > 1.0e10f);
-  EXPECT_TRUE(dot < 2.0e10f);
+  const long long dot = vctInnerProduct(&a, &b);
+  EXPECT_TRUE(dot > 10000000000LL);
+  EXPECT_TRUE(dot < 20000000000LL);
 }
 
 static void test_vctGetElement_projection()

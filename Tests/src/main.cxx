@@ -1,9 +1,11 @@
 #include <srl.hpp>
 #include <srl_log.hpp>
+#include <cstdint>
 
 #include "minunit.h"
 
 #include "../../src/SDL/SDL.h"
+#include "../../src/degutil.h"
 #include "../../src/vector.h"
 
 // ---------------------------------------------------------------------------
@@ -18,6 +20,47 @@ static uint32_t computeFpsTimes100(uint32_t vblanksElapsed)
   if (vblanksElapsed > 0u)
     return 6000u / vblanksElapsed;
   return 6000u; // first-frame / no-vblank-yet default
+}
+
+struct RealtimeFpsState
+{
+  uint32_t fpsTimes100;
+  uint32_t windowStartMs;
+  uint32_t renderedFrames;
+  bool initialized;
+  uint32_t syncCount;
+  uint32_t lastRenderSyncCount;
+};
+
+static uint32_t updateRealtimeFps(RealtimeFpsState &state, uint32_t nowMs)
+{
+  if (!state.initialized)
+  {
+    state.windowStartMs = nowMs;
+    state.renderedFrames = 0;
+    state.initialized = true;
+  }
+
+  state.renderedFrames++;
+  const uint32_t elapsedMs = nowMs - state.windowStartMs;
+  const uint32_t syncElapsed = state.syncCount - state.lastRenderSyncCount;
+  if (syncElapsed > 0u)
+  {
+    state.lastRenderSyncCount = state.syncCount;
+  }
+
+  if (elapsedMs >= 500u)
+  {
+    state.fpsTimes100 = (uint32_t)(((unsigned long long)state.renderedFrames * 100000ull) / elapsedMs);
+    state.windowStartMs = nowMs;
+    state.renderedFrames = 0;
+  }
+  else if (elapsedMs == 0u && state.fpsTimes100 == 0u && syncElapsed > 0u)
+  {
+    state.fpsTimes100 = 6000u / syncElapsed;
+  }
+
+  return state.fpsTimes100;
 }
 
 static void computeFpsDisplay(uint32_t fpsTimes100, int32_t &outWhole, int32_t &outFrac)
@@ -49,36 +92,39 @@ static bool movingBulletHitsShip(const Vector &bulletPos,
                                  const Vector &shipPos,
                                  int shipHitWidth)
 {
-  const double startX = (double)bulletPrevPos.x;
-  const double startY = (double)bulletPrevPos.y;
-  const double deltaX = (double)(bulletPos.x - bulletPrevPos.x);
-  const double deltaY = (double)(bulletPos.y - bulletPrevPos.y);
-  const double shipX = (double)shipPos.x;
-  const double shipY = (double)shipPos.y;
-  const double lengthSquared = deltaX * deltaX + deltaY * deltaY;
+  const int startX = bulletPrevPos.x;
+  const int startY = bulletPrevPos.y;
+  const int deltaX = bulletPos.x - bulletPrevPos.x;
+  const int deltaY = bulletPos.y - bulletPrevPos.y;
+  const int targetX = shipPos.x;
+  const int targetY = shipPos.y;
+  const long long lengthSquared = (long long)deltaX * (long long)deltaX +
+                                  (long long)deltaY * (long long)deltaY;
 
-  if (lengthSquared <= 1.0)
+  if (lengthSquared <= 1)
   {
-    const double pointX = shipX - startX;
-    const double pointY = shipY - startY;
-    return (pointX * pointX + pointY * pointY) <= (double)shipHitWidth;
+    const long long pointX = (long long)targetX - (long long)startX;
+    const long long pointY = (long long)targetY - (long long)startY;
+    return (pointX * pointX + pointY * pointY) <= (long long)shipHitWidth;
   }
 
-  double t = ((shipX - startX) * deltaX + (shipY - startY) * deltaY) / lengthSquared;
-  if (t < 0.0)
+  const long long dot = ((long long)targetX - (long long)startX) * (long long)deltaX +
+                        ((long long)targetY - (long long)startY) * (long long)deltaY;
+  long long tFp = (dot << 16) / lengthSquared;
+  if (tFp < 0)
   {
-    t = 0.0;
+    tFp = 0;
   }
-  else if (t > 1.0)
+  else if (tFp > (1LL << 16))
   {
-    t = 1.0;
+    tFp = (1LL << 16);
   }
 
-  const double nearestX = startX + deltaX * t;
-  const double nearestY = startY + deltaY * t;
-  const double distX = shipX - nearestX;
-  const double distY = shipY - nearestY;
-  return (distX * distX + distY * distY) <= (double)shipHitWidth;
+  const long long nearestX = (long long)startX + (((long long)deltaX * tFp) >> 16);
+  const long long nearestY = (long long)startY + (((long long)deltaY * tFp) >> 16);
+  const long long distX = (long long)targetX - nearestX;
+  const long long distY = (long long)targetY - nearestY;
+  return (distX * distX + distY * distY) <= (long long)shipHitWidth;
 }
 
 static bool shouldDestroyShipNow(int status)
@@ -100,6 +146,86 @@ static SRL_Surface makeTestSurface(int width, int height)
   surface.dirtyX2 = 0;
   surface.dirtyY2 = 0;
   return surface;
+}
+
+template <typename LegacyFp>
+static int legacyIntFromFloatType(LegacyFp value)
+{
+  return (int)value;
+}
+
+static Fxp fxpFromDouble(double value)
+{
+  return Fxp::BuildRaw(static_cast<int32_t>(value * 65536.0));
+}
+
+static int migratedIntFromFxp(Fxp value)
+{
+  int result = value.As<int>();
+  if (value.RawValue() < 0 && (value.RawValue() & 0xFFFF) != 0)
+  {
+    result += 1;
+  }
+  return result;
+}
+
+static int migratedScaledIntFromFxp(Fxp value)
+{
+  const int raw = value.RawValue();
+  if (raw >= 0)
+  {
+    return (raw + 0x8000) >> 16;
+  }
+  return -(((-raw) + 0x8000) >> 16);
+}
+
+template <typename LegacyFp>
+static int legacyDirectionIndexWrapped(LegacyFp directionDegrees)
+{
+  int direction = legacyIntFromFloatType(directionDegrees * static_cast<LegacyFp>(DIV) / static_cast<LegacyFp>(360));
+  direction &= (DIV - 1);
+  return direction;
+}
+
+template <typename LegacyFp>
+static int legacyDirectionIndexSigned(LegacyFp directionDegrees)
+{
+  return legacyIntFromFloatType(directionDegrees * static_cast<LegacyFp>(DIV) / static_cast<LegacyFp>(360));
+}
+
+static int migratedDirectionIndexSigned(Fxp directionDegrees)
+{
+  const int64_t scaledRaw = static_cast<int64_t>(directionDegrees.RawValue()) * DIV / 360;
+  return static_cast<int>(scaledRaw / 65536);
+}
+
+static int migratedDirectionIndexWrapped(Fxp directionDegrees)
+{
+  int direction = migratedDirectionIndexSigned(directionDegrees);
+  direction &= (DIV - 1);
+  return direction;
+}
+
+template <typename LegacyFp>
+static int legacyScaledSpeed(LegacyFp speed, int rate)
+{
+  return legacyIntFromFloatType(speed * static_cast<LegacyFp>(rate));
+}
+
+static int migratedScaledSpeed(Fxp speed, int rate)
+{
+  const int64_t scaledRaw = static_cast<int64_t>(speed.RawValue()) * rate;
+  if (scaledRaw >= 0)
+  {
+    return static_cast<int>((scaledRaw + 0x8000) >> 16);
+  }
+  return -static_cast<int>(((-scaledRaw) + 0x8000) >> 16);
+}
+
+static Fxp migratedDirectionDegreesFromIndex(int direction)
+{
+  const int64_t raw = static_cast<int64_t>(direction) * 360 * 65536 / DIV;
+  return Fxp::BuildRaw(static_cast<int32_t>(raw));
 }
 
 using namespace SRL::Types;
@@ -168,9 +294,9 @@ MU_TEST(test_vctInnerProduct_large_values_no_overflow)
 {
   Vector a{120000, 0};
   Vector b{120000, 0};
-  const float dot = vctInnerProduct(&a, &b);
-  mu_assert(dot > 1.0e10f, "dot product too small");
-  mu_assert(dot < 2.0e10f, "dot product too large");
+  const long long dot = vctInnerProduct(&a, &b);
+  mu_assert(dot > 10000000000LL, "dot product too small");
+  mu_assert(dot < 20000000000LL, "dot product too large");
 }
 
 MU_TEST(test_vctGetElement_projection)
@@ -305,6 +431,95 @@ MU_TEST(test_destroyShip_no_invincibility_behavior)
   mu_check(!shouldDestroyShipNow(GAMEOVER));
 }
 
+template <typename LegacyFp>
+static void assertDirectionWrappedParity()
+{
+  const double samples[] = {
+      -719.9, -540.5, -360.0, -181.2, -90.5, -45.25, -1.99, -0.75,
+      0.0, 0.75, 1.99, 45.25, 89.99, 90.5, 179.9, 180.0, 359.9, 540.5, 719.9};
+
+  for (unsigned i = 0; i < sizeof(samples) / sizeof(samples[0]); ++i)
+  {
+    const LegacyFp degrees = static_cast<LegacyFp>(samples[i]);
+    mu_assert_int_eq(legacyDirectionIndexWrapped(degrees), migratedDirectionIndexWrapped(fxpFromDouble(samples[i])));
+  }
+
+  for (int q = -5760; q <= 5760; ++q)
+  {
+    const double degDouble = static_cast<double>(q) * 0.25;
+    const LegacyFp degrees = static_cast<LegacyFp>(degDouble);
+    mu_assert_int_eq(legacyDirectionIndexWrapped(degrees), migratedDirectionIndexWrapped(fxpFromDouble(degDouble)));
+  }
+}
+
+template <typename LegacyFp>
+static void assertDirectionSignedParity()
+{
+  const double samples[] = {
+      -719.9, -540.5, -360.0, -181.2, -90.5, -45.25, -1.99, -0.75,
+      0.0, 0.75, 1.99, 45.25, 89.99, 90.5, 179.9, 180.0, 359.9, 540.5, 719.9};
+
+  for (unsigned i = 0; i < sizeof(samples) / sizeof(samples[0]); ++i)
+  {
+    const LegacyFp degrees = static_cast<LegacyFp>(samples[i]);
+    mu_assert_int_eq(legacyDirectionIndexSigned(degrees), migratedDirectionIndexSigned(fxpFromDouble(samples[i])));
+  }
+}
+
+template <typename LegacyFp>
+static void assertSpeedAccelParity()
+{
+  const int rate = 400;
+  const double samples[] = {
+      -8.75, -4.5, -2.25, -1.99, -1.5, -0.99, -0.5, -0.01,
+      0.0, 0.01, 0.5, 0.99, 1.5, 1.99, 2.25, 4.5, 8.75};
+
+  for (unsigned i = 0; i < sizeof(samples) / sizeof(samples[0]); ++i)
+  {
+    const LegacyFp speed = static_cast<LegacyFp>(samples[i]);
+    mu_assert_int_eq(legacyScaledSpeed(speed, rate), migratedScaledSpeed(fxpFromDouble(samples[i]), rate));
+  }
+}
+
+template <typename LegacyFp>
+static void assertDirectionGetterParity()
+{
+  const int directionSamples[] = {-1536, -1025, -1024, -513, -512, -257, -1, 0, 1, 257, 512, 1023, 1024, 1535};
+
+  for (unsigned i = 0; i < sizeof(directionSamples) / sizeof(directionSamples[0]); ++i)
+  {
+    const int legacyDirection = directionSamples[i];
+    const LegacyFp legacyDegrees = static_cast<LegacyFp>(legacyDirection) * static_cast<LegacyFp>(360) / static_cast<LegacyFp>(DIV);
+    const int expectedSigned = legacyDirectionIndexSigned(legacyDegrees);
+    const int migratedSigned = migratedDirectionIndexSigned(migratedDirectionDegreesFromIndex(legacyDirection));
+    mu_assert_int_eq(expectedSigned, migratedSigned);
+  }
+}
+
+MU_TEST(test_fxp_foecommand_direction_wrapped_matches_legacy_float_and_double)
+{
+  assertDirectionWrappedParity<float>();
+  assertDirectionWrappedParity<double>();
+}
+
+MU_TEST(test_fxp_foecommand_direction_signed_matches_legacy_float_and_double)
+{
+  assertDirectionSignedParity<float>();
+  assertDirectionSignedParity<double>();
+}
+
+MU_TEST(test_fxp_foecommand_speed_and_accel_match_legacy_float_and_double)
+{
+  assertSpeedAccelParity<float>();
+  assertSpeedAccelParity<double>();
+}
+
+MU_TEST(test_fxp_foecommand_direction_getter_matches_legacy_float_and_double)
+{
+  assertDirectionGetterParity<float>();
+  assertDirectionGetterParity<double>();
+}
+
 MU_TEST(test_add_sub_mul_div_extended)
 {
   Vector a{20, -30};
@@ -332,9 +547,9 @@ MU_TEST(test_inner_product_large_values_extended)
   Vector a{120000, -50000};
   Vector b{120000, 50000};
 
-  const float dot = vctInnerProduct(&a, &b);
-  mu_assert(dot > 1.18e10f, "dot product too small");
-  mu_assert(dot < 1.20e10f, "dot product too large");
+  const long long dot = vctInnerProduct(&a, &b);
+  mu_assert(dot > 11800000000LL, "dot product too small");
+  mu_assert(dot < 12000000000LL, "dot product too large");
 }
 
 MU_TEST(test_get_element_projection_extended)
@@ -505,6 +720,16 @@ MU_TEST(test_sdl_time_wrappers_are_safe_and_monotonic)
   SDL_Delay(0);
 }
 
+MU_TEST(test_sdl_subsystem_init_bootstraps_timer)
+{
+  sdl_initialized = 0;
+  sdl_ticksStart = SRL::Tickstamp();
+  sdl_profilerStart = SRL::Tickstamp();
+
+  mu_assert_int_eq(0, SDL_InitSubSystem(SDL_INIT_JOYSTICK));
+  mu_assert_int_eq(1, sdl_initialized);
+}
+
 MU_TEST_SUITE(sdl_wrapper_test_suite)
 {
   MU_RUN_TEST(test_sdl_copy_bytes);
@@ -513,6 +738,7 @@ MU_TEST_SUITE(sdl_wrapper_test_suite)
   MU_RUN_TEST(test_sdl_blit_palette_and_stats_helpers);
   MU_RUN_TEST(test_sdl_blit_surface_safe_error_paths);
   MU_RUN_TEST(test_sdl_time_wrappers_are_safe_and_monotonic);
+  MU_RUN_TEST(test_sdl_subsystem_init_bootstraps_timer);
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +825,65 @@ MU_TEST(test_fps_display_zero_fpstimes100)
   mu_assert_int_eq(0, f);
 }
 
+MU_TEST(test_realtime_fps_updates_from_elapsed_ms_window)
+{
+  RealtimeFpsState s{0u, 0u, 0u, true, 0u, 0u};
+
+  for (int i = 0; i < 29; ++i)
+  {
+    updateRealtimeFps(s, 490u);
+  }
+  mu_assert_int_eq(0u, s.fpsTimes100);
+
+  updateRealtimeFps(s, 500u);
+  mu_assert_int_eq(6000u, s.fpsTimes100);
+}
+
+MU_TEST(test_realtime_fps_window_start_zero_not_reinitialized)
+{
+  RealtimeFpsState s{0u, 0u, 0u, true, 0u, 0u};
+
+  for (int i = 0; i < 29; ++i)
+  {
+    updateRealtimeFps(s, 0u);
+  }
+  mu_assert_int_eq(0u, s.fpsTimes100);
+
+  updateRealtimeFps(s, 500u);
+  mu_assert_int_eq(6000u, s.fpsTimes100);
+}
+
+MU_TEST(test_realtime_fps_sync_fallback_when_ticks_stalled)
+{
+  RealtimeFpsState s{0u, 0u, 0u, true, 0u, 0u};
+
+  s.syncCount = 1u;
+  updateRealtimeFps(s, 0u);
+
+  mu_assert_int_eq(6000u, s.fpsTimes100);
+}
+
+MU_TEST(test_realtime_fps_preserves_nonzero_until_next_window)
+{
+  RealtimeFpsState s{6000u, 500u, 0u, true, 0u, 0u};
+
+  updateRealtimeFps(s, 750u);
+  mu_assert_int_eq(6000u, s.fpsTimes100);
+}
+
+MU_TEST(test_realtime_fps_recomputes_on_later_window)
+{
+  RealtimeFpsState s{6000u, 500u, 0u, true, 0u, 0u};
+
+  for (int i = 0; i < 9; ++i)
+  {
+    updateRealtimeFps(s, 999u);
+  }
+  updateRealtimeFps(s, 1000u);
+
+  mu_assert_int_eq(2000u, s.fpsTimes100);
+}
+
 MU_TEST_SUITE(fps_test_suite)
 {
   MU_RUN_TEST(test_fps_zero_vblanks_returns_default_60fps);
@@ -608,6 +893,11 @@ MU_TEST_SUITE(fps_test_suite)
   MU_RUN_TEST(test_fps_4_vblanks_is_15fps);
   MU_RUN_TEST(test_fps_display_fractional_frac);
   MU_RUN_TEST(test_fps_display_zero_fpstimes100);
+  MU_RUN_TEST(test_realtime_fps_updates_from_elapsed_ms_window);
+  MU_RUN_TEST(test_realtime_fps_window_start_zero_not_reinitialized);
+  MU_RUN_TEST(test_realtime_fps_sync_fallback_when_ticks_stalled);
+  MU_RUN_TEST(test_realtime_fps_preserves_nonzero_until_next_window);
+  MU_RUN_TEST(test_realtime_fps_recomputes_on_later_window);
 }
 
 MU_TEST_SUITE(collision_test_suite)
@@ -622,6 +912,10 @@ MU_TEST_SUITE(collision_test_suite)
   MU_RUN_TEST(test_shotHitsFoeSwept_tunneling);
   MU_RUN_TEST(test_movingBulletHitsShip_full_coverage);
   MU_RUN_TEST(test_destroyShip_no_invincibility_behavior);
+  MU_RUN_TEST(test_fxp_foecommand_direction_wrapped_matches_legacy_float_and_double);
+  MU_RUN_TEST(test_fxp_foecommand_direction_signed_matches_legacy_float_and_double);
+  MU_RUN_TEST(test_fxp_foecommand_speed_and_accel_match_legacy_float_and_double);
+  MU_RUN_TEST(test_fxp_foecommand_direction_getter_matches_legacy_float_and_double);
 }
 
 MU_TEST_SUITE(vector_test_suite)

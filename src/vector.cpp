@@ -39,10 +39,10 @@ static int intSqrtU64(unsigned long long value)
   return (int)res;
 }
 
-float vctInnerProduct(Vector *v1, Vector *v2) {
+long long vctInnerProduct(Vector *v1, Vector *v2) {
   const long long x = (long long)v1->x * (long long)v2->x;
   const long long y = (long long)v1->y * (long long)v2->y;
-  return (float)(x + y);
+  return x + y;
 }
 
 Vector vctGetElement(Vector *v1, Vector *v2) {

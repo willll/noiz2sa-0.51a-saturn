@@ -49,3 +49,4 @@ cd/music/*.raw
 *.log
 *.SGL.WAV
 0.bin
+build_profile/**

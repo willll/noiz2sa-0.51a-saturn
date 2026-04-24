@@ -119,3 +119,33 @@ To use binary BulletML files in your Saturn port:
 4. Load patterns from binary files
 
 See `../doc/BINARY_PARSER_README.md` for C++ integration details.
+
+## Performance Drop Report
+
+The `perf_drop_report.py` script parses runtime timing lines (`[PERF_US]` and `[BLIT_US]`) and highlights where FPS drops happen.
+
+### What It Reports
+
+- FPS summary: average, p50, p90, p99
+- Frame time summary (`total_us`): average, p50, p90, p99
+- Drop detection using thresholds (`fps < X` or `total_us > Y`)
+- Worst spikes with context windows around each drop
+- BLIT hotspots (layer/line/panel DMA costs)
+
+### Usage
+
+```bash
+# Default input path: Tests/uts.log
+python3 tools/perf_drop_report.py
+
+# Explicit log path
+python3 tools/perf_drop_report.py Tests/uts.log
+
+# Custom drop thresholds and context window
+python3 tools/perf_drop_report.py Tests/uts.log --fps-threshold 20 --total-threshold 50000 --window 30 --top 10
+```
+
+### Notes
+
+- The script expects runtime logs that include `[PERF_US]` and/or `[BLIT_US]` lines.
+- If no `[PERF_US]` entries are found, run a profiling build/run where these debug logs are enabled.
