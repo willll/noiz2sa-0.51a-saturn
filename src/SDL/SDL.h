@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <limits.h>
 #include <srl.hpp>
+#include <srl_timer.hpp>
 #include <srl_vdp1.hpp>
 #include <srl_scene2d.hpp>
 
@@ -32,9 +33,6 @@ typedef struct {
 // SDL Color - now using SRL HighColor
 // Kept as typedef for compatibility but redirects to SRL::Types::HighColor
 #include <srl_color.hpp>
-
-// Saturn hardware timer support - included after SRL to avoid conflicts
-#include <sega_tim.h>
 
 // SDL PixelFormat
 typedef struct SDL_PixelFormat {
@@ -88,12 +86,10 @@ typedef struct {
 #define SDL_HWPALETTE 0x20000000
 
 
-// SDL timing - Track elapsed time since SDL_Init for SDL_GetTicks()
-// Uses Saturn's Free-Running Timer (FRT) hardware for accurate microsecond timing
-static volatile uint16_t sdl_previousRawCount = 0;
-static volatile float sdl_elapsedMicros = 0.0f;
-static volatile uint16_t sdl_profilerPreviousRawCount = 0;
-static volatile float sdl_profilerElapsedMicros = 0.0f;
+// SDL timing - backed by SRL::Timer so the project uses a single timing source.
+// SDL_GetTicks() and SDL_GetProfileMicros() measure elapsed time since SDL_Init().
+static SRL::Tickstamp sdl_ticksStart;
+static SRL::Tickstamp sdl_profilerStart;
 static volatile int sdl_initialized = 0;
 static volatile int16_t sdl_blitPaletteBank = 0;
 static int16_t sdl_blitPaletteCacheBank = INT16_MIN;
@@ -200,17 +196,12 @@ static inline void SDL_MarkDirtyRect(SRL_Surface* surface, int x, int y, int w, 
 // SDL initialization and system
 static inline int SDL_Init(uint32_t flags) { 
     (void)flags;
-    
-    // Initialize the FRT once and keep it running continuously.
-    // Use divider 128 so 16-bit counter wraps much less frequently,
-    // keeping SDL_GetTicks stable even when frame rate is low.
-    TIM_FRT_INIT(TIM_CKS_128);
-    TIM_FRT_SET_16(0);
-    
-    sdl_previousRawCount = 0;
-    sdl_elapsedMicros = 0.0f;
-    sdl_profilerPreviousRawCount = 0;
-    sdl_profilerElapsedMicros = 0.0f;
+
+    // SRL::Core::Initialize() already calls SRL::Timer::Init().
+    // We only snapshot the current timer so SDL-style elapsed APIs can measure
+    // time relative to SDL_Init() without maintaining a separate timer stack.
+    sdl_ticksStart = SRL::Timer::Capture();
+    sdl_profilerStart = sdl_ticksStart;
     sdl_initialized = 1;
     
     return 0; 
@@ -460,18 +451,16 @@ static inline int SDL_FillRect(SRL_Surface* dst, SDL_Rect* dstrect, uint32_t col
 static inline int SDL_Flip(SRL_Surface* screen) { (void)screen; return 0; }
 
 // SDL event and input functions - Saturn implementation
-// Hardware timer-based timing using the FRT (Free-Running Timer)
+// Time conversion uses SRL::Timer snapshots instead of direct FRT access.
 
 static inline uint32_t SDL_GetTicks(void) {
     if (!sdl_initialized) {
         return 0;
     }
 
-    const uint16_t currentRawCount = TIM_FRT_GET_16();
-    const uint16_t deltaCount = (uint16_t)(currentRawCount - sdl_previousRawCount);
-    sdl_previousRawCount = currentRawCount;
-    sdl_elapsedMicros += TIM_FRT_CNT_TO_MCR(deltaCount);
-    return (uint32_t)(sdl_elapsedMicros / 1000.0f);
+    const SRL::Tickstamp elapsed = SRL::Timer::Capture() - sdl_ticksStart;
+    const uint32_t secondsRaw = (uint32_t)elapsed.ToSeconds().RawValue();
+    return (uint32_t)(((uint64_t)secondsRaw * 1000ull) >> 16);
 }
 
 static inline uint32_t SDL_GetProfileMicros(void) {
@@ -479,11 +468,9 @@ static inline uint32_t SDL_GetProfileMicros(void) {
         return 0;
     }
 
-    const uint16_t currentRawCount = TIM_FRT_GET_16();
-    const uint16_t deltaCount = (uint16_t)(currentRawCount - sdl_profilerPreviousRawCount);
-    sdl_profilerPreviousRawCount = currentRawCount;
-    sdl_profilerElapsedMicros += TIM_FRT_CNT_TO_MCR(deltaCount);
-    return (uint32_t)sdl_profilerElapsedMicros;
+    const SRL::Tickstamp elapsed = SRL::Timer::Capture() - sdl_profilerStart;
+    const uint32_t secondsRaw = (uint32_t)elapsed.ToSeconds().RawValue();
+    return (uint32_t)(((uint64_t)secondsRaw * 1000000ull) >> 16);
 }
 
 static inline void SDL_Delay(uint32_t ms) {
