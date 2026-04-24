@@ -59,12 +59,13 @@ static bool sglStartupSelfTestPlayed = false;
 static int16_t chunk[CHUNK_NUM];
 static bool ponesoundDriverInitialized = false;
 static bool chunkInvalidWarned[CHUNK_NUM];
+static bool chunkReloadAttempted[CHUNK_NUM];
 
 static int16_t loadPonesoundChunkWithRetry(const uint8_t* data, int32_t size)
 {
   int16_t id = -1;
   // -7 means M68K-side pcmCtrl is not ready yet; tick and retry a few times.
-  for (int attempt = 0; attempt < 8; ++attempt)
+  for (int attempt = 0; attempt < 64; ++attempt)
   {
     id = SRL::Ponesound::Pcm::LoadPcmFromMemory(data, size, SRL::Ponesound::BitDepth::PCM16, 32000);
     if (id != -7)
@@ -72,11 +73,42 @@ static int16_t loadPonesoundChunkWithRetry(const uint8_t* data, int32_t size)
       return id;
     }
 
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < 16; ++i)
     {
       SRL::Ponesound::Sound::Driver::Tick();
     }
   }
+  return id;
+}
+
+static int16_t loadPonesoundChunkFromCd(int idx)
+{
+  char name[32];
+  snprintf(name, sizeof(name), "%s.PCM", chunkName[idx]);
+
+  SRL::Cd::ChangeDir((char *)nullptr);
+  SRL::Cd::ChangeDir("SOUNDS");
+  SRL::Cd::File file(name);
+  if (!file.Open())
+  {
+    SRL::Cd::ChangeDir((char *)nullptr);
+    return -1;
+  }
+
+  const int32_t size = file.Size.Bytes;
+  uint8_t* raw = new uint8_t[size];
+  const int32_t readBytes = file.LoadBytes(0, size, raw);
+  file.Close();
+  SRL::Cd::ChangeDir((char *)nullptr);
+
+  if (readBytes != size)
+  {
+    delete[] raw;
+    return -2;
+  }
+
+  const int16_t id = loadPonesoundChunkWithRetry(raw, size);
+  delete[] raw;
   return id;
 }
 #endif
@@ -106,6 +138,7 @@ void closeSound() {
   for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
     chunkInvalidWarned[i] = false;
+    chunkReloadAttempted[i] = false;
   }
   SRL::Ponesound::Pcm::Unload(-1);
 #  endif
@@ -166,7 +199,10 @@ void loadSounds() {
 #  else
 #    if NOIZ2SA_ENABLE_PCM_SFX == 0
   SRL::Logger::LogWarning("[SOUND] Ponesound PCM SFX disabled (NOIZ2SA_ENABLE_PCM_SFX=0)");
-  for (int i = 0; i < CHUNK_NUM; i++) chunk[i] = -1;
+  for (int i = 0; i < CHUNK_NUM; i++) {
+    chunk[i] = -1;
+    chunkReloadAttempted[i] = false;
+  }
 #    else
   SRL::Logger::LogDebug("[CDDA] stop backend=Ponesound");
   uint8_t* rawBuffers[CHUNK_NUM] = {nullptr};
@@ -176,6 +212,7 @@ void loadSounds() {
   for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
     chunkInvalidWarned[i] = false;
+    chunkReloadAttempted[i] = false;
     char name[32];
     snprintf(name, sizeof(name), "%s.PCM", chunkName[i]);
     SRL::Logger::LogDebug("[SOUND] loadSounds (Ponesound): Loading %s", name);
@@ -286,6 +323,7 @@ void initSound() {
   for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
     chunkInvalidWarned[i] = false;
+    chunkReloadAttempted[i] = false;
   }
   SRL::Logger::LogWarning("[SOUND] Ponesound driver init skipped (NOIZ2SA_ENABLE_PCM_SFX=0)");
   ponesoundDriverInitialized = false;
@@ -388,6 +426,23 @@ void playChunk(int idx) {
   }
 #  else
   if (chunk[idx] < 0) {
+    // Recover from early M68K init races (-7) by retrying one lazy reload
+    // from CD the first time this chunk is requested.
+    if (!chunkReloadAttempted[idx]) {
+      chunkReloadAttempted[idx] = true;
+      const int16_t reloadedId = loadPonesoundChunkFromCd(idx);
+      if (reloadedId >= 0) {
+        chunk[idx] = reloadedId;
+        chunkInvalidWarned[idx] = false;
+      }
+    }
+
+    if (chunk[idx] >= 0) {
+      SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
+      SRL::Ponesound::Pcm::Play(chunk[idx], SRL::Ponesound::PlayMode::Volatile, 7);
+      return;
+    }
+
     if (!chunkInvalidWarned[idx]) {
       SRL::Logger::LogWarning("[SOUND] playChunk: chunk[%d] invalid (id=%d)", idx, chunk[idx]);
       chunkInvalidWarned[idx] = true;
