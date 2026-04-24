@@ -12,8 +12,8 @@
 #include "SDL.h"
 #include <stdio.h>
 #include <srl.hpp> // for malloc/free, atoi
+#include <srl_timer.hpp>
 #include <srl_log.hpp>    // for logging
-#include <srl_memory.hpp> // for explicit allocator initialization
 #include <srl_system.hpp> // for exit
 
 // Include Random class (must be AFTER SRL headers to avoid macro conflicts)
@@ -157,7 +157,7 @@ void initTitle()
   SRL::Logger::LogDebug("[TITLE] Game objects initialized");
 
   setStageBackground(1);
-  SRL::Logger::LogInfo("[CDDA] TITLE: forcing menu BGM playMusic(0)");
+  SRL::Logger::LogDebug("[CDDA] TITLE: forcing menu BGM playMusic(0)");
   playMusic(0);
   initTitleStage(stg);
   showScore();
@@ -187,7 +187,7 @@ void initGame(int stg)
   if (stg < STAGE_NUM)
   {
     setStageBackground(stg % 5 + 1);
-    SRL::Logger::LogInfo("[CDDA] IN_GAME: playMusic(%d) for stage=%d", stg % 5 + 1, stg);
+    SRL::Logger::LogDebug("[CDDA] IN_GAME: playMusic(%d) for stage=%d", stg % 5 + 1, stg);
     playMusic(stg % 5 + 1);
     SRL::Logger::LogDebug("[GAME] Stage %d: Background/Music set to %d", stg, stg % 5 + 1);
   }
@@ -196,15 +196,15 @@ void initGame(int stg)
     if (!insane)
     {
       setStageBackground(0);
-      SRL::Logger::LogInfo("[CDDA] IN_GAME endless-normal: playMusic(0)");
+      SRL::Logger::LogDebug("[CDDA] IN_GAME endless-normal: playMusic(0)");
       playMusic(0);
     }
     else
     {
       setStageBackground(6);
-      SRL::Logger::LogInfo("[CDDA] IN_GAME endless-insane: playMusic(6)");
+      SRL::Logger::LogDebug("[CDDA] IN_GAME endless-insane: playMusic(6)");
       playMusic(6);
-      SRL::Logger::LogInfo("[GAME] Endless stage: INSANE mode activated");
+      SRL::Logger::LogDebug("[GAME] Endless stage: INSANE mode activated");
     }
   }
 
@@ -387,10 +387,20 @@ static const uint32_t kUiRenderDivisor = 1;
 static uint32_t gInGameRenderCounter = 0;
 static uint32_t gStalledTickFrames = 0;
 static bool gUseFixedFramePacing = false;
+static uint32_t gFpsTimes100 = 0;
+static uint32_t gSyncCount = 0;
+
+static void drawFpsCounter()
+{
+  const int32_t fpsWhole = (int32_t)(gFpsTimes100 / 100u);
+  const int32_t fpsFrac = (int32_t)(gFpsTimes100 % 100u);
+
+  SRL::Debug::PrintClearLine(2);
+  SRL::Debug::Print(1, 2, "FPS: %d.%02d", (int)fpsWhole, (int)fpsFrac);
+}
 
 int main()
 {
-  SRL::Memory::Initialize();
   SRL::Logger::LogInfo("[MAIN] Noiz2sa startup (v%d)", VERSION_NUM);
 
   int done = 0;
@@ -403,7 +413,6 @@ int main()
   // Initialize the SRL core (graphics/video setup?)
   // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
   SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
-
 
   // Define loading steps for main()
   const char* mainSteps[] = {
@@ -581,6 +590,26 @@ int main()
       phaseStartUs = SDL_GetProfileMicros();
       flipScreen();
       timeFlipUs = SDL_GetProfileMicros() - phaseStartUs;
+
+      // Update FPS from completed synchronized presents since the previous
+      // rendered frame. This avoids SRL::Core::OnVblank callback registration,
+      // which is unsafe here because SRL event vectors allocate before the
+      // project heap is initialized.
+      {
+        static uint32_t sLastSyncCount = 0;
+        const uint32_t elapsed = gSyncCount - sLastSyncCount;
+        sLastSyncCount = gSyncCount;
+        if (elapsed > 0u)
+        {
+          gFpsTimes100 = 6000u / elapsed;
+        }
+        else if (gFpsTimes100 == 0u)
+        {
+          gFpsTimes100 = 6000u; // first-frame boot default
+        }
+      }
+
+      drawFpsCounter();
     }
 
     phaseStartUs = SDL_GetProfileMicros();
@@ -594,6 +623,8 @@ int main()
     if (!gUseFixedFramePacing && nowTick > 0)
     {
       SRL::Core::Synchronize();
+      gSyncCount++;
+      soundTick(); // Pump M68K driver every frame (replaces unsafe OnVblank callback)
     }
     else
     {
@@ -604,13 +635,14 @@ int main()
   #endif
     uint32_t timeSyncUs = SDL_GetProfileMicros() - phaseStartUs;
 
+    const uint32_t totalUs = timeMoveUs + timeSmokeUs + timeDrawUs + timeFlipUs + timeSyncUs;
+
     // Log timing every 60 frames (~10 sec at 6 FPS)
     static uint32_t frameCount = 0;
     frameCount++;
     if ((frameCount % 60) == 0)
     {
-      const uint32_t totalUs = timeMoveUs + timeSmokeUs + timeDrawUs + timeFlipUs + timeSyncUs;
-      const uint32_t fpsTimes100 = (totalUs > 0) ? (100000000u / totalUs) : 0u;
+      const uint32_t fpsTimes100 = gFpsTimes100;
       SRL::Logger::LogDebug(
                           "[PERF_US] move=%lu smoke=%lu draw=%lu flip=%lu sync=%lu total=%lu fps=%lu.%02lu tick_ms=%lu frame=%d render=%d rdiv=%lu fixed=%d stalled=%lu status=%d dbuf_off=%d",
           (unsigned long)timeMoveUs,
