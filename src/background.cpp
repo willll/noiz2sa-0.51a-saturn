@@ -208,7 +208,7 @@ static void uploadBackgroundBitmap(const uint16_t *src)
   uint8_t *dstRow = (uint8_t *)backgroundLayerVram + (BACKGROUND_SCREEN_X * (int)sizeof(uint16_t));
   for (int row = 0; row < LAYER_HEIGHT; row++)
   {
-    DMA_ScuMemCopy((void *)srcRow, dstRow, LAYER_WIDTH * sizeof(uint16_t));
+    DMA_ScuMemCopy(dstRow, (void *)srcRow, LAYER_WIDTH * sizeof(uint16_t));
     srcRow += LAYER_WIDTH * sizeof(uint16_t);
     dstRow += BACKGROUND_BITMAP_WIDTH * sizeof(uint16_t);
   }
