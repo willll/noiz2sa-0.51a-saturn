@@ -105,13 +105,14 @@ static inline uint32_t SDL_GetProfileMicros(void);
 
 static inline void SDL_CopyBytes(void* dst, const void* src, uint32_t byteCount)
 {
-    uint8_t* d8 = (uint8_t*)dst;
-    const uint8_t* s8 = (const uint8_t*)src;
+    // uint8_t* d8 = (uint8_t*)dst;
+    // const uint8_t* s8 = (const uint8_t*)src;
 
-    while (byteCount-- > 0)
-    {
-        *d8++ = *s8++;
-    }
+    // while (byteCount-- > 0)
+    // {
+    //     *d8++ = *s8++;
+    // }
+    memcpy(dst, src, byteCount);
 }
 
 static inline void SDL_ClearDirtyRect(SRL_Surface* surface)
