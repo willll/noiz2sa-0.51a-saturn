@@ -52,3 +52,4 @@ cd/music/*.raw
 build_profile/**
 ss
 imgui.ini
+Tests/cd_bulletml/data/0.bin
