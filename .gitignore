@@ -50,3 +50,5 @@ cd/music/*.raw
 *.SGL.WAV
 0.bin
 build_profile/**
+ss
+imgui.ini
