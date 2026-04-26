@@ -1,3 +1,19 @@
+# === Line Drawing Path Options ===
+option(NOIZ2SA_ENABLE_HARDWARE_LINE "Enable hardware-accelerated line drawing" ON)
+option(NOIZ2SA_ENABLE_SOFTWARE_LINE "Enable software (buffer) line drawing" ON)
+
+# Gameplay performance toggles
+if(NOIZ2SA_ENABLE_HARDWARE_LINE)
+    add_compile_definitions(NOIZ2SA_ENABLE_HARDWARE_LINE=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_HARDWARE_LINE=0)
+endif()
+
+if(NOIZ2SA_ENABLE_SOFTWARE_LINE)
+    add_compile_definitions(NOIZ2SA_ENABLE_SOFTWARE_LINE=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_SOFTWARE_LINE=0)
+endif()
 cmake_minimum_required(VERSION 3.5)
 
 # ============================================================================
@@ -78,6 +94,14 @@ set(SRL_LOG_LEVEL "INFO" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
 set(SRL_LOG_OUTPUT "EMULATOR" CACHE STRING "Log output method")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
+
+# Performance/Debug logging option
+option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
+if(NOIZ2SA_ENABLE_PERF_LOGS)
+    add_compile_definitions(NOIZ2SA_ENABLE_PERF_LOGS=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_PERF_LOGS=0)
+endif()
 
 # Sound configuration
 option(SRL_USE_SGL_SOUND_DRIVER "Use SGL sound driver" OFF)
