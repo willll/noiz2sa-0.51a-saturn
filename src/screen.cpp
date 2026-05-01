@@ -29,6 +29,7 @@
 #include "gamepad.h"
 #include "canvas_palette.h"
 
+
 using namespace SRL::Math::Types;
 
 int brightness = DEFAULT_BRIGHTNESS;
@@ -325,10 +326,16 @@ static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &di
 
 static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect)
 {
+
   if (panelLayerVram == nullptr || src == nullptr)
   {
     return;
   }
+
+#if NOIZ2SA_PERF_MODE
+  // Force VRAM clear for playfield region before every upload in perf mode
+  SRL::VDP2::VRAM::Blank(panelLayerVram, panelLayerVramSize);
+#endif
 
   int srcX = dirtyRect.x;
   int srcY = dirtyRect.y;
@@ -796,6 +803,33 @@ void initSDL()
 
 void blendScreen()
 {
+#if NOIZ2SA_PERF_MODE
+  if (status == IN_GAME || status == PAUSE)
+  {
+    // Faster gameplay blend: opaque top layer avoids per-pixel alpha table lookups.
+    // Clear playfield first so stale pixels from previous frames do not persist.
+    memset(buf, 0, lyrSize);
+
+    for (int i = lyrSize - 1; i >= 0; i--)
+    {
+      if (l1buf[i] != 0)
+      {
+        buf[i] = l1buf[i];
+      }
+    }
+
+    // Force full playfield upload every frame in perf mode
+    SDL_SetSurfaceDirty(layer);
+    layer->dirtyX1 = 0;
+    layer->dirtyY1 = 0;
+    layer->dirtyX2 = LAYER_WIDTH;
+    layer->dirtyY2 = LAYER_HEIGHT;
+    return;
+  }
+#endif
+
+  // Rebuild this frame from the mid/background software layer first so
+  // foreground draws after blend do not accumulate stale pixels.
   SDL_CopyBytes(buf, l2buf, lyrSize);
 
   for (int i = lyrSize - 1; i >= 0; i--)
@@ -848,44 +882,6 @@ void flipScreen()
   SDL_Flip(video);
 
   flipCounter++;
-  if ((flipCounter % 60u) == 0u)
-  {
-    uint32_t calls = 0;
-    uint32_t uploads = 0;
-    uint32_t uploadPixels = 0;
-    uint32_t uploadUs = 0;
-    uint32_t drawUs = 0;
-    const bool expectedBlitWork = layer->dirty || (pendingLineCommandCount > 0) || panelUploaded;
-    const bool panelOnlyWork = (!layer->dirty && pendingLineCommandCount == 0 && panelUploaded);
-    SDL_GetBlitStats(&calls, &uploads, &uploadPixels, &uploadUs, &drawUs);
-    if (calls == 0 && expectedBlitWork && !panelOnlyWork)
-    {
-      SRL::Logger::LogWarning(
-          "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
-          (unsigned long)flipCounter,
-          (unsigned long)timeLayerUs,
-          (unsigned long)timeHwLineUs,
-          (unsigned long)(panelUploaded ? timePanelUs : 0),
-          (unsigned long)calls,
-          (unsigned long)uploads,
-          (unsigned long)uploadUs,
-          (unsigned long)drawUs);
-    }
-    else
-    {
-        SRL::Logger::LogInfo(
-          "[BLIT_US] frame=%lu layer=%lu lines=%lu panel_dma=%lu | calls=%lu uploads=%lu up=%lu draw=%lu",
-          (unsigned long)flipCounter,
-          (unsigned long)timeLayerUs,
-          (unsigned long)timeHwLineUs,
-          (unsigned long)(panelUploaded ? timePanelUs : 0),
-          (unsigned long)calls,
-          (unsigned long)uploads,
-          (unsigned long)uploadUs,
-          (unsigned long)drawUs);
-    }
-    SDL_ResetBlitStats();
-  }
 
 }
 
@@ -985,12 +981,15 @@ void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Ca
   lx = abs(x2 - x1);
   ly = abs(y2 - y1);
 
-  // Fast Saturn path: bullet wake lines are safe to emit in active gameplay only.
+
+  // Configurable hardware/software line path
+#if NOIZ2SA_ENABLE_HARDWARE_LINE
   if (buf == l1buf && status == IN_GAME)
   {
     if (width == 1)
     {
       queueHardwareLineCommand(x1, y1, x2, y2, color);
+      return;
     }
     else
     {
@@ -1005,9 +1004,14 @@ void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Ca
           layerRect.x,
           layerRect.y,
           500);
+      return;
     }
-    return;
   }
+#endif
+  // Always allow software path if enabled
+#if !NOIZ2SA_ENABLE_SOFTWARE_LINE
+  return;
+#endif
 
   if (lx < ly)
   {
@@ -1120,7 +1124,9 @@ void drawThickLine(int x1, int y1, int x2, int y2,
   ly = abs(y2 - y1);
   width1 = width - 2;
 
-  // Hardware path for gameplay thick lines keeps this effect off the software framebuffer.
+
+  // Configurable hardware/software thick line path
+#if NOIZ2SA_ENABLE_HARDWARE_LINE
   if (status == IN_GAME)
   {
     if (drawHardwareThickLine(
@@ -1138,6 +1144,10 @@ void drawThickLine(int x1, int y1, int x2, int y2,
       return;
     }
   }
+#endif
+#if !NOIZ2SA_ENABLE_SOFTWARE_LINE
+  return;
+#endif
 
   if (lx < ly)
   {

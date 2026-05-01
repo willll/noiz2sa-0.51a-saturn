@@ -220,6 +220,7 @@ void drawScore()
 
 void drawRPanel()
 {
+
   int y;
   const char *str = "LEFT";
   clearRPanel();

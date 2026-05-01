@@ -24,7 +24,7 @@
 static Board board[BOARD_MAX];
 static void *backgroundLayerVram = nullptr;
 static int backgroundLayerVramSize = 0;
-static uint16_t *backgroundBuffers[2] = { nullptr, nullptr };
+static uint16_t *backgroundBuffers[2] = {nullptr, nullptr};
 static uint32_t backgroundUploadedGeneration = 0;
 static uint32_t backgroundRequestedGeneration = 0;
 static bool backgroundUploadLogged = false;
@@ -36,6 +36,12 @@ static int bdIdx;
 static int boardMx, boardMy;
 static int boardRepx, boardRepy;
 static int boardRepXn, boardRepYn;
+// Render a new background bitmap at most every this many move ticks.
+// At 60hz tick rate this gives ~20fps background updates, freeing Slave SH2
+// and SCU DMA bandwidth for foes/bullets/ship on other ticks.
+static constexpr uint32_t kBgRenderDivisor = 3u;
+static uint32_t sBgMoveTick = 0u;
+
 static constexpr uint16_t BACKGROUND_BASE_COLOR = 0xffff;
 static constexpr uint32_t BACKGROUND_HASH_OFFSET = 2166136261u;
 static constexpr uint32_t BACKGROUND_HASH_PRIME = 16777619u;
@@ -64,12 +70,28 @@ static void rasterBackgroundRect(
 {
   int x = centerX - (width >> 1);
   int y = centerY - (height >> 1);
-  if (x < 0) { width += x; x = 0; }
-  if (x + width > LAYER_WIDTH) { width = LAYER_WIDTH - x; }
-  if (width <= 1) return;
-  if (y < 0) { height += y; y = 0; }
-  if (y + height > LAYER_HEIGHT) { height = LAYER_HEIGHT - y; }
-  if (height <= 1) return;
+  if (x < 0)
+  {
+    width += x;
+    x = 0;
+  }
+  if (x + width > LAYER_WIDTH)
+  {
+    width = LAYER_WIDTH - x;
+  }
+  if (width <= 1)
+    return;
+  if (y < 0)
+  {
+    height += y;
+    y = 0;
+  }
+  if (y + height > LAYER_HEIGHT)
+  {
+    height = LAYER_HEIGHT - y;
+  }
+  if (height <= 1)
+    return;
 
   int ptr = x + y * LAYER_WIDTH;
   fillBackgroundSpan(&(dst[ptr]), width, borderColor);
@@ -264,8 +286,8 @@ static void ensureBackgroundLayer()
   // HWRAM heap is only ~159KB total and is consumed by BulletML parse trees;
   // these 2×76KB buffers must come from LWRAM to avoid exhausting it.
   SRL::Logger::LogInfo("[BACKGROUND] HWRAM free before bg buffers: %lu LWRAM free: %lu",
-    (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace(),
-    (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace(),
+                       (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
   for (int i = 0; i < 2; i++)
   {
     const size_t bufSize = LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t);
@@ -273,13 +295,13 @@ static void ensureBackgroundLayer()
     if (backgroundBuffers[i] == nullptr)
     {
       SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate CPU background buffer %d (LWRAM free=%lu)",
-        i, (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+                            i, (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
       SRL::System::Exit(1);
     }
     memset(backgroundBuffers[i], 0, bufSize);
   }
   SRL::Logger::LogInfo("[BACKGROUND] bg buffers allocated OK: LWRAM free now %lu",
-    (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+                       (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
 
   SRL::VDP2::NBG0::SetCellAddress(backgroundLayerVram, backgroundLayerVramSize);
   SRL::VDP2::VRAM::Blank(backgroundLayerVram, backgroundLayerVramSize);
@@ -321,6 +343,7 @@ static void submitBackgroundRender()
       backgroundBuffers[bufferIndex],
       backgroundRequestedGeneration,
       bufferIndex);
+
   SRL::Slave::ExecuteOnSlave(backgroundRenderTask);
 }
 
@@ -536,6 +559,8 @@ void moveBackground()
 {
   int i;
   Board *bd;
+  // Always update scroll positions — cheap integer math, needed every tick
+  // for correct game-speed scrolling regardless of render rate.
   for (i = 0; i < bdIdx; i++)
   {
     bd = &(board[i]);
@@ -545,7 +570,14 @@ void moveBackground()
     bd->y &= (boardRepy - 1);
   }
 
-  submitBackgroundRender();
+  // Submit a new Slave SH2 render only every kBgRenderDivisor ticks.
+  // This keeps background at low priority (~20fps at 60hz) so foes,
+  // bullets and ship always get the Slave SH2 and SCU DMA first.
+  sBgMoveTick++;
+  if ((sBgMoveTick % kBgRenderDivisor) == 0u)
+  {
+    submitBackgroundRender();
+  }
 }
 
 void drawBackground()
@@ -561,6 +593,10 @@ unsigned int getBackgroundDebugBitmapHash()
   {
     return 0u;
   }
+
+  // Render current board state synchronously so the hash reflects the latest
+  // board positions regardless of the render divisor or async Slave SH2 state.
+  renderBackgroundBitmap(board, boardRepx, boardRepy, boardRepXn, boardRepYn, backgroundBuffers[0]);
 
   uint32_t hash = BACKGROUND_HASH_OFFSET;
   const uint16_t *pixels = backgroundBuffers[0];

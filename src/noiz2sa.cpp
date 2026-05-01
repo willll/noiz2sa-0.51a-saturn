@@ -35,6 +35,7 @@
 #include "gamepad.h"
 #include "loading_screen.h"
 
+
 static int noSound = 0;
 
 // Thin wrapper kept for compatibility with callers in other translation units
@@ -401,8 +402,19 @@ static void draw()
     drawBackground();
     drawBonuses();
     drawFoes();
+#if NOIZ2SA_PERF_MODE
+    if ((tick & 1) == 0)
+    {
+      drawBulletsWake();
+    }
+    if ((tick & 1) == 0)
+    {
+      drawFrags();
+    }
+#else
     drawBulletsWake();
     drawFrags();
+#endif
     blendScreen();
     // Draw forground.
     drawShots();
@@ -442,7 +454,15 @@ static void draw()
     drawBackground();
     drawBonuses();
     drawFoes();
+#if NOIZ2SA_PERF_MODE
+    // Keep pause overlay responsive with lower VDP1 workload.
+    if ((tick & 1) == 0)
+    {
+      drawBulletsWake();
+    }
+#else
     drawBulletsWake();
+#endif
     drawFrags();
     blendScreen();
     // Draw forground.
@@ -489,6 +509,7 @@ static uint32_t gInGameRenderCounter = 0;
 static uint32_t gStalledTickFrames = 0;
 static bool gUseFixedFramePacing = false;
 static uint32_t gFpsTimes100 = 0;
+static uint32_t gLastDisplayedFpsTimes100 = 0xFFFFFFFFu;
 static uint32_t gFpsWindowStartMs = 0;
 static uint32_t gRenderedFramesInWindow = 0;
 static bool gFpsWindowInitialized = false;
@@ -502,6 +523,10 @@ static bool gAutoStartTriggered = false;
 
 static void drawFpsCounter()
 {
+  if (gFpsTimes100 == gLastDisplayedFpsTimes100)
+    return;
+  gLastDisplayedFpsTimes100 = gFpsTimes100;
+
   const int32_t fpsWhole = (int32_t)(gFpsTimes100 / 100u);
   const int32_t fpsFrac = (int32_t)(gFpsTimes100 % 100u);
 
@@ -814,46 +839,9 @@ int main()
     frameCount++;
     if ((frameCount % 60) == 0)
     {
-      const uint32_t fpsTimes100 = gFpsTimes100;
-      SRL::Logger::LogInfo(
-                          "[PERF_US] move=%lu smoke=%lu draw=%lu flip=%lu sync=%lu total=%lu fps=%lu.%02lu tick_ms=%lu frame=%d render=%d rdiv=%lu fixed=%d stalled=%lu status=%d dbuf_off=%d",
-          (unsigned long)timeMoveUs,
-          (unsigned long)timeSmokeUs,
-          (unsigned long)timeDrawUs,
-          (unsigned long)timeFlipUs,
-          (unsigned long)timeSyncUs,
-          (unsigned long)totalUs,
-          (unsigned long)(fpsTimes100 / 100u),
-          (unsigned long)(fpsTimes100 % 100u),
-          (unsigned long)nowTick,
-                    frame,
-              renderThisLoop ? 1 : 0,
-              (unsigned long)renderDivisor,
-              gUseFixedFramePacing ? 1 : 0,
-              (unsigned long)gStalledTickFrames,
-                  status,
-                  NOIZ2SA_DISABLE_DOUBLE_BUFFER);
-      
-      // Log move-phase subsystem breakdown if any frames were processed
+      // Reset accumulators every 60-frame window.
       if (gMovePhaseFrameCount > 0)
       {
-        const uint32_t avgFrames = gMovePhaseFrameCount;
-        SRL::Logger::LogInfo(
-                            "[PERF_MOVE] f=%lu bg=%lu add=%lu sh=%lu ship=%lu foes=%lu fr=%lu bn=%lu t=%lu go=%lu sc=%lu p=%lu",
-            (unsigned long)avgFrames,
-            (unsigned long)gMovePhaseTimings.background,
-            (unsigned long)gMovePhaseTimings.addBullets,
-            (unsigned long)gMovePhaseTimings.shots,
-            (unsigned long)gMovePhaseTimings.ship,
-            (unsigned long)gMovePhaseTimings.foes,
-            (unsigned long)gMovePhaseTimings.frags,
-            (unsigned long)gMovePhaseTimings.bonuses,
-            (unsigned long)gMovePhaseTimings.titleMenu,
-            (unsigned long)gMovePhaseTimings.gameOver,
-            (unsigned long)gMovePhaseTimings.stageClear,
-            (unsigned long)gMovePhaseTimings.pause);
-        
-        // Reset accumulators for next 60-frame window
         gMovePhaseTimings = MovePhaseTimings{};
         gMovePhaseFrameCount = 0;
       }

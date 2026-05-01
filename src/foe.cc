@@ -44,6 +44,17 @@ static unsigned long bulletSpawnFailed = 0;
 static unsigned long bulletRemovedOffscreen = 0;
 static unsigned long bulletRemovedHitShip = 0;
 
+// Hard projectile budget for Saturn hardware stability.
+// This keeps moveFoes bounded so ship/foe updates stay responsive under stress.
+static constexpr int kMaxActiveBullets = 160;
+static constexpr int kMaxNormalBullets = 256;
+static constexpr int kMaxBossActiveBullets = 64;
+static constexpr int kMaxTotalProjectiles = 420;
+
+static int sLiveActiveBullets = 0;
+static int sLiveNormalBullets = 0;
+static int sLiveBossActiveBullets = 0;
+
 static inline int getFoeIndex(const Foe *fe)
 {
   return (int)(fe - foe);
@@ -125,6 +136,22 @@ static bool bulletHitsShip(const Foe *fe)
 
 static void removeFoeForcedNoDeleteCmd(Foe *fe)
 {
+  if (fe->spc == ACTIVE_BULLET)
+  {
+    if (sLiveActiveBullets > 0)
+      sLiveActiveBullets--;
+  }
+  else if (fe->spc == BULLET)
+  {
+    if (sLiveNormalBullets > 0)
+      sLiveNormalBullets--;
+  }
+  else if (fe->spc == BOSS_ACTIVE_BULLET)
+  {
+    if (sLiveBossActiveBullets > 0)
+      sLiveBossActiveBullets--;
+  }
+
   if (fe->spc == FOE)
   {
     foeCnt--;
@@ -170,6 +197,9 @@ void initFoes()
   bulletSpawnFailed = 0;
   bulletRemovedOffscreen = 0;
   bulletRemovedHitShip = 0;
+  sLiveActiveBullets = 0;
+  sLiveNormalBullets = 0;
+  sLiveBossActiveBullets = 0;
 }
 
 void closeFoes()
@@ -238,18 +268,35 @@ Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
 Foe *addFoeBossActiveBullet(int x, int y, Fxp rank,
                             int d, int spd, BulletMLParserBLB *parser)
 {
+  const int totalProjectiles = sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets;
+  if (sLiveBossActiveBullets >= kMaxBossActiveBullets ||
+      totalProjectiles >= kMaxTotalProjectiles)
+  {
+    bulletSpawnFailed++;
+    return nullptr;
+  }
+
   Foe *fe = addFoe(x, y, rank, d, spd, BOSS_TYPE, 0, parser);
   if (!fe)
     return nullptr;
   foeCnt--;
   enNum[BOSS_TYPE]--;
   fe->spc = BOSS_ACTIVE_BULLET;
+  sLiveBossActiveBullets++;
   return fe;
 }
 
 void addFoeActiveBullet(Vector *pos, Fxp rank,
                         int d, int spd, int color, BulletMLState *state)
 {
+  const int totalProjectiles = sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets;
+  if (sLiveActiveBullets >= kMaxActiveBullets ||
+      totalProjectiles >= kMaxTotalProjectiles)
+  {
+    bulletSpawnFailed++;
+    return;
+  }
+
   Foe *fe = getNextFoe();
   if (!fe)
   {
@@ -268,10 +315,19 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
   fe->color = color;
   markFoeSlotActive(fe);
   bulletSpawnedActive++;
+  sLiveActiveBullets++;
 }
 
 void addFoeNormalBullet(Vector *pos, Fxp rank, int d, int spd, int color)
 {
+  const int totalProjectiles = sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets;
+  if (sLiveNormalBullets >= kMaxNormalBullets ||
+      totalProjectiles >= kMaxTotalProjectiles)
+  {
+    bulletSpawnFailed++;
+    return;
+  }
+
   Foe *fe = getNextFoe();
   if (!fe)
   {
@@ -290,6 +346,7 @@ void addFoeNormalBullet(Vector *pos, Fxp rank, int d, int spd, int color)
   fe->color = color;
   markFoeSlotActive(fe);
   bulletSpawnedNormal++;
+  sLiveNormalBullets++;
 }
 
 #define BULLET_WIPE_WIDTH 7200
@@ -329,10 +386,11 @@ static int enemyScore[] = {500, 1000, 5000, 50000};
 int processSpeedDownBulletsNum = DEFAULT_SPEED_DOWN_BULLETS_NUM;
 int insanespeed = 0;
 int nowait = 0;
+static int sFoeUpdateCursor = 0;
 
 void moveFoes()
 {
-  int i, j;
+  int j;
   Foe *fe;
   int foeNum = 0;
   int activeBulletNum = 0;
@@ -340,8 +398,33 @@ void moveFoes()
   int bossActiveBulletNum = 0;
   int mx, my;
   int wl;
-  for (i = 0; i < foeActiveCount;)
+
+  int updateBudget = foeActiveCount;
+#if NOIZ2SA_PERF_MODE
+  if (status == IN_GAME || status == GAMEOVER || status == PAUSE)
   {
+    if (updateBudget > NOIZ2SA_FOE_UPDATE_BUDGET)
+    {
+      updateBudget = NOIZ2SA_FOE_UPDATE_BUDGET;
+    }
+  }
+#endif
+
+  if (foeActiveCount > 0 && sFoeUpdateCursor >= foeActiveCount)
+  {
+    sFoeUpdateCursor = 0;
+  }
+
+  int i = sFoeUpdateCursor;
+  int processed = 0;
+  while (processed < updateBudget && foeActiveCount > 0)
+  {
+    if (i >= foeActiveCount)
+    {
+      i = 0;
+    }
+
+    processed++;
     fe = &(foe[foeActiveIndices[i]]);
 
     if (fe->type < 0 || fe->type >= FOE_TYPE_MAX)
@@ -463,8 +546,11 @@ void moveFoes()
     i++;
   }
 
+  sFoeUpdateCursor = (foeActiveCount > 0) ? (i % foeActiveCount) : 0;
+
   // A game speed becomes slow as many bullets appears.
   interval = INTERVAL_BASE;
+#if !NOIZ2SA_DISABLE_BULLET_SLOWDOWN
   if (!insane && !nowait && foeNum > processSpeedDownBulletsNum)
   {
     interval += (foeNum - processSpeedDownBulletsNum) * INTERVAL_BASE /
@@ -472,6 +558,7 @@ void moveFoes()
     if (interval > INTERVAL_BASE * 2)
       interval = INTERVAL_BASE * 2;
   }
+#endif
 }
 
 void clearFoes()

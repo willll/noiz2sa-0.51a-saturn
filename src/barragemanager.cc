@@ -352,6 +352,7 @@ static Foe *bossBullet;
 void addBullets() {
   int x, y, i;
   int type, frq;
+  int spawnBudget = NOIZ2SA_SPAWN_BUDGET_PER_TICK;
 
   // Scene time control.
   sceneCnt--;
@@ -382,6 +383,11 @@ void addBullets() {
   if ( sceneCnt < SCENE_END_TERM ) return;
 
   for ( i=0 ; i<barrageNum ; i++ ) {
+    if (spawnBudget <= 0)
+    {
+      break;
+    }
+
     if ( bossMode ) {
       if ( i > 0 ) break;
       if ( zakoAppCnt <= 0 ) break;
@@ -391,18 +397,24 @@ void addBullets() {
     // An additional enemy appears when there is no enemy of the same type.
     if ( type == quickAppType && enNum[type] == 0 ) {
       x = pax; y = pay;
-      addFoe(x, y, barrage[i]->rank, 512, 0, type, shield[type], barrage[i]->bulletml);
+      if (addFoe(x, y, barrage[i]->rank, 512, 0, type, shield[type], barrage[i]->bulletml) != nullptr)
+      {
+        spawnBudget--;
+      }
     }
 
     frq = appFreq[type]/barrage[i]->frq;
     if ( frq < 2 ) frq = 2;
-    if ( (nextRandInt(&rnd)%frq) == 0 ) {
+    if ( spawnBudget > 0 && (nextRandInt(&rnd)%frq) == 0 ) {
       x = nextRandInt(&rnd)%(SCAN_WIDTH_8*2/3) + (SCAN_WIDTH_8/6);
       y = nextRandInt(&rnd)%(SCAN_HEIGHT_8/6) + (SCAN_HEIGHT_8/10);
       if ( type == quickAppType ) {
 	pax = x; pay = y;
       }
-      addFoe(x, y, barrage[i]->rank, 512, 0, type, shield[type], barrage[i]->bulletml);
+      if (addFoe(x, y, barrage[i]->rank, 512, 0, type, shield[type], barrage[i]->bulletml) != nullptr)
+      {
+        spawnBudget--;
+      }
     }
   }
 }

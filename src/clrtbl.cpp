@@ -13,7 +13,7 @@
 
 
 SRL::Types::HighColor color[256] = {
-    SRL::Types::HighColor(255, 255, 255),
+    SRL::Types::HighColor(0, 0, 0),
     SRL::Types::HighColor(225, 225, 225),
     SRL::Types::HighColor(210, 210, 210),
     SRL::Types::HighColor(195, 195, 195),

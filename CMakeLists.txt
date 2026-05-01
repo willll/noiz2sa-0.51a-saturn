@@ -124,6 +124,10 @@ set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=ha
 set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
 option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
 option(NOIZ2SA_DEBUG_AUTOSTART_SMOKE "Debug-only: auto-start gameplay from title for deterministic smoke runs" OFF)
+option(NOIZ2SA_PERF_MODE "Enable performance mode (disables non-essential draws for benchmarking)" OFF)
+option(NOIZ2SA_DISABLE_BULLET_SLOWDOWN "Disable bullet slowdown when foe count is high" ON)
+set(NOIZ2SA_SPAWN_BUDGET_PER_TICK "2" CACHE STRING "Maximum new enemies spawned per tick")
+set(NOIZ2SA_FOE_UPDATE_BUDGET "160" CACHE STRING "Maximum foe updates processed per tick")
 
 # Background color after loading
 set(NOIZ2SA_POST_LOAD_BG_COLOR "BLUE" CACHE STRING "Background color after loading completes")
@@ -246,6 +250,23 @@ if(NOIZ2SA_DISABLE_DOUBLE_BUFFER)
 else()
     add_compile_definitions(NOIZ2SA_DISABLE_DOUBLE_BUFFER=0)
 endif()
+
+if(NOIZ2SA_PERF_MODE)
+    add_compile_definitions(NOIZ2SA_PERF_MODE=1)
+else()
+    add_compile_definitions(NOIZ2SA_PERF_MODE=0)
+endif()
+
+if(NOIZ2SA_DISABLE_BULLET_SLOWDOWN)
+    add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=1)
+else()
+    add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=0)
+endif()
+
+add_compile_definitions(
+    NOIZ2SA_SPAWN_BUDGET_PER_TICK=${NOIZ2SA_SPAWN_BUDGET_PER_TICK}
+    NOIZ2SA_FOE_UPDATE_BUDGET=${NOIZ2SA_FOE_UPDATE_BUDGET}
+)
 
 # SGL Work Area
 add_compile_definitions(
