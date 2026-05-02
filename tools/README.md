@@ -6,12 +6,14 @@ This directory contains utility tools for the Noiz2sa Saturn port.
 
 - `run_mednafen.sh`: Launches Mednafen with the default image `BuildDrop/noiz2sa.cue`
 - `run_kronos.sh`: Launches Kronos with `QT_QPA_PLATFORM="xcb"` and `BuildDrop/noiz2sa.cue`
+- `run_on_saturn.bat`: Polyglot script to launch on Saturn hardware via USBGamers (requires SRL_INSTALL_ROOT)
 
 Usage:
 
 ```bash
 ./tools/run_mednafen.sh
 ./tools/run_kronos.sh
+./tools/run_on_saturn.bat
 ```
 
 ## BulletML Converter

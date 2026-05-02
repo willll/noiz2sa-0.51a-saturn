@@ -148,6 +148,45 @@ cmake --build build
 | `SRL_CUSTOM_CCFLAGS` | string | Additional compiler flags |
 | `SRL_CUSTOM_LDFLAGS` | string | Additional linker flags |
 
+### Hardware Debug Mode (HW_DEBUG)
+
+The `HW_DEBUG` option enables a special build configuration for testing on real Saturn hardware using development cartridges (USBGamers) and optional remote power control via ESP-SaturnPSU_Control.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `HW_DEBUG` | ON/OFF | OFF | Enable hardware debug mode (no CD assets) |
+| `HW_DEBUG_ENDLESS_STAGE` | 10-13 | 10 | Endless stage to boot directly (10=Zako, 11=Middle, 12=Boss, 13=Bonus) |
+
+**When HW_DEBUG=ON:**
+- BulletML patterns are embedded at compile time (no CD load)
+- Sound system is disabled (PCM SFX + CDDA disabled)
+- Logs output to DEV_CART (Saturn debug cartridge)
+- Game boots directly to specified endless stage
+- No CD image required for testing
+
+**Quick Start:**
+```bash
+# Hardware debug build
+cmake -B build_hw_debug -DHW_DEBUG=ON
+
+# Boot to Boss stage instead of default (Zako)
+cmake -B build_hw_debug -DHW_DEBUG=ON -DHW_DEBUG_ENDLESS_STAGE=12
+
+# Build
+cmake --build build_hw_debug
+
+# Upload to Saturn via USBGamers cartridge
+./tools/run_on_saturn.bat
+```
+
+**Complete HW_DEBUG documentation**: See [HW_DEBUG_GUIDE.md](HW_DEBUG_GUIDE.md)
+
+**Use Cases:**
+- Rapid iteration testing on real hardware without CD image overhead
+- Debugging collision or rendering issues in hardware context
+- Automated test campaigns with optional ESP-SaturnPSU_Control hardware power control
+- Verifying hardware compatibility before CD release
+
 ## Build Process Details
 
 ### 1. Configuration Phase

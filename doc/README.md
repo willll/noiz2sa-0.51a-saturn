@@ -33,12 +33,14 @@ cmake --build build
 ```
 
 **Build Outputs:**
-- `build/noiz2sa.elf` - Main executable
-- `build/cd/data/0.bin` - Saturn binary format (auto-generated)
-- `build/cd/data/` - Asset directory with required metadata files
-- `build/cd/music/` - Music asset directory
+- `BuildDrop/noiz2sa.elf` - Main executable
+- `BuildDrop/noiz2sa.bin` - Saturn binary format (CD image)
+- `BuildDrop/IP.BIN` - CD metadata and system information
+- `BuildDrop/noiz2sa.cue` - CUE sheet for CD emulators
 
 ### Create ISO Image
+
+ISO images are generated automatically if `postbuild.cmake` is present:
 
 ```bash
 # Enable ISO creation
@@ -47,7 +49,7 @@ cp postbuild.cmake.example postbuild.cmake
 # Rebuild
 cmake --build build
 
-# Outputs: build/noiz2sa.iso and build/noiz2sa.cue
+# Outputs: BuildDrop/noiz2sa.iso and BuildDrop/noiz2sa.cue
 ```
 
 ### Documentation

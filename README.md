@@ -33,12 +33,14 @@ cmake --build build
 ```
 
 **Build Outputs:**
-- `build/noiz2sa.elf` - Main executable
-- `build/cd/data/0.bin` - Saturn binary format (auto-generated)
-- `build/cd/data/` - Asset directory with required metadata files
-- `build/cd/music/` - Music asset directory
+- `BuildDrop/noiz2sa.elf` - Main executable
+- `BuildDrop/noiz2sa.bin` - Saturn binary format (CD image)
+- `BuildDrop/IP.BIN` - CD metadata and system information
+- `BuildDrop/noiz2sa.cue` - CUE sheet for CD emulators
 
 ### Create ISO Image
+
+ISO images are generated automatically if `postbuild.cmake` is present:
 
 ```bash
 # Enable ISO creation
@@ -47,15 +49,31 @@ cp postbuild.cmake.example postbuild.cmake
 # Rebuild
 cmake --build build
 
-# Outputs: build/noiz2sa.iso and build/noiz2sa.cue
+# Outputs: BuildDrop/noiz2sa.iso and BuildDrop/noiz2sa.cue
 ```
 
 ### Documentation
 
 - [BUILD_GUIDE.md](BUILD_GUIDE.md) - Complete build instructions and configuration options
+- [HW_DEBUG_GUIDE.md](HW_DEBUG_GUIDE.md) - Hardware debug mode for real Saturn testing with development cartridges
 - [BUILD_SYSTEM_SUMMARY.md](BUILD_SYSTEM_SUMMARY.md) - SaturnRingLib and build system integration summary
 - [doc/BINARY_PARSER_README.md](doc/BINARY_PARSER_README.md) - BulletML binary parser integration guide
 - [doc/BINARY_FORMAT.md](doc/BINARY_FORMAT.md) - BulletML binary format specification
+
+## Hardware Testing
+
+For testing on real Sega Saturn hardware with development cartridges (USBGamers) and optional remote power control:
+
+```bash
+# Build in HW_DEBUG mode (no CD assets, embedded patterns)
+cmake -B build_hw_debug -DHW_DEBUG=ON
+cmake --build build_hw_debug
+
+# Upload to Saturn hardware
+./tools/run_on_saturn.bat
+```
+
+See [HW_DEBUG_GUIDE.md](HW_DEBUG_GUIDE.md) for complete instructions, including optional ESP-SaturnPSU_Control device integration for automated hardware control via REST API.
 
 ## Upstream / Legacy Readme
 

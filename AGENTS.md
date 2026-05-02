@@ -6,7 +6,7 @@ Sega Saturn port of Kenta Cho's bullet-hell shooter, cross-compiled for SH-2 usi
 
 ```bash
 cmake -B build          # Configure (requires /opt/saturn toolchain)
-cmake --build build     # Compile → build/noiz2sa.elf + CD image
+cmake --build build     # Compile → BuildDrop/noiz2sa.elf + CD image
 ```
 
 Full options documented in [BUILD_GUIDE.md](BUILD_GUIDE.md). Key CMake flags:
@@ -17,6 +17,23 @@ Full options documented in [BUILD_GUIDE.md](BUILD_GUIDE.md). Key CMake flags:
 | `NOIZ2SA_SCREEN_DIVISOR` | `1` | `2`/`4` for lower resolution |
 | `NOIZ2SA_ENABLE_SMOKE` | OFF | Smoke/afterimage effects |
 | `DEBUG` | OFF | Debug logging |
+| `HW_DEBUG` | OFF | Hardware debug mode (no CD, embedded patterns) |
+
+### Hardware Debug Mode (HW_DEBUG)
+
+For real Saturn hardware testing with development cartridges:
+
+```bash
+cmake -B build_hw_debug -DHW_DEBUG=ON      # Embedded patterns, no audio
+cmake --build build_hw_debug               # Compile for cartridge
+./tools/run_on_saturn.bat                  # Upload via USBGamers
+
+# With optional ESP-SaturnPSU_Control for automated power control
+curl -X POST http://192.168.1.100/api/v1/on   # Power ON via REST API
+./tools/run_on_saturn.bat                      # Upload build
+```
+
+See [HW_DEBUG_GUIDE.md](HW_DEBUG_GUIDE.md) for complete instructions and ESP-SaturnPSU_Control REST API reference.
 
 ## Testing
 

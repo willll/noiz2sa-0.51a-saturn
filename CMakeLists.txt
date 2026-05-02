@@ -128,6 +128,22 @@ option(NOIZ2SA_PERF_MODE "Enable performance mode (disables non-essential draws 
 option(NOIZ2SA_DISABLE_BULLET_SLOWDOWN "Disable bullet slowdown when foe count is high" ON)
 set(NOIZ2SA_SPAWN_BUDGET_PER_TICK "2" CACHE STRING "Maximum new enemies spawned per tick")
 set(NOIZ2SA_FOE_UPDATE_BUDGET "160" CACHE STRING "Maximum foe updates processed per tick")
+option(HW_DEBUG "Hardware debug mode: run without CD-backed files or audio assets" OFF)
+set(HW_DEBUG_ENDLESS_STAGE "10" CACHE STRING "Endless stage index to boot directly in HW_DEBUG mode (10-13)")
+set_property(CACHE HW_DEBUG_ENDLESS_STAGE PROPERTY STRINGS 10 11 12 13)
+
+if(HW_DEBUG)
+    set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
+    set(NOIZ2SA_ENABLE_SOUND OFF CACHE BOOL "Enable in-game sound (PCM SFX + CDDA BGM)" FORCE)
+    set(NOIZ2SA_ENABLE_PCM_SFX OFF CACHE BOOL "Enable PCM SFX loading through Ponesound backend" FORCE)
+
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+    file(GLOB HW_DEBUG_ZAKO_BLB_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/noiz2sa_share/zako_blb/*.blb")
+    file(GLOB HW_DEBUG_MIDDLE_BLB_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/noiz2sa_share/middle_blb/*.blb")
+    file(GLOB HW_DEBUG_BOSS_BLB_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/noiz2sa_share/boss_blb/*.blb")
+    set(HW_DEBUG_BULLETML_OUTPUT "${CMAKE_BINARY_DIR}/generated/hw_debug_bulletml_embedded.hpp")
+    include("${CMAKE_SOURCE_DIR}/cmake/generate_hw_debug_bulletml.cmake")
+endif()
 
 # Background color after loading
 set(NOIZ2SA_POST_LOAD_BG_COLOR "BLUE" CACHE STRING "Background color after loading completes")
@@ -263,7 +279,14 @@ else()
     add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=0)
 endif()
 
+if(HW_DEBUG)
+    add_compile_definitions(HW_DEBUG=1)
+else()
+    add_compile_definitions(HW_DEBUG=0)
+endif()
+
 add_compile_definitions(
+    HW_DEBUG_ENDLESS_STAGE=${HW_DEBUG_ENDLESS_STAGE}
     NOIZ2SA_SPAWN_BUDGET_PER_TICK=${NOIZ2SA_SPAWN_BUDGET_PER_TICK}
     NOIZ2SA_FOE_UPDATE_BUDGET=${NOIZ2SA_FOE_UPDATE_BUDGET}
 )
@@ -486,6 +509,7 @@ target_include_directories(
     ${CD_NAME}.elf PUBLIC
     # SaturnRingLib headers (MUST come first to override system headers)
     ${SRL_INSTALL_ROOT}/saturnringlib
+    ${CMAKE_BINARY_DIR}/generated
     ${CMAKE_SOURCE_DIR}/src/ponesound/INC
     ${CMAKE_SOURCE_DIR}/src/decompression/INC
     ${CMAKE_SOURCE_DIR}/src/smpc/INC
@@ -714,6 +738,10 @@ message(STATUS "Maximum events: ${SGL_MAX_EVENTS}")
 message(STATUS "Maximum work units: ${SGL_MAX_WORKS}")
 message(STATUS "Video mode: ${SRL_MODE}")
 message(STATUS "Framerate: ${SRL_FRAMERATE}")
+message(STATUS "HW debug mode: ${HW_DEBUG}")
+if(HW_DEBUG)
+    message(STATUS "HW debug endless stage: ${HW_DEBUG_ENDLESS_STAGE}")
+endif()
 if(NOT SRL_LOG_LEVEL STREQUAL "")
     message(STATUS "Log level: ${SRL_LOG_LEVEL}")
 else()

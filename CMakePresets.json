@@ -1,0 +1,38 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default",
+      "description": "Default Sega Saturn build configuration",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build"
+    },
+    {
+      "name": "hw-debug",
+      "displayName": "HW_DEBUG",
+      "description": "Hardware debug build with embedded endless BulletML and direct endless boot",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-hwdebug",
+      "cacheVariables": {
+        "HW_DEBUG": "ON",
+        "HW_DEBUG_ENDLESS_STAGE": "10"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default"
+    },
+    {
+      "name": "hw-debug",
+      "configurePreset": "hw-debug"
+    }
+  ]
+}
