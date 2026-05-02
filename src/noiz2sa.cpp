@@ -483,7 +483,9 @@ static int accframe = 0;
 // Saturn doesn't support command-line arguments, so we set optimal settings directly.
 static void initGameConfig()
 {
-#if NOIZ2SA_ENABLE_SOUND
+#if HW_DEBUG
+  noSound = 1;
+#elif NOIZ2SA_ENABLE_SOUND
   noSound = 0;
 #else
   noSound = 1;
@@ -510,6 +512,7 @@ static uint32_t gStalledTickFrames = 0;
 static bool gUseFixedFramePacing = false;
 static uint32_t gFpsTimes100 = 0;
 static uint32_t gLastDisplayedFpsTimes100 = 0xFFFFFFFFu;
+static uint32_t gLastSerialFpsLogMs = 0;
 static uint32_t gFpsWindowStartMs = 0;
 static uint32_t gRenderedFramesInWindow = 0;
 static bool gFpsWindowInitialized = false;
@@ -532,6 +535,20 @@ static void drawFpsCounter()
 
   SRL::Debug::PrintClearLine(2);
   SRL::Debug::Print(1, 2, "FPS: %d.%02d", (int)fpsWhole, (int)fpsFrac);
+}
+
+static void logFpsToSerialIfDue()
+{
+#if HW_DEBUG
+  const uint32_t nowMs = SDL_GetTicks();
+  if (nowMs - gLastSerialFpsLogMs < 1000u)
+    return;
+
+  gLastSerialFpsLogMs = nowMs;
+  const int32_t fpsWhole = (int32_t)(gFpsTimes100 / 100u);
+  const int32_t fpsFrac = (int32_t)(gFpsTimes100 % 100u);
+  SRL::Logger::LogInfo("[FPS] %d.%02d", (int)fpsWhole, (int)fpsFrac);
+#endif
 }
 
 int main()
@@ -590,8 +607,20 @@ int main()
   mainStepIdx++;
 
   initFirst();
+#if HW_DEBUG
+  updateLoadingProgress("Entering HW_DEBUG endless", (mainStepIdx + 1) * 100 / mainNumSteps);
+  insane = 1;
+  const int hwDebugStage = (HW_DEBUG_ENDLESS_STAGE < STAGE_NUM) ? STAGE_NUM : HW_DEBUG_ENDLESS_STAGE;
+  if (hwDebugStage != HW_DEBUG_ENDLESS_STAGE)
+  {
+    SRL::Logger::LogWarning("[HW_DEBUG] Requested stage %d is not endless; forcing stage %d", HW_DEBUG_ENDLESS_STAGE, hwDebugStage);
+  }
+  SRL::Logger::LogInfo("[HW_DEBUG] Skipping title/menu and booting directly into endless INSANE stage %d", hwDebugStage);
+  initGame(hwDebugStage);
+#else
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initTitle();
+#endif
   g_loadingScreen.Clear();
 
   initGamepad();
@@ -807,6 +836,7 @@ int main()
       }
 
       drawFpsCounter();
+      logFpsToSerialIfDue();
     }
 
     phaseStartUs = SDL_GetProfileMicros();

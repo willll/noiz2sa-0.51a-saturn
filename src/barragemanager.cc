@@ -26,6 +26,10 @@
 #include <srl_cd.hpp>
 #include <srl_string.hpp>
 
+#if HW_DEBUG
+#include "hw_debug_bulletml_embedded.hpp"
+#endif
+
 #define BARRAGE_PATTERN_MAX 32
 
 static Barrage barragePattern[BARRAGE_TYPE_NUM][BARRAGE_PATTERN_MAX];
@@ -39,6 +43,48 @@ static const char *BARRAGE_DIR_NAME[] = {
 };
 
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
+#if HW_DEBUG
+  int i = 0;
+  const HWDebugBulletML::EmbeddedPattern* patterns = nullptr;
+  uint32_t patternCount = 0;
+
+  if (strcmp(dirPath, "ZAKO") == 0)
+  {
+    patterns = HWDebugBulletML::kZakoPatterns;
+    patternCount = HWDebugBulletML::kZakoPatternCount;
+  }
+  else if (strcmp(dirPath, "MIDDLE") == 0)
+  {
+    patterns = HWDebugBulletML::kMiddlePatterns;
+    patternCount = HWDebugBulletML::kMiddlePatternCount;
+  }
+  else if (strcmp(dirPath, "BOSS") == 0)
+  {
+    patterns = HWDebugBulletML::kBossPatterns;
+    patternCount = HWDebugBulletML::kBossPatternCount;
+  }
+
+  if (patterns == nullptr || patternCount == 0)
+  {
+    SRL::Logger::LogFatal("[HW_DEBUG] No embedded BulletML patterns available for %s", dirPath);
+    SRL::System::Exit(1);
+  }
+
+  for (uint32_t patternIndex = 0; patternIndex < patternCount && i < BARRAGE_PATTERN_MAX; ++patternIndex)
+  {
+    brg[i].bulletml = new BulletMLParserBLB(patterns[patternIndex].name, patterns[patternIndex].data, patterns[patternIndex].size);
+    if (!brg[i].bulletml->build())
+    {
+      SRL::Logger::LogFatal("[HW_DEBUG] Failed to parse embedded BulletML file: %s/%s", dirPath, patterns[patternIndex].name);
+      delete brg[i].bulletml;
+      brg[i].bulletml = nullptr;
+      SRL::System::Exit(1);
+    }
+    i++;
+  }
+
+  return i;
+#else
   int i = 0;
   int listEntries = 0;
   int parseFailures = 0;
@@ -158,6 +204,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   }
   
   return i;
+#endif
 }
 
 static unsigned int rnd;

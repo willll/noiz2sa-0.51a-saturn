@@ -798,7 +798,11 @@ void initSDL()
   clearRPanel();
   refreshPanelLayer();
 
+#if HW_DEBUG
+  SRL::Logger::LogInfo("[HW_DEBUG] Skipping CD-backed sprite loading");
+#else
   loadSprites();
+#endif
 }
 
 void blendScreen()

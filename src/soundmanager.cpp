@@ -55,7 +55,7 @@ static SRL::Sound::Pcm::WaveSound* sglChunks[CHUNK_NUM];
 static bool sglChunkExists[CHUNK_NUM];
 static char sglChunkFileName[CHUNK_NUM][32];
 static bool sglStartupSelfTestPlayed = false;
-#else
+#elif NOIZ2SA_ENABLE_SOUND == 1 && SRL_USE_SGL_SOUND_DRIVER == 0
 static int16_t chunk[CHUNK_NUM];
 static bool ponesoundDriverInitialized = false;
 static bool chunkInvalidWarned[CHUNK_NUM];
