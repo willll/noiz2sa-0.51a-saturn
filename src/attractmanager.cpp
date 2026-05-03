@@ -524,7 +524,12 @@ void moveGameover()
   if (goCnt > 900 || (goCnt > 128 && mnp && (btn & PAD_BUTTON1)))
   {
     setHiScore();
+#if HW_DEBUG
+    // In HW_DEBUG endless mode, skip title screen and restart stage directly.
+    initGame(HW_DEBUG_ENDLESS_STAGE);
+#else
     initTitle();
+#endif
     return;
   }
   if (btn == 0)

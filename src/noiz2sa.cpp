@@ -509,10 +509,10 @@ static void draw()
 #endif
     // Iter G: Alternate wake/frag draws every other frame to save ~2-4ms rend.
     // Iter M: At high bullet counts (>100), skip wake every 4th frame (75% skip).
-    // Iter N: At very high bullet counts (>200), skip wake every 16th frame (93.75% skip).
+    // Iter N: At very high bullet counts (>200), disable wake draws entirely (screen saturated).
     {
       const int liveBullets = getLiveProjectileCount();
-      const bool doWake = (liveBullets > 200) ? ((tick & 15) == 0) :
+      const bool doWake = (liveBullets > 200) ? false :
                           (liveBullets > 100) ? ((tick & 3) == 0) : ((tick & 1) == 0);
       if (doWake)
       {
