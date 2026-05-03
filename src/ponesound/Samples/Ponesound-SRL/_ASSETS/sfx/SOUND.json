@@ -1,0 +1,50 @@
+{
+  "CAT.SND": {
+    "MEOW1.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW5.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW2.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW6.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW3.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW7.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW4.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW8.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW9.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    }
+  },
+  "ANOTHER.SND": {
+    "MEOW1.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    },
+    "MEOW2.PCM": {
+      "SampleRate": "15360",
+      "BitDepth": "1"
+    }
+  }
+}
