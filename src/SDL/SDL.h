@@ -374,10 +374,18 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
         {
             const uint8_t* src8 = (const uint8_t*)src->pixels;
             uint8_t* dst8 = (uint8_t*)dstData;
+            const bool srcInHwram = ((((uintptr_t)src8) & 0xFF000000u) == 0x06000000u);
 
             if (uploadX == 0 && uploadY == 0 && uploadW == src->w && uploadH == src->h)
             {
-                slDMACopy((void*)src8, dst8, (uint32_t)(src->w * src->h));
+                if (srcInHwram)
+                {
+                    memcpy(dst8, src8, (size_t)(src->w * src->h));
+                }
+                else
+                {
+                    slDMACopy((void*)src8, dst8, (uint32_t)(src->w * src->h));
+                }
             }
             else
             {
@@ -385,10 +393,20 @@ static inline int SDL_BlitSurface(SRL_Surface* src, SDL_Rect* srcrect, SRL_Surfa
                 {
                     const uint8_t* srcRow = src8 + ((uploadY + row) * src->w) + uploadX;
                     uint8_t* dstRow = dst8 + ((uploadY + row) * src->w) + uploadX;
-                    slDMACopy((void*)srcRow, dstRow, (uint32_t)uploadW);
+                    if (srcInHwram)
+                    {
+                        memcpy(dstRow, srcRow, (size_t)uploadW);
+                    }
+                    else
+                    {
+                        slDMACopy((void*)srcRow, dstRow, (uint32_t)uploadW);
+                    }
                 }
             }
-            slDMAWait();
+            if (!srcInHwram)
+            {
+                slDMAWait();
+            }
         }
 
         SDL_ClearDirtyRect(src);
