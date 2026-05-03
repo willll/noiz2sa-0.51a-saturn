@@ -53,3 +53,6 @@ build_profile/**
 ss
 imgui.ini
 Tests/cd_bulletml/data/0.bin
+build-hwdebug/*
+build_hw_debug/*
+logs/*
