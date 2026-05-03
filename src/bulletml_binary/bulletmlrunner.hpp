@@ -118,7 +118,7 @@ public:
 
         node_count_ = state->getNodeCount();
         if (node_count_ > 0 && state->getNodes()) {
-            nodes_ = lwnew BulletMLNode*[node_count_];
+            nodes_ = hwnew BulletMLNode*[node_count_];
             if (!nodes_) {
                 end_ = true;
                 delete state;
@@ -267,7 +267,7 @@ private:
             new_cap = grown;
         }
 
-        Task* t = lwnew Task[new_cap];
+        Task* t = hwnew Task[new_cap];
         if (!t) return false;
         for (uint16_t i = 0; i < task_count_; ++i) {
             t[i] = tasks_[i];
@@ -524,7 +524,7 @@ private:
 
         if (!src || count == 0) return;
 
-        Fxp* p = lwnew Fxp[count];
+        Fxp* p = hwnew Fxp[count];
         if (!p) return;
         for (uint16_t i = 0; i < count; ++i) {
             p[i] = src[i];
@@ -777,7 +777,7 @@ private:
         if (param_nodes == 0) return nullptr;
 
         const uint16_t total = static_cast<uint16_t>(param_nodes + 1);
-        Fxp* out = lwnew Fxp[total];
+        Fxp* out = hwnew Fxp[total];
         if (!out) return nullptr;
 
         out[0] = 0.0;  // 1-based parameters
@@ -824,7 +824,7 @@ private:
                     return;
                 }
 
-                BulletMLNode** acts = lwnew BulletMLNode*[total];
+                BulletMLNode** acts = hwnew BulletMLNode*[total];
                 if (!acts) return;
 
                 uint16_t w = 0;
@@ -838,7 +838,7 @@ private:
                     if (c && c->getNameAsName() == BulletMLNode::actionRef) acts[w++] = c;
                 }
 
-                BulletMLState* st = lwnew BulletMLState(parser_, acts, total, params_, param_count_);
+                BulletMLState* st = hwnew BulletMLState(parser_, acts, total, params_, param_count_);
                 if (!st) {
                     delete[] acts;
                     SRL::Logger::LogWarning("[BML-RUNNER] Failed to allocate child state for bullet actions=%u", total);
@@ -1035,23 +1035,23 @@ inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
     if (!top_actions || top_count_u32 == 0) return;
 
     uint16_t top_count = (top_count_u32 > 65535U) ? 65535U : static_cast<uint16_t>(top_count_u32);
-    impls_ = lwnew BulletMLRunnerImpl*[top_count];
+    impls_ = hwnew BulletMLRunnerImpl*[top_count];
     if (!impls_) return;
 
     for (uint16_t i = 0; i < top_count; ++i) impls_[i] = nullptr;
 
     for (uint16_t i = 0; i < top_count; ++i) {
-        BulletMLNode** nodes = lwnew BulletMLNode*[1];
+        BulletMLNode** nodes = hwnew BulletMLNode*[1];
         if (!nodes) break;
         nodes[0] = top_actions[i];
 
-        BulletMLState* st = lwnew BulletMLState(parser_, nodes, 1, nullptr, 0);
+        BulletMLState* st = hwnew BulletMLState(parser_, nodes, 1, nullptr, 0);
         if (!st) {
             delete[] nodes;
             break;
         }
 
-        BulletMLRunnerImpl* impl = lwnew BulletMLRunnerImpl(st, this);
+        BulletMLRunnerImpl* impl = hwnew BulletMLRunnerImpl(st, this);
         if (!impl) break;
 
         impls_[impl_count_++] = impl;
@@ -1063,10 +1063,10 @@ inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
     if (!state_) return;
 
     parser_ = state_->getParser();
-    impls_ = lwnew BulletMLRunnerImpl*[1];
+    impls_ = hwnew BulletMLRunnerImpl*[1];
     if (!impls_) return;
 
-    impls_[0] = lwnew BulletMLRunnerImpl(state_, this);
+    impls_[0] = hwnew BulletMLRunnerImpl(state_, this);
     if (!impls_[0]) {
         delete[] impls_;
         impls_ = nullptr;

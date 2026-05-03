@@ -23,7 +23,7 @@ public:
           parameters_(nullptr),
           parameter_count_(0) {
         if (parameter_count > 0 && parameters) {
-            parameters_ = lwnew Fxp[parameter_count];
+            parameters_ = hwnew Fxp[parameter_count];
             if (parameters_) {
                 for (uint16_t i = 0; i < parameter_count; ++i) {
                     parameters_[i] = parameters[i];
