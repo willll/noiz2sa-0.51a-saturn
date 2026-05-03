@@ -39,7 +39,7 @@ static int boardRepXn, boardRepYn;
 // Render a new background bitmap at most every this many move ticks.
 // At 60hz tick rate this gives ~20fps background updates, freeing Slave SH2
 // and SCU DMA bandwidth for foes/bullets/ship on other ticks.
-static constexpr uint32_t kBgRenderDivisor = 3u;
+static constexpr uint32_t kBgRenderDivisor = 6u;  // Iter F: was 3; halves bg-upload avg cost
 static uint32_t sBgMoveTick = 0u;
 
 static constexpr uint16_t BACKGROUND_BASE_COLOR = 0xffff;
@@ -230,10 +230,12 @@ static void uploadBackgroundBitmap(const uint16_t *src)
   uint8_t *dstRow = (uint8_t *)backgroundLayerVram + (BACKGROUND_SCREEN_X * (int)sizeof(uint16_t));
   for (int row = 0; row < LAYER_HEIGHT; row++)
   {
+    slDMAWait();  // Wait for previous SCU Level-0 DMA to complete before starting the next
     DMA_ScuMemCopy(dstRow, (void *)srcRow, LAYER_WIDTH * sizeof(uint16_t));
     srcRow += LAYER_WIDTH * sizeof(uint16_t);
     dstRow += BACKGROUND_BITMAP_WIDTH * sizeof(uint16_t);
   }
+  slDMAWait();  // Wait for the final row DMA to complete
 
   if (!backgroundUploadLogged)
   {
