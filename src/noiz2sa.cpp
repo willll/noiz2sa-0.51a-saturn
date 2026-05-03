@@ -12,6 +12,7 @@
 #include "SDL.h"
 #include <stdio.h>
 #include <srl.hpp> // for malloc/free, atoi
+#include <srl_memory.hpp>
 #include <srl_timer.hpp>
 #include <srl_log.hpp>    // for logging
 #include <srl_system.hpp> // for exit
@@ -257,9 +258,32 @@ struct MovePhaseTimings {
   uint32_t bonuses;
 };
 
+struct DrawPhaseTimings {
+  uint32_t memset;
+  uint32_t background;
+  uint32_t bonuses;
+  uint32_t foes;
+  uint32_t bulletsWake;
+  uint32_t frags;
+  uint32_t blend;
+  uint32_t shots;
+  uint32_t ship;
+  uint32_t bullets;
+  uint32_t bulletOverlay;
+  uint32_t score;
+  uint32_t clearRPanel;
+  uint32_t title;
+  uint32_t titleMenu;
+  uint32_t gameover;
+  uint32_t stageClear;
+  uint32_t pause;
+};
+
 // Global accumulator for move-phase subsystem timings (reset every 60 frames)
 static MovePhaseTimings gMovePhaseTimings{};
 static uint32_t gMovePhaseFrameCount = 0;
+static DrawPhaseTimings gDrawPhaseTimings{};
+static uint32_t gDrawPhaseFrameCount = 0;
 
 static void move()
 {
@@ -286,33 +310,89 @@ static void move()
     break;
     
   case IN_GAME:
+#if HW_DEBUG
+    {
+      static uint32_t sMoveProbeCount = 0u;
+      const bool probeMove = (sMoveProbeCount < 4u);
+      if (probeMove)
+      {
+        SRL::Logger::LogInfo("[MOVE] begin idx=%lu", (unsigned long)sMoveProbeCount);
+      }
+#endif
     phaseStart = SDL_GetProfileMicros();
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-bg");
+    #endif
     moveBackground();
     gMovePhaseTimings.background += SDL_GetProfileMicros() - phaseStart;
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-bg");
+    #endif
     
     phaseStart = SDL_GetProfileMicros();
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-addBullets");
+    #endif
     addBullets();
     gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-addBullets");
+    #endif
     
     phaseStart = SDL_GetProfileMicros();
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-shots");
+    #endif
     moveShots();
     gMovePhaseTimings.shots += SDL_GetProfileMicros() - phaseStart;
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-shots");
+    #endif
     
     phaseStart = SDL_GetProfileMicros();
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-ship");
+    #endif
     moveShip();
     gMovePhaseTimings.ship += SDL_GetProfileMicros() - phaseStart;
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-ship");
+    #endif
     
     phaseStart = SDL_GetProfileMicros();
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-foes");
+    #endif
     moveFoes();
     gMovePhaseTimings.foes += SDL_GetProfileMicros() - phaseStart;
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-foes");
+    #endif
     
     phaseStart = SDL_GetProfileMicros();
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-frags");
+    #endif
     moveFrags();
     gMovePhaseTimings.frags += SDL_GetProfileMicros() - phaseStart;
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-frags");
+    #endif
     
     phaseStart = SDL_GetProfileMicros();
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-bonuses");
+    #endif
     moveBonuses();
     gMovePhaseTimings.bonuses += SDL_GetProfileMicros() - phaseStart;
+    #if HW_DEBUG
+    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-bonuses");
+    if (probeMove)
+    {
+      sMoveProbeCount++;
+    }
+    }
+    #endif
     break;
     
   case GAMEOVER:
@@ -379,101 +459,134 @@ static void move()
 
 static void draw()
 {
-  memset(l1buf, 0, lyrSize);
-  memset(l2buf, 0, lyrSize);
+  const auto traceDraw = [](uint32_t &accumUs, auto drawCall)
+  {
+    const uint32_t startUs = SDL_GetProfileMicros();
+    drawCall();
+    accumUs += SDL_GetProfileMicros() - startUs;
+  };
+
+  // Iter E: Collapse two-layer blend architecture.  l2buf was always zero
+  // (nothing writes it) so blendScreen() was just copying l1buf→buf.
+  // Draw everything directly into buf; saves 2×memset(38400B on LWRAM) ≈ 20ms
+  // and eliminates the 21ms blend copy entirely (~31ms total saving).
+#if HW_DEBUG
+  if (gDrawPhaseFrameCount < 1)
+    SRL::Logger::LogInfo("[BUF] buf=%p lyrSize=%u pre-memset hwfree=%u",
+                         (void*)buf, (unsigned)lyrSize,
+                         (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+#endif
+  traceDraw(gDrawPhaseTimings.memset, [&]() { memset(buf, 0, lyrSize); });
+#if HW_DEBUG
+  if (gDrawPhaseFrameCount < 3) SRL::Logger::LogInfo("[DRAW] post-memset hwfree=%u", (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+#endif
 
   switch (status)
   {
   case TITLE:
     // Draw background.
-    drawBackground();
-    drawFoes();
-    drawBulletsWake();
-    blendScreen();
+    traceDraw(gDrawPhaseTimings.background, []() { drawBackground(); });
+    traceDraw(gDrawPhaseTimings.foes, []() { drawFoes(); });
+    traceDraw(gDrawPhaseTimings.bulletsWake, []() { drawBulletsWake(); });
+    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
     // Draw foreground.
-    drawBullets();
-    drawScore();
-    clearRPanel();
-    drawTitle();
-    drawTitleMenu();
+    traceDraw(gDrawPhaseTimings.bullets, []() { drawBullets(); });
+    traceDraw(gDrawPhaseTimings.score, []() { drawScore(); });
+    traceDraw(gDrawPhaseTimings.clearRPanel, []() { clearRPanel(); });
+    traceDraw(gDrawPhaseTimings.title, []() { drawTitle(); });
+    traceDraw(gDrawPhaseTimings.titleMenu, []() { drawTitleMenu(); });
     break;
   case IN_GAME:
     // Draw background.
-    drawBackground();
-    drawBonuses();
-    drawFoes();
-#if NOIZ2SA_PERF_MODE
-    if ((tick & 1) == 0)
-    {
-      drawBulletsWake();
-    }
-    if ((tick & 1) == 0)
-    {
-      drawFrags();
-    }
-#else
-    drawBulletsWake();
-    drawFrags();
+    traceDraw(gDrawPhaseTimings.background, []() { drawBackground(); });
+#if HW_DEBUG
+    if (gDrawPhaseFrameCount < 3) SRL::Logger::LogInfo("[DRAW] post-bg hwfree=%u", (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
 #endif
-    blendScreen();
+    traceDraw(gDrawPhaseTimings.bonuses, []() { drawBonuses(); });
+    traceDraw(gDrawPhaseTimings.foes, []() { drawFoes(); });
+#if HW_DEBUG
+    if (gDrawPhaseFrameCount < 3) SRL::Logger::LogInfo("[DRAW] post-foes hwfree=%u", (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+#endif
+    // Iter G: Alternate wake/frag draws every other frame to save ~2-4ms rend.
+    // Iter M: At high bullet counts (>100), skip wake every 4th frame (75% skip).
+    // Iter N: At very high bullet counts (>200), skip wake every 16th frame (93.75% skip).
+    {
+      const int liveBullets = getLiveProjectileCount();
+      const bool doWake = (liveBullets > 200) ? ((tick & 15) == 0) :
+                          (liveBullets > 100) ? ((tick & 3) == 0) : ((tick & 1) == 0);
+      if (doWake)
+      {
+        traceDraw(gDrawPhaseTimings.bulletsWake, []() { drawBulletsWake(); });
+        traceDraw(gDrawPhaseTimings.frags, []() { drawFrags(); });
+      }
+    }
+    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
     // Draw forground.
-    drawShots();
-    drawShip();
-    drawBullets();
-    drawBulletDebugOverlay();
-    drawScore();
+    traceDraw(gDrawPhaseTimings.shots, []() { drawShots(); });
+    traceDraw(gDrawPhaseTimings.ship, []() { drawShip(); });
+    traceDraw(gDrawPhaseTimings.bullets, []() { drawBullets(); });
+#if HW_DEBUG
+    if (gDrawPhaseFrameCount < 3) SRL::Logger::LogInfo("[DRAW] post-bullets hwfree=%u", (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+#endif
+    traceDraw(gDrawPhaseTimings.bulletOverlay, []() { drawBulletDebugOverlay(); });
+    traceDraw(gDrawPhaseTimings.score, []() { drawScore(); });
+#if HW_DEBUG
+    if (gDrawPhaseFrameCount < 3) SRL::Logger::LogInfo("[DRAW] post-score hwfree=%u", (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+#endif
     break;
   case GAMEOVER:
     // Draw background.
-    drawBackground();
-    drawFoes();
-    drawBulletsWake();
-    drawFrags();
-    blendScreen();
+    traceDraw(gDrawPhaseTimings.background, []() { drawBackground(); });
+    traceDraw(gDrawPhaseTimings.foes, []() { drawFoes(); });
+    // Iter G: Alternate wake/frag draws every other frame.
+    if ((tick & 1) == 0)
+    {
+      traceDraw(gDrawPhaseTimings.bulletsWake, []() { drawBulletsWake(); });
+      traceDraw(gDrawPhaseTimings.frags, []() { drawFrags(); });
+    }
+    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
     // Draw forground.
-    drawShots();
-    drawBullets();
-    drawBulletDebugOverlay();
-    drawScore();
-    drawGameover();
+    traceDraw(gDrawPhaseTimings.shots, []() { drawShots(); });
+    traceDraw(gDrawPhaseTimings.bullets, []() { drawBullets(); });
+    traceDraw(gDrawPhaseTimings.bulletOverlay, []() { drawBulletDebugOverlay(); });
+    traceDraw(gDrawPhaseTimings.score, []() { drawScore(); });
+    traceDraw(gDrawPhaseTimings.gameover, []() { drawGameover(); });
     break;
   case STAGE_CLEAR:
     // Draw background.
-    drawBackground();
-    drawBonuses();
-    drawFrags();
-    blendScreen();
+    traceDraw(gDrawPhaseTimings.background, []() { drawBackground(); });
+    traceDraw(gDrawPhaseTimings.bonuses, []() { drawBonuses(); });
+    traceDraw(gDrawPhaseTimings.frags, []() { drawFrags(); });
+    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
     // Draw forground.
-    drawShots();
-    drawShip();
-    drawScore();
-    drawStageClear();
+    traceDraw(gDrawPhaseTimings.shots, []() { drawShots(); });
+    traceDraw(gDrawPhaseTimings.ship, []() { drawShip(); });
+    traceDraw(gDrawPhaseTimings.score, []() { drawScore(); });
+    traceDraw(gDrawPhaseTimings.stageClear, []() { drawStageClear(); });
     break;
   case PAUSE:
     // Draw background.
-    drawBackground();
-    drawBonuses();
-    drawFoes();
-#if NOIZ2SA_PERF_MODE
-    // Keep pause overlay responsive with lower VDP1 workload.
+    traceDraw(gDrawPhaseTimings.background, []() { drawBackground(); });
+    traceDraw(gDrawPhaseTimings.bonuses, []() { drawBonuses(); });
+    traceDraw(gDrawPhaseTimings.foes, []() { drawFoes(); });
+    // Iter G: Alternate wake draw every other frame (same as IN_GAME/GAMEOVER).
     if ((tick & 1) == 0)
     {
-      drawBulletsWake();
+      traceDraw(gDrawPhaseTimings.bulletsWake, []() { drawBulletsWake(); });
     }
-#else
-    drawBulletsWake();
-#endif
-    drawFrags();
-    blendScreen();
+    traceDraw(gDrawPhaseTimings.frags, []() { drawFrags(); });
+    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
     // Draw forground.
-    drawShots();
-    drawShip();
-    drawBullets();
-    drawBulletDebugOverlay();
-    drawScore();
-    drawPause();
+    traceDraw(gDrawPhaseTimings.shots, []() { drawShots(); });
+    traceDraw(gDrawPhaseTimings.ship, []() { drawShip(); });
+    traceDraw(gDrawPhaseTimings.bullets, []() { drawBullets(); });
+    traceDraw(gDrawPhaseTimings.bulletOverlay, []() { drawBulletDebugOverlay(); });
+    traceDraw(gDrawPhaseTimings.score, []() { drawScore(); });
+    traceDraw(gDrawPhaseTimings.pause, []() { drawPause(); });
     break;
   }
+
+  gDrawPhaseFrameCount++;
 
 }
 
@@ -519,6 +632,45 @@ static bool gFpsWindowInitialized = false;
 static uint32_t gSyncCount = 0;
 static uint32_t gLastRenderSyncCount = 0;
 
+struct PerfTraceWindow {
+  uint64_t totalUs;
+  uint64_t moveUs;
+  uint64_t smokeUs;
+  uint64_t drawUs;
+  uint64_t flipUs;
+  uint64_t syncUs;
+  uint64_t vdpPanelUploadUs;
+  uint64_t vdpPlayfieldUploadUs;
+  uint64_t vdpFlipPresentUs;
+  uint64_t vdpHwLineUs;
+  uint64_t vdpPanelUploadBytes;
+  uint64_t vdpPlayfieldUploadBytes;
+  uint64_t blendCopyUs;
+  uint64_t blendAlphaUs;
+  uint64_t vdp1BlitUploadUs;
+  uint64_t vdp1BlitDrawUs;
+  uint64_t foeTotalCount;
+  uint64_t bulletTotalCount;
+  uint64_t drawnBulletTotal;
+  uint64_t culledBulletTotal;
+  uint64_t foeBudgetTotal;
+  uint32_t peakFoeCount;
+  uint32_t peakBulletCount;
+  uint32_t loopCount;
+  uint32_t renderCount;
+  uint32_t overBudgetCount;
+  uint32_t overDoubleBudgetCount;
+  uint32_t worstTotalUs;
+  uint32_t worstMoveUs;
+  uint32_t worstDrawUs;
+  uint32_t worstSyncUs;
+};
+
+static PerfTraceWindow gPerfTraceWindow{};
+static constexpr uint32_t kPerfTraceWindowFrames = 60u;
+static constexpr uint32_t kTargetFps = 30u;
+static constexpr uint32_t kTargetFrameBudgetUs = 1000000u / kTargetFps;
+
 #if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
 static int gAutoStartTitleFrames = 0;
 static bool gAutoStartTriggered = false;
@@ -549,6 +701,213 @@ static void logFpsToSerialIfDue()
   const int32_t fpsFrac = (int32_t)(gFpsTimes100 % 100u);
   SRL::Logger::LogInfo("[FPS] %d.%02d", (int)fpsWhole, (int)fpsFrac);
 #endif
+}
+
+static uint32_t maxU32(uint32_t a, uint32_t b)
+{
+  return (a > b) ? a : b;
+}
+
+static void logPerfTraceWindowAndReset()
+{
+#if HW_DEBUG
+  if (gPerfTraceWindow.loopCount == 0u)
+    return;
+
+  const uint32_t loops = gPerfTraceWindow.loopCount;
+  const uint32_t avgTotalUs = (uint32_t)(gPerfTraceWindow.totalUs / loops);
+  const uint32_t avgMoveUs = (uint32_t)(gPerfTraceWindow.moveUs / loops);
+  const uint32_t avgSmokeUs = (uint32_t)(gPerfTraceWindow.smokeUs / loops);
+  const uint32_t avgDrawUs = (uint32_t)(gPerfTraceWindow.drawUs / loops);
+  const uint32_t avgFlipUs = (uint32_t)(gPerfTraceWindow.flipUs / loops);
+  const uint32_t avgSyncUs = (uint32_t)(gPerfTraceWindow.syncUs / loops);
+  const uint32_t avgRenderUs = avgSmokeUs + avgDrawUs + avgFlipUs;
+  const uint32_t avgVdpPanelUploadUs = (uint32_t)(gPerfTraceWindow.vdpPanelUploadUs / loops);
+  const uint32_t avgVdpPlayfieldUploadUs = (uint32_t)(gPerfTraceWindow.vdpPlayfieldUploadUs / loops);
+  const uint32_t avgVdpFlipPresentUs = (uint32_t)(gPerfTraceWindow.vdpFlipPresentUs / loops);
+  const uint32_t avgVdpHwLineUs = (uint32_t)(gPerfTraceWindow.vdpHwLineUs / loops);
+  const uint32_t avgVdpPanelUploadBytes = (uint32_t)(gPerfTraceWindow.vdpPanelUploadBytes / loops);
+  const uint32_t avgVdpPlayfieldUploadBytes = (uint32_t)(gPerfTraceWindow.vdpPlayfieldUploadBytes / loops);
+  const uint32_t avgBlendCopyUs = (uint32_t)(gPerfTraceWindow.blendCopyUs / loops);
+  const uint32_t avgBlendAlphaUs = (uint32_t)(gPerfTraceWindow.blendAlphaUs / loops);
+  const uint32_t avgFoeCount = (uint32_t)(gPerfTraceWindow.foeTotalCount / loops);
+  const uint32_t avgBulletCount = (uint32_t)(gPerfTraceWindow.bulletTotalCount / loops);
+  const uint32_t avgDrawnBullets = (uint32_t)(gPerfTraceWindow.drawnBulletTotal / loops);
+  const uint32_t avgCulledBullets = (uint32_t)(gPerfTraceWindow.culledBulletTotal / loops);
+  const uint32_t avgFoeBudget = (uint32_t)(gPerfTraceWindow.foeBudgetTotal / loops);
+  const uint32_t cullPct = (avgDrawnBullets + avgCulledBullets > 0u) ?
+      (avgCulledBullets * 100u) / (avgDrawnBullets + avgCulledBullets) : 0u;
+  const uint32_t budgetUsePct = (avgTotalUs * 100u) / kTargetFrameBudgetUs;
+  const uint32_t overBudgetPct = (gPerfTraceWindow.overBudgetCount * 100u) / loops;
+  const uint32_t overDoubleBudgetPct = (gPerfTraceWindow.overDoubleBudgetCount * 100u) / loops;
+  const uint32_t headroomUs = (avgTotalUs >= kTargetFrameBudgetUs) ?
+      (avgTotalUs - kTargetFrameBudgetUs) : (kTargetFrameBudgetUs - avgTotalUs);
+
+  // Approximate move-phase hotspot by total cost over the profiling window.
+  uint32_t hotspotUs = gMovePhaseTimings.background;
+  const char* hotspotName = "moveBackground";
+  if (gMovePhaseTimings.addBullets > hotspotUs) { hotspotUs = gMovePhaseTimings.addBullets; hotspotName = "addBullets"; }
+  if (gMovePhaseTimings.shots > hotspotUs) { hotspotUs = gMovePhaseTimings.shots; hotspotName = "moveShots"; }
+  if (gMovePhaseTimings.ship > hotspotUs) { hotspotUs = gMovePhaseTimings.ship; hotspotName = "moveShip"; }
+  if (gMovePhaseTimings.foes > hotspotUs) { hotspotUs = gMovePhaseTimings.foes; hotspotName = "moveFoes"; }
+  if (gMovePhaseTimings.frags > hotspotUs) { hotspotUs = gMovePhaseTimings.frags; hotspotName = "moveFrags"; }
+  if (gMovePhaseTimings.bonuses > hotspotUs) { hotspotUs = gMovePhaseTimings.bonuses; hotspotName = "moveBonuses"; }
+  if (gMovePhaseTimings.titleMenu > hotspotUs) { hotspotUs = gMovePhaseTimings.titleMenu; hotspotName = "moveTitleMenu"; }
+  if (gMovePhaseTimings.gameOver > hotspotUs) { hotspotUs = gMovePhaseTimings.gameOver; hotspotName = "moveGameover"; }
+  if (gMovePhaseTimings.stageClear > hotspotUs) { hotspotUs = gMovePhaseTimings.stageClear; hotspotName = "moveStageClear"; }
+  if (gMovePhaseTimings.pause > hotspotUs) { hotspotUs = gMovePhaseTimings.pause; hotspotName = "movePause"; }
+
+  const uint32_t moveFrames = maxU32(gMovePhaseFrameCount, 1u);
+  const uint32_t avgHotspotUs = hotspotUs / moveFrames;
+
+  // Approximate draw-phase hotspot by total cost over the profiling window.
+  uint32_t drawHotspotUs = gDrawPhaseTimings.memset;
+  const char *drawHotspotName = "clearBuf";
+  if (gDrawPhaseTimings.background > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.background; drawHotspotName = "drawBackground"; }
+  if (gDrawPhaseTimings.bonuses > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.bonuses; drawHotspotName = "drawBonuses"; }
+  if (gDrawPhaseTimings.foes > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.foes; drawHotspotName = "drawFoes"; }
+  if (gDrawPhaseTimings.bulletsWake > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.bulletsWake; drawHotspotName = "drawBulletsWake"; }
+  if (gDrawPhaseTimings.frags > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.frags; drawHotspotName = "drawFrags"; }
+  if (gDrawPhaseTimings.blend > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.blend; drawHotspotName = "blendScreen"; }
+  if (gDrawPhaseTimings.shots > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.shots; drawHotspotName = "drawShots"; }
+  if (gDrawPhaseTimings.ship > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.ship; drawHotspotName = "drawShip"; }
+  if (gDrawPhaseTimings.bullets > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.bullets; drawHotspotName = "drawBullets"; }
+  if (gDrawPhaseTimings.bulletOverlay > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.bulletOverlay; drawHotspotName = "drawBulletOverlay"; }
+  if (gDrawPhaseTimings.score > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.score; drawHotspotName = "drawScore"; }
+  if (gDrawPhaseTimings.clearRPanel > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.clearRPanel; drawHotspotName = "clearRPanel"; }
+  if (gDrawPhaseTimings.title > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.title; drawHotspotName = "drawTitle"; }
+  if (gDrawPhaseTimings.titleMenu > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.titleMenu; drawHotspotName = "drawTitleMenu"; }
+  if (gDrawPhaseTimings.gameover > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.gameover; drawHotspotName = "drawGameover"; }
+  if (gDrawPhaseTimings.stageClear > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.stageClear; drawHotspotName = "drawStageClear"; }
+  if (gDrawPhaseTimings.pause > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.pause; drawHotspotName = "drawPause"; }
+
+  const uint32_t drawFrames = maxU32(gDrawPhaseFrameCount, 1u);
+  const uint32_t avgDrawHotspotUs = drawHotspotUs / drawFrames;
+
+  uint32_t bottleneckUs = avgMoveUs;
+  const char* bottleneckName = "move";
+  if (avgRenderUs > bottleneckUs)
+  {
+    bottleneckUs = avgRenderUs;
+    bottleneckName = "render";
+  }
+  if (avgSyncUs > bottleneckUs)
+  {
+    bottleneckUs = avgSyncUs;
+    bottleneckName = "sync";
+  }
+
+    const uint32_t avgSmk = (uint32_t)(gPerfTraceWindow.smokeUs / loops);
+    const uint32_t avgDrawUs2 = (uint32_t)(gPerfTraceWindow.drawUs / loops);
+    const uint32_t avgFlipUs2 = (uint32_t)(gPerfTraceWindow.flipUs / loops);
+    SRL::Logger::LogInfo(
+      "[PERF] fps=%u.%02u target=%u avg(total=%u move=%u rend=%u smoke=%u sync=%u draw=%u flip=%u)",
+      (unsigned int)(gFpsTimes100 / 100u),
+      (unsigned int)(gFpsTimes100 % 100u),
+      (unsigned int)kTargetFps,
+      (unsigned int)avgTotalUs,
+      (unsigned int)avgMoveUs,
+      (unsigned int)avgRenderUs,
+      (unsigned int)avgSmk,
+      (unsigned int)avgSyncUs,
+      (unsigned int)avgDrawUs2,
+      (unsigned int)avgFlipUs2);
+
+    SRL::Logger::LogInfo(
+      "[PERF] budget=%uus use=%u%% over=%u%% over2x=%u%%",
+      (unsigned int)kTargetFrameBudgetUs,
+      (unsigned int)budgetUsePct,
+      (unsigned int)overBudgetPct,
+      (unsigned int)overDoubleBudgetPct);
+
+  SRL::Logger::LogInfo(
+      "[PERF] worst(total=%u move=%u draw=%u sync=%u) rendered=%u/%u",
+      (unsigned int)gPerfTraceWindow.worstTotalUs,
+      (unsigned int)gPerfTraceWindow.worstMoveUs,
+      (unsigned int)gPerfTraceWindow.worstDrawUs,
+      (unsigned int)gPerfTraceWindow.worstSyncUs,
+      (unsigned int)gPerfTraceWindow.renderCount,
+      (unsigned int)loops);
+
+  SRL::Logger::LogInfo(
+      "[PERF] move_hotspot=%s avg_us=%u (window_frames=%u sim_frames=%u)",
+      hotspotName,
+      (unsigned int)avgHotspotUs,
+      (unsigned int)loops,
+      (unsigned int)gMovePhaseFrameCount);
+
+    SRL::Logger::LogInfo(
+      "[PERF_DRAW] hotspot=%s avg_us=%u clr=%u bg=%u bon=%u foes=%u frags=%u wake=%u blend=%u shots=%u ship=%u bullets=%u score=%u title=%u tmenu=%u",
+      drawHotspotName,
+      (unsigned int)avgDrawHotspotUs,
+      (unsigned int)(gDrawPhaseTimings.memset / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.background / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.bonuses / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.foes / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.frags / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.bulletsWake / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.blend / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.shots / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.ship / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.bullets / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.score / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.title / drawFrames),
+      (unsigned int)(gDrawPhaseTimings.titleMenu / drawFrames));
+
+    SRL::Logger::LogInfo(
+      "[PERF_VDP] up_pf=%uus(%uB) up_pan=%uus(%uB) flip=%u hwline=%u",
+      (unsigned int)avgVdpPlayfieldUploadUs,
+      (unsigned int)avgVdpPlayfieldUploadBytes,
+      (unsigned int)avgVdpPanelUploadUs,
+      (unsigned int)avgVdpPanelUploadBytes,
+      (unsigned int)avgVdpFlipPresentUs,
+      (unsigned int)avgVdpHwLineUs);
+
+    SRL::Logger::LogInfo(
+      "[PERF_DRAW2] blend_copy=%uus blend_alpha=%uus skip=%d vdp1_upload=%uus vdp1_draw=%uus",
+      (unsigned int)avgBlendCopyUs,
+      (unsigned int)avgBlendAlphaUs,
+      (int)NOIZ2SA_BLEND_SKIP,
+      (unsigned int)(gPerfTraceWindow.vdp1BlitUploadUs / loops),
+      (unsigned int)(gPerfTraceWindow.vdp1BlitDrawUs / loops));
+
+    SRL::Logger::LogInfo(
+      "[PERF_FOE] avg_entities=%u peak=%u avg_bullets=%u peak=%u budget=%u",
+      (unsigned int)avgFoeCount,
+      (unsigned int)gPerfTraceWindow.peakFoeCount,
+      (unsigned int)avgBulletCount,
+      (unsigned int)gPerfTraceWindow.peakBulletCount,
+      (unsigned int)avgFoeBudget);
+
+    SRL::Logger::LogInfo(
+      "[PERF_CULL] drawn=%u culled=%u cull_pct=%u%%",
+      (unsigned int)avgDrawnBullets,
+      (unsigned int)avgCulledBullets,
+      (unsigned int)cullPct);
+
+  if (avgTotalUs > kTargetFrameBudgetUs)
+  {
+    SRL::Logger::LogInfo(
+        "[PERF_HINT] bottleneck=%s avg_us=%u need_reduction_us=%u for %uFPS",
+        bottleneckName,
+        (unsigned int)bottleneckUs,
+        (unsigned int)headroomUs,
+        (unsigned int)kTargetFps);
+  }
+  else
+  {
+    SRL::Logger::LogInfo(
+        "[PERF_HINT] target met: spare_budget_us=%u vs %uFPS",
+        (unsigned int)headroomUs,
+        (unsigned int)kTargetFps);
+  }
+#endif
+
+  gPerfTraceWindow = PerfTraceWindow{};
+  gMovePhaseTimings = MovePhaseTimings{};
+  gMovePhaseFrameCount = 0;
+  gDrawPhaseTimings = DrawPhaseTimings{};
+  gDrawPhaseFrameCount = 0;
 }
 
 int main()
@@ -639,6 +998,14 @@ int main()
 
   while (!done)
   {
+#if HW_DEBUG
+    static uint32_t sPhaseProbeLoops = 0u;
+    const bool probePhase = (sPhaseProbeLoops < 8u);
+    if (probePhase)
+    {
+      SRL::Logger::LogInfo("[PHASE] loop-start loop=%lu status=%d", (unsigned long)sPhaseProbeLoops, status);
+    }
+#endif
 #if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
     if (!gAutoStartTriggered)
     {
@@ -661,6 +1028,9 @@ int main()
 #endif
 
     // Handle pause/unpause input
+  #if HW_DEBUG
+    // Perf-campaign debug probe: bypass START polling to isolate loop-1 stall source.
+  #else
     if (gamepad && gamepad->IsConnected() && gamepad->WasPressed(SRL::Input::Digital::Button::START))
     {
       if (!pPrsd)
@@ -678,10 +1048,17 @@ int main()
       }
       pPrsd = 1;
     }
+#if HW_DEBUG
+    if (probePhase)
+    {
+      SRL::Logger::LogInfo("[PHASE] post-input loop=%lu", (unsigned long)sPhaseProbeLoops);
+    }
+#endif
     else
     {
       pPrsd = 0;
     }
+#endif
 
     // Calculate frames to process based on time elapsed
     nowTick = SDL_GetTicks();
@@ -710,6 +1087,12 @@ int main()
     {
       frame = (int)(nowTick - prvTickCount) / interval;
     }
+#if HW_DEBUG
+    if (probePhase)
+    {
+      SRL::Logger::LogInfo("[PHASE] post-framecalc loop=%lu now=%ld prev=%ld frame=%d", (unsigned long)sPhaseProbeLoops, nowTick, prvTickCount, frame);
+    }
+#endif
     
     if (!gUseFixedFramePacing && frame <= 0)
     {
@@ -763,14 +1146,95 @@ int main()
       prvTickCount += frame * interval;
     }
 
+    // Adaptive foe update budget controller.
+    // Tightens the per-tick foe update cap when the previous frame was over-budget,
+    // relaxes it when we have headroom. The round-robin cursor in moveFoes() ensures
+    // every foe is visited across consecutive frames even when the budget clips one tick.
+#if HW_DEBUG
+    {
+      static uint32_t sLastFrameTotalUs = 0u;
+      static int sAdaptiveFoeBudget = 0; // 0 = uncapped
+      // Track per-frame instantaneous timing (delta from previous loop iteration),
+      // not the windowed average. This gives 1-frame reaction instead of 60-frame lag.
+      static uint64_t sPrevWindowTotalUs = 0u;
+      static uint32_t sPrevWindowLoopCount = 0u;
+      const int kFoeBudgetMin  = NOIZ2SA_FOE_UPDATE_BUDGET / 2;
+      const int kBudgetTightenStep = 8;
+      const int kBudgetRelaxStep   = 4;
+
+      if (status == IN_GAME || status == GAMEOVER || status == PAUSE)
+      {
+        if (sLastFrameTotalUs > kTargetFrameBudgetUs)
+        {
+          if (sAdaptiveFoeBudget == 0)
+            sAdaptiveFoeBudget = kFoeBudgetMin; // jump directly to floor on first overrun
+          else
+            sAdaptiveFoeBudget -= kBudgetTightenStep;
+          if (sAdaptiveFoeBudget < kFoeBudgetMin)
+            sAdaptiveFoeBudget = kFoeBudgetMin;
+        }
+        else if (sAdaptiveFoeBudget > 0)
+        {
+          sAdaptiveFoeBudget += kBudgetRelaxStep;
+          if (sAdaptiveFoeBudget >= NOIZ2SA_FOE_UPDATE_BUDGET)
+            sAdaptiveFoeBudget = 0; // back to uncapped
+        }
+        setFoeBudgetLimit(sAdaptiveFoeBudget);
+      }
+      else
+      {
+        setFoeBudgetLimit(0);
+        sAdaptiveFoeBudget = 0;
+      }
+      // Compute instantaneous per-frame time (delta between consecutive readings).
+      // gPerfTraceWindow is updated at end of loop body, so this gives the
+      // PREVIOUS frame's actual total — reacts in 1 frame instead of ~60.
+      {
+        uint32_t curCount = gPerfTraceWindow.loopCount;
+        uint64_t curTotal = gPerfTraceWindow.totalUs;
+        uint32_t deltaCount = curCount - sPrevWindowLoopCount;
+        if (deltaCount > 0u)
+        {
+          sLastFrameTotalUs = (uint32_t)((curTotal - sPrevWindowTotalUs) / deltaCount);
+        }
+        sPrevWindowTotalUs   = curTotal;
+        sPrevWindowLoopCount = curCount;
+      }
+    }
+#endif
+
     // Process game logic for calculated frames
     uint32_t phaseStartUs = SDL_GetProfileMicros();
+#if HW_DEBUG
+    if (probePhase)
+    {
+      SRL::Logger::LogInfo("[PHASE] pre-move loop=%lu frame=%d", (unsigned long)sPhaseProbeLoops, frame);
+    }
+#endif
     for (i = 0; i < frame; i++)
     {
+#if HW_DEBUG
+      if (probePhase && i == 0)
+      {
+        SRL::Logger::LogInfo("[PHASE] pre-move-call loop=%lu i=%d", (unsigned long)sPhaseProbeLoops, i);
+      }
+#endif
       move();
+#if HW_DEBUG
+      if (probePhase && i == 0)
+      {
+        SRL::Logger::LogInfo("[PHASE] post-move-call loop=%lu i=%d", (unsigned long)sPhaseProbeLoops, i);
+      }
+#endif
       tick++;
     }
     uint32_t timeMoveUs = SDL_GetProfileMicros() - phaseStartUs;
+#if HW_DEBUG
+    if (probePhase)
+    {
+      SRL::Logger::LogInfo("[PHASE] post-move loop=%lu us=%lu frame=%d", (unsigned long)sPhaseProbeLoops, (unsigned long)timeMoveUs, frame);
+    }
+#endif
 
     uint32_t renderDivisor = 1;
     if (status == IN_GAME)
@@ -788,8 +1252,15 @@ int main()
     uint32_t timeSmokeUs = 0;
     uint32_t timeDrawUs = 0;
     uint32_t timeFlipUs = 0;
+    ScreenVdpPerfStats frameVdpStats{};
     if (renderThisLoop)
     {
+#if HW_DEBUG
+      if (probePhase)
+      {
+        SRL::Logger::LogInfo("[PHASE] pre-draw loop=%lu hwfree=%u", (unsigned long)sPhaseProbeLoops, (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+      }
+#endif
       phaseStartUs = SDL_GetProfileMicros();
       smokeScreen();
       timeSmokeUs = SDL_GetProfileMicros() - phaseStartUs;
@@ -797,10 +1268,24 @@ int main()
       phaseStartUs = SDL_GetProfileMicros();
       draw();
       timeDrawUs = SDL_GetProfileMicros() - phaseStartUs;
+#if HW_DEBUG
+      if (probePhase)
+      {
+        SRL::Logger::LogInfo("[PHASE] post-draw loop=%lu us=%lu hwfree=%u", (unsigned long)sPhaseProbeLoops, (unsigned long)timeDrawUs, (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+      }
+#endif
 
       phaseStartUs = SDL_GetProfileMicros();
       flipScreen();
       timeFlipUs = SDL_GetProfileMicros() - phaseStartUs;
+#if HW_DEBUG
+      if (probePhase)
+      {
+        SRL::Logger::LogInfo("[PHASE] post-flip loop=%lu us=%lu", (unsigned long)sPhaseProbeLoops, (unsigned long)timeFlipUs);
+      }
+#endif
+
+      consumeScreenVdpPerfStats(&frameVdpStats);
 
       // Realtime FPS based on rendered frames and elapsed milliseconds.
       // SDL_GetTicks() has stable behavior across emulator/hardware paths.
@@ -849,9 +1334,21 @@ int main()
     // Fall back to non-blocking refresh only when ticks are stalled to avoid hard lockups.
     if (!gUseFixedFramePacing && nowTick > 0)
     {
+#if HW_DEBUG
+      if (probePhase)
+      {
+        SRL::Logger::LogInfo("[PHASE] pre-sync loop=%lu", (unsigned long)sPhaseProbeLoops);
+      }
+#endif
       SRL::Core::Synchronize();
       gSyncCount++;
-      soundTick(); // Pump M68K driver every frame (replaces unsafe OnVblank callback)
+#if HW_DEBUG
+      if (probePhase)
+      {
+        SRL::Logger::LogInfo("[PHASE] post-sync loop=%lu", (unsigned long)sPhaseProbeLoops);
+      }
+#endif
+      soundTick(); // Pump M68K driver every frame
     }
     else
     {
@@ -864,18 +1361,64 @@ int main()
 
     const uint32_t totalUs = timeMoveUs + timeSmokeUs + timeDrawUs + timeFlipUs + timeSyncUs;
 
-    // Log timing every 60 frames (~10 sec at 6 FPS)
+    gPerfTraceWindow.totalUs += totalUs;
+    gPerfTraceWindow.moveUs += timeMoveUs;
+    gPerfTraceWindow.smokeUs += timeSmokeUs;
+    gPerfTraceWindow.drawUs += timeDrawUs;
+    gPerfTraceWindow.flipUs += timeFlipUs;
+    gPerfTraceWindow.syncUs += timeSyncUs;
+    gPerfTraceWindow.vdpPanelUploadUs += frameVdpStats.panelUploadUs;
+    gPerfTraceWindow.vdpPlayfieldUploadUs += frameVdpStats.playfieldUploadUs;
+    gPerfTraceWindow.vdpFlipPresentUs += frameVdpStats.flipPresentUs;
+    gPerfTraceWindow.vdpHwLineUs += frameVdpStats.hwLineUs;
+    gPerfTraceWindow.vdpPanelUploadBytes += frameVdpStats.panelUploadBytes;
+    gPerfTraceWindow.vdpPlayfieldUploadBytes += frameVdpStats.playfieldUploadBytes;
+    gPerfTraceWindow.blendCopyUs += frameVdpStats.blendCopyUs;
+    gPerfTraceWindow.blendAlphaUs += frameVdpStats.blendAlphaUs;
+    gPerfTraceWindow.vdp1BlitUploadUs += frameVdpStats.vdp1BlitUploadUs;
+    gPerfTraceWindow.vdp1BlitDrawUs += frameVdpStats.vdp1BlitDrawUs;
+
+    FoePressureStats frameFoeStats{};
+    consumeFoePressureStats(&frameFoeStats);
+    gPerfTraceWindow.foeTotalCount += frameFoeStats.foeCount;
+    gPerfTraceWindow.bulletTotalCount += frameFoeStats.bulletCount;
+    gPerfTraceWindow.drawnBulletTotal += frameFoeStats.drawnBullets;
+    gPerfTraceWindow.culledBulletTotal += frameFoeStats.culledBullets;
+    gPerfTraceWindow.foeBudgetTotal += frameFoeStats.foeBudget;
+    gPerfTraceWindow.peakFoeCount = maxU32(gPerfTraceWindow.peakFoeCount, frameFoeStats.foeCount);
+    gPerfTraceWindow.peakBulletCount = maxU32(gPerfTraceWindow.peakBulletCount, frameFoeStats.bulletCount);
+    gPerfTraceWindow.loopCount++;
+    if (renderThisLoop)
+    {
+      gPerfTraceWindow.renderCount++;
+    }
+    if (totalUs > kTargetFrameBudgetUs)
+    {
+      gPerfTraceWindow.overBudgetCount++;
+    }
+    if (totalUs > (kTargetFrameBudgetUs * 2u))
+    {
+      gPerfTraceWindow.overDoubleBudgetCount++;
+    }
+    gPerfTraceWindow.worstTotalUs = maxU32(gPerfTraceWindow.worstTotalUs, totalUs);
+    gPerfTraceWindow.worstMoveUs = maxU32(gPerfTraceWindow.worstMoveUs, timeMoveUs);
+    gPerfTraceWindow.worstDrawUs = maxU32(gPerfTraceWindow.worstDrawUs, timeDrawUs + timeSmokeUs + timeFlipUs);
+    gPerfTraceWindow.worstSyncUs = maxU32(gPerfTraceWindow.worstSyncUs, timeSyncUs);
+
+    // Windowed profiling logs for iterative optimization on Saturn HW.
     static uint32_t frameCount = 0;
     frameCount++;
-    if ((frameCount % 60) == 0)
+    if ((frameCount % kPerfTraceWindowFrames) == 0)
     {
-      // Reset accumulators every 60-frame window.
-      if (gMovePhaseFrameCount > 0)
-      {
-        gMovePhaseTimings = MovePhaseTimings{};
-        gMovePhaseFrameCount = 0;
-      }
+      logPerfTraceWindowAndReset();
     }
+
+#if HW_DEBUG
+    if (probePhase)
+    {
+      sPhaseProbeLoops++;
+    }
+#endif
 
   }
   quitLast();

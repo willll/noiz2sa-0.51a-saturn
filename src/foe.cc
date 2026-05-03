@@ -14,6 +14,7 @@
 
 #include "SDL.h"
 #include <stdlib.h>
+#include <srl_memory.hpp>
 
 #include "noiz2sa.h"
 #include "screen.h"
@@ -44,6 +45,22 @@ static unsigned long bulletSpawnFailed = 0;
 static unsigned long bulletRemovedOffscreen = 0;
 static unsigned long bulletRemovedHitShip = 0;
 
+// Per-frame pressure snapshot — read and zeroed by consumeFoePressureStats() each loop.
+static uint32_t sFrameFoeCount = 0;
+static uint32_t sFrameBulletCount = 0;
+static uint32_t sFrameDrawnBullets = 0;
+static uint32_t sFrameCulledBullets = 0;
+static uint32_t sFrameFoeBudget = 0;
+
+// Runtime foe update budget.  0 = uncapped (process all foes every frame).
+// Adjusted dynamically by noiz2sa.cpp's adaptive controller each tick.
+static int sRuntimeFoeBudgetLimit = 0;
+
+void setFoeBudgetLimit(int limit)
+{
+  sRuntimeFoeBudgetLimit = limit;
+}
+
 // Hard projectile budget for Saturn hardware stability.
 // This keeps moveFoes bounded so ship/foe updates stay responsive under stress.
 static constexpr int kMaxActiveBullets = 160;
@@ -54,6 +71,11 @@ static constexpr int kMaxTotalProjectiles = 420;
 static int sLiveActiveBullets = 0;
 static int sLiveNormalBullets = 0;
 static int sLiveBossActiveBullets = 0;
+
+int getLiveProjectileCount()
+{
+  return sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets;
+}
 
 static inline int getFoeIndex(const Foe *fe)
 {
@@ -241,7 +263,7 @@ Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
 
   fe->parser = parser;
 
-  fe->cmd = lwnew FoeCommand(parser, fe);
+  fe->cmd = hwnew FoeCommand(parser, fe);
 
   fe->pos.x = x;
   fe->pos.y = y;
@@ -303,7 +325,7 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
     bulletSpawnFailed++;
     return;
   }
-  fe->cmd = lwnew FoeCommand(state, fe);
+  fe->cmd = hwnew FoeCommand(state, fe);
   fe->spos = fe->ppos = fe->pos = *pos;
   fe->vel.x = fe->vel.y = 0;
   fe->rank = rank;
@@ -399,7 +421,21 @@ void moveFoes()
   int mx, my;
   int wl;
 
+#if HW_DEBUG
+  static uint32_t sFoeProbeFrames = 0u;
+  const bool probeFoe = (sFoeProbeFrames < 3u);
+  if (probeFoe)
+  {
+    SRL::Logger::LogInfo("[FOE] begin frame=%lu active=%d cursor=%d", (unsigned long)sFoeProbeFrames, foeActiveCount, sFoeUpdateCursor);
+  }
+#endif
+
   int updateBudget = foeActiveCount;
+
+  // Snapshot entity pressure for this tick before any removals.
+  sFrameFoeCount = (uint32_t)foeActiveCount;
+  sFrameBulletCount = (uint32_t)(sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets);
+
 #if NOIZ2SA_PERF_MODE
   if (status == IN_GAME || status == GAMEOVER || status == PAUSE)
   {
@@ -409,6 +445,15 @@ void moveFoes()
     }
   }
 #endif
+
+  // Adaptive runtime budget (applied on top of compile-time PERF_MODE limit).
+  // 0 means uncapped. When set, the cursor round-robin ensures all foes are
+  // visited across consecutive frames even when the budget clips a single tick.
+  if (sRuntimeFoeBudgetLimit > 0 && updateBudget > sRuntimeFoeBudgetLimit)
+  {
+    updateBudget = sRuntimeFoeBudgetLimit;
+  }
+  sFrameFoeBudget = (uint32_t)updateBudget;
 
   if (foeActiveCount > 0 && sFoeUpdateCursor >= foeActiveCount)
   {
@@ -427,6 +472,13 @@ void moveFoes()
     processed++;
     fe = &(foe[foeActiveIndices[i]]);
 
+#if HW_DEBUG
+    if (probeFoe && processed <= 20)
+    {
+      SRL::Logger::LogInfo("[FOE] step p=%d i=%d type=%d spc=%d cmd=%d", processed, i, fe->type, fe->spc, fe->cmd ? 1 : 0);
+    }
+#endif
+
     if (fe->type < 0 || fe->type >= FOE_TYPE_MAX)
     {
       removeFoeForced(fe);
@@ -440,11 +492,30 @@ void moveFoes()
         if (fe->cmd->isEnd())
         {
           delete fe->cmd;
-          fe->cmd = lwnew FoeCommand(fe->parser, fe);
+          fe->cmd = hwnew FoeCommand(fe->parser, fe);
           // fe->cmd->reset();
         }
       }
-      fe->cmd->run();
+      // Iter J: Skip BulletML step for ACTIVE_BULLET and BOSS_ACTIVE_BULLET on odd ticks.
+      // FOE entities always run to ensure correct bullet-spawn timing.
+      const bool skipBulletML = ((fe->spc == ACTIVE_BULLET || fe->spc == BOSS_ACTIVE_BULLET) &&
+                                 (tick & 1) != 0);
+      if (!skipBulletML)
+      {
+#if HW_DEBUG
+        if (probeFoe && processed <= 20)
+        {
+          SRL::Logger::LogInfo("[FOE] cmd-run p=%d hwfree=%u", processed, (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+        }
+#endif
+        fe->cmd->run();
+#if HW_DEBUG
+        if (probeFoe && processed <= 20)
+        {
+          SRL::Logger::LogInfo("[FOE] cmd-done p=%d", processed);
+        }
+#endif
+      }
       if (fe->spc == NOT_EXIST)
       {
         if (fe->cmd)
@@ -470,6 +541,13 @@ void moveFoes()
     fe->ppos.x = fe->pos.x - (mx << wl);
     fe->ppos.y = fe->pos.y - (my << wl);
     fe->cnt++;
+
+#if HW_DEBUG
+    if (probeFoe && processed <= 20)
+    {
+      SRL::Logger::LogInfo("[FOE] moved p=%d cnt=%d", processed, fe->cnt);
+    }
+#endif
 
     if (fe->spc == FOE)
     {
@@ -526,6 +604,13 @@ void moveFoes()
 
       const bool didHit = bulletHitsShip(fe);
 
+    #if HW_DEBUG
+      if (probeFoe && processed <= 20)
+      {
+        SRL::Logger::LogInfo("[FOE] shipcheck p=%d hit=%d", processed, didHit ? 1 : 0);
+      }
+    #endif
+
       if (didHit)
       {
         bulletRemovedHitShip++;
@@ -547,6 +632,14 @@ void moveFoes()
   }
 
   sFoeUpdateCursor = (foeActiveCount > 0) ? (i % foeActiveCount) : 0;
+
+#if HW_DEBUG
+  if (probeFoe)
+  {
+    SRL::Logger::LogInfo("[FOE] end frame=%lu processed=%d foeNum=%d active=%d cursor=%d", (unsigned long)sFoeProbeFrames, processed, foeNum, foeActiveCount, sFoeUpdateCursor);
+    sFoeProbeFrames++;
+  }
+#endif
 
   // A game speed becomes slow as many bullets appears.
   interval = INTERVAL_BASE;
@@ -605,7 +698,17 @@ void drawBulletsWake()
     y = (fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
     sx = (fe->spos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
     sy = (fe->spos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
-    drawLine(x, y, sx, sy, 13 - fe->cnt / 5, 1, l1buf);
+
+    // Skip wake lines fully outside the playfield on the same side.
+    if ((x < 0 && sx < 0) ||
+        (x >= LAYER_WIDTH && sx >= LAYER_WIDTH) ||
+        (y < 0 && sy < 0) ||
+        (y >= LAYER_HEIGHT && sy >= LAYER_HEIGHT))
+    {
+      continue;
+    }
+
+    drawLine(x, y, sx, sy, 13 - fe->cnt / 5, 1, buf);
   }
 }
 
@@ -642,14 +745,14 @@ void drawFoes()
     {
       cl1 = FOE_HIT_COLOR;
     }
-    drawBox(x, y, sz, sz, cl1, cl2, l1buf);
+    drawBox(x, y, sz, sz, cl1, cl2, buf);
     d = (fe->cnt * 8) << 4;
     md = (DIV << 4) / fe->shield;
     sz /= 3;
     for (j = 0; j < fe->shield; j++, d += md)
     {
       di = (d >> 4) & (DIV - 1);
-      drawBox(x + ((sctbl[di] * sz) >> 7), y + ((sctbl[di + DIV / 4] * sz) >> 7), sz, sz, cl1, cl2, l1buf);
+      drawBox(x + ((sctbl[di] * sz) >> 7), y + ((sctbl[di + DIV / 4] * sz) >> 7), sz, sz, cl1, cl2, buf);
     }
   }
 }
@@ -735,6 +838,7 @@ void drawBullets()
   int x, y;
   int bc;
   int drawnBulletNum = 0;
+  int culledBulletNum = 0;
   for (i = 0; i < foeActiveCount; i++)
   {
     fe = &(foe[foeActiveIndices[i]]);
@@ -743,9 +847,32 @@ void drawBullets()
     bc = fe->color % BULLET_COLOR_NUM;
     x = ((fe->pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8) - (BULLET_WIDTH / 2);
     y = ((fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8) - (BULLET_WIDTH / 2);
+
+    // Cull bullets whose bounding box is entirely off-screen.
+    // Their simulation (position, BulletML) already ran in moveFoes(); only the draw is skipped.
+    if (x + BULLET_WIDTH <= 0 || x >= LAYER_WIDTH ||
+        y + BULLET_WIDTH <= 0 || y >= LAYER_HEIGHT)
+    {
+      culledBulletNum++;
+      continue;
+    }
+
     drawBox3x3(x, y, bulletColor[bc][0], bulletColor[bc][1], buf);
     drawnBulletNum++;
   }
+  sFrameDrawnBullets = (uint32_t)drawnBulletNum;
+  sFrameCulledBullets = (uint32_t)culledBulletNum;
+}
+
+void consumeFoePressureStats(FoePressureStats *outStats)
+{
+  outStats->foeCount      = sFrameFoeCount;
+  outStats->bulletCount   = sFrameBulletCount;
+  outStats->drawnBullets  = sFrameDrawnBullets;
+  outStats->culledBullets = sFrameCulledBullets;
+  outStats->foeBudget     = sFrameFoeBudget;
+  sFrameFoeCount = sFrameBulletCount = sFrameDrawnBullets = sFrameCulledBullets = 0;
+  sFrameFoeBudget = 0;
 }
 
 void drawBulletDebugOverlay()
