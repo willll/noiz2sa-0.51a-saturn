@@ -915,13 +915,13 @@ private:
     // Helper macros for bounds checking
     #define CHECK_BOUNDS(size) \
         if (offset_ + (size) > data_size_) { \
-            SRL::Logger::LogFatal("[BulletML] Unexpected end of file in '%s' at offset %u (need %u bytes, have %u)", filename_, (size), data_size_); \
+            SRL::Logger::LogFatal("[BML] EOF '%s' ofs=%u need=%u have=%u", filename_, offset_, (size), data_size_); \
             return false; \
         }
 
     #define CHECK_BOUNDS_PTR(size) \
         if (offset_ + (size) > data_size_) { \
-            SRL::Logger::LogFatal("[BulletML] Unexpected end of file in '%s' at offset %u (need %u bytes, have %u)", filename_, (size), data_size_); \
+            SRL::Logger::LogFatal("[BML] EOF '%s' ofs=%u need=%u have=%u", filename_, offset_, (size), data_size_); \
             return nullptr; \
         }
 
