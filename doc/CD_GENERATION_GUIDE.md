@@ -198,3 +198,62 @@ If not found, the build will warn but not fail (ISO generation will fail at runt
 ## Emulator Usage
 
 ### Mednafen
+```bash
+mednafen build/cd.cue
+```
+
+### Yabause
+1. Load `build/cd.cue` as CD image
+2. Boot the emulator
+
+### SSF
+Use `build/cd.bin` + `build/cd.cue` (both files must be in same directory)
+
+## Troubleshooting
+
+### "xorrisofs not found"
+Install with: `apt-get install xorriso` (Linux) or `brew install xorriso` (macOS)
+
+### "iso2raw not found"
+- Linux/macOS: Build from https://github.com/gianlucarenzi/iso2raw
+- Windows: Download precompiled binary
+- Set PATH or specify full path in CMake
+
+### "sox not found"
+Install with: `apt-get install sox libsox-fmt-all` (Linux) or `brew install sox` (macOS)
+
+### Audio files not converting
+- Check that `noiz2sa_share/music/` directory exists
+- Verify audio file permissions and formats
+- Run `sox` manually to test: `sox input.mp3 -r 44100 -b 16 -e signed output.wav`
+- Check build log for error messages
+
+### Sector alignment errors
+- Ensure audio files are properly converted to PCM WAV format
+- sox should handle this automatically, but verify with: `file output.wav`
+- Error typically means audio wasn't padded to 2352-byte multiple
+
+## CMakeLists.txt Configuration
+
+Key variables in CMakeLists.txt:
+
+```cmake
+set(BUILD_ISO "${CMAKE_BINARY_DIR}/cd.iso")       # ISO output path
+set(BUILD_BIN "${CMAKE_BINARY_DIR}/cd.bin")       # BIN output path
+set(BUILD_CUE "${CMAKE_BINARY_DIR}/cd.cue")       # CUE output path
+set(MUSIC_DIR "${CMAKE_SOURCE_DIR}/noiz2sa_share/music")  # Audio directory
+set(ASSETS_DIR "${CMAKE_BINARY_DIR}/cd/data")     # Game assets directory
+```
+
+Override MUSIC_DIR if audio is in a different location:
+```bash
+cmake -B build -DMUSIC_DIR=/path/to/audio
+```
+
+## Additional Resources
+
+- [Sega Saturn CD Specification](https://en.wikipedia.org/wiki/Sega_Saturn#Technical_specifications)
+- [xorrisofs Documentation](https://www.gnu.org/software/xorriso/man_1_xorrisofs.html)
+- [iso2raw GitHub](https://github.com/gianlucarenzi/iso2raw)
+- [sox Documentation](http://sox.sourceforge.net/)
+- [CUE Sheet Format](https://en.wikipedia.org/wiki/Cue_sheet_(computing))

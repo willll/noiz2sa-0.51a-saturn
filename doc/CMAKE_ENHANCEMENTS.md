@@ -198,3 +198,46 @@ All new code was inserted after the sound driver configuration section (line ~33
 ```bash
 cd /saturn/noiz2sa-0.51a-saturn
 cmake -B build
+cmake --build build          # Build executable
+cmake --build build --target cd-all  # Generate complete CD
+```
+
+### Advanced: Step-by-step with manual scripts
+```bash
+cmake -B build && cmake --build build
+cd build
+bash generate_iso.sh         # ISOs are ~700MB
+bash generate_bin_cue.sh     # Creates playable CD format
+bash add_audio_tracks.sh     # Appends audio tracks
+```
+
+### Custom audio directory
+```bash
+cmake -B build -DMUSIC_DIR=/path/to/audio
+cmake --build build --target cd-audio
+```
+
+## Verification
+
+To verify the generated CD images:
+1. **ISO validity**: `iso-info -R cd.iso`
+2. **BIN/CUE integrity**: `cuetools` package
+3. **Audio tracks**: `ffprobe cd.bin` (shows all tracks concatenated)
+4. **Emulator test**: Load `cd.cue` in Mednafen/Yabause
+
+## Related Files
+
+- **NEW**: [CD_GENERATION_GUIDE.md](CD_GENERATION_GUIDE.md) - User guide for CD generation
+- **MODIFIED**: CMakeLists.txt - Enhanced with CD generation rules
+- **EXISTING**: shared.mk - Original Makefile rules (now integrated into CMake)
+
+## Error Handling
+
+Scripts include comprehensive error checking:
+- File existence validation
+- Sector alignment verification
+- Frame count bounds checking (0-74)
+- Size sanity checks for BIN/CUE files
+- Audio file validity confirmation
+
+All errors are reported with descriptive messages and exit codes for integration with build systems.
