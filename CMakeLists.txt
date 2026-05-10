@@ -94,9 +94,13 @@ set(SRL_MAX_TEXTURES "75" CACHE STRING "Maximum textures")
 # Debug configuration
 option(DEBUG "Enable debug mode" OFF)
 set(SRL_LOG_LEVEL "INFO" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
-set(SRL_LOG_OUTPUT "EMULATOR" CACHE STRING "Log output method")
+set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method (EMULATOR, DEV_CART, NONE)")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
+
+# Real-hardware logging is opt-in for non-HW_DEBUG builds so emulator runs keep
+# their console logs unless you explicitly want DevCart output.
+option(NOIZ2SA_ENABLE_REAL_HW_LOGS "Send logs to DEV_CART on non-HW_DEBUG builds" OFF)
 
 # Performance/Debug logging option
 option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
@@ -134,6 +138,7 @@ set(NOIZ2SA_SPAWN_BUDGET_PER_TICK "2" CACHE STRING "Maximum new enemies spawned 
 set(NOIZ2SA_FOE_UPDATE_BUDGET "160" CACHE STRING "Maximum foe updates processed per tick")
 option(HW_DEBUG "Hardware debug mode: run without CD-backed files or audio assets" OFF)
 set(HW_DEBUG_ENDLESS_STAGE "10" CACHE STRING "Endless stage index to boot directly in HW_DEBUG mode (10-13)")
+set(HW_DEBUG_STARTING_SHIPS "20" CACHE STRING "Starting ships in HW_DEBUG mode (minimum 1)")
 set_property(CACHE HW_DEBUG_ENDLESS_STAGE PROPERTY STRINGS 10 11 12 13)
 
 if(HW_DEBUG)
@@ -147,6 +152,16 @@ if(HW_DEBUG)
     file(GLOB HW_DEBUG_BOSS_BLB_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/noiz2sa_share/boss_blb/*.blb")
     set(HW_DEBUG_BULLETML_OUTPUT "${CMAKE_BINARY_DIR}/generated/hw_debug_bulletml_embedded.hpp")
     include("${CMAKE_SOURCE_DIR}/cmake/generate_hw_debug_bulletml.cmake")
+endif()
+
+if(NOIZ2SA_ENABLE_REAL_HW_LOGS AND NOT HW_DEBUG)
+    set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
+endif()
+
+if(NOIZ2SA_ENABLE_REAL_HW_LOGS)
+    add_compile_definitions(NOIZ2SA_ENABLE_REAL_HW_LOGS=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_REAL_HW_LOGS=0)
 endif()
 
 # Background color after loading
@@ -297,6 +312,7 @@ endif()
 
 add_compile_definitions(
     HW_DEBUG_ENDLESS_STAGE=${HW_DEBUG_ENDLESS_STAGE}
+    HW_DEBUG_STARTING_SHIPS=${HW_DEBUG_STARTING_SHIPS}
     NOIZ2SA_SPAWN_BUDGET_PER_TICK=${NOIZ2SA_SPAWN_BUDGET_PER_TICK}
     NOIZ2SA_FOE_UPDATE_BUDGET=${NOIZ2SA_FOE_UPDATE_BUDGET}
 )
