@@ -10,6 +10,8 @@
  * @version $Revision: 1.3 $
  */
 
+#pragma once
+
 #include <srl.hpp>  
 #include "SDL.h"
 #include "vector.h"
@@ -54,6 +56,20 @@ extern int buttonReversed;
 extern int brightness;
 extern Digital *gamepad;
 
+struct ScreenVdpPerfStats
+{
+	uint32_t panelUploadUs;
+	uint32_t panelUploadBytes;
+	uint32_t playfieldUploadUs;
+	uint32_t playfieldUploadBytes;
+	uint32_t flipPresentUs;
+	uint32_t hwLineUs;
+	uint32_t blendCopyUs;
+	uint32_t blendAlphaUs;
+	uint32_t vdp1BlitUploadUs;
+	uint32_t vdp1BlitDrawUs;
+};
+
 void initSDL();
 void closeSDL();
 void blendScreen();
@@ -64,6 +80,7 @@ void clearScreen();
 void clearLPanel();
 void clearRPanel();
 void smokeScreen();
+void consumeScreenVdpPerfStats(ScreenVdpPerfStats *outStats);
 void drawThickLine(int x1, int y1, int x2, int y2, Canvas::Pixel color1, Canvas::Pixel color2, int width);
 void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Canvas::Pixel *buf);
 void drawBox(int x, int y, int width, int height,

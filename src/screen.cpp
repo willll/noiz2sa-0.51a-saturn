@@ -45,6 +45,13 @@ static Canvas::Pixel **smokeBuf = nullptr;
 static Canvas::Pixel *pbuf  = nullptr;
 Canvas::Pixel *l1buf = nullptr;
 Canvas::Pixel *l2buf = nullptr;
+// buf is the playfield sprite layer, written every frame by CPU (memset + draw calls).
+// Declared as a static BSS array so it lives in HWRAM (0x06xxxxxx, 32-bit bus) BEFORE
+// __heap_start, completely outside the TLSF pool.  This gives ~2× faster memset than
+// LWRAM (16-bit bus) without any risk of overwriting TLSF metadata.
+// IMPORTANT: keep this array ≤ lyrSize bytes; do NOT resize SCREEN_DIVISOR without
+//            updating this declaration.
+static Canvas::Pixel gBufStorage[LAYER_WIDTH * LAYER_HEIGHT];
 Canvas::Pixel *buf   = nullptr;
 Canvas::Pixel *lpbuf = nullptr;
 Canvas::Pixel *rpbuf = nullptr;
@@ -70,6 +77,7 @@ struct PendingLineCommand
 static constexpr int MAX_PENDING_LINE_COMMANDS = 512;
 static PendingLineCommand pendingLineCommands[MAX_PENDING_LINE_COMMANDS];
 static int pendingLineCommandCount = 0;
+static ScreenVdpPerfStats gScreenVdpPerfStats{};
 
 // Handle TGA images in ISO 8:3 format
 #define SPRITE_NUM 7
@@ -314,6 +322,8 @@ static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &di
 
   const uint8_t *srcRow = src + srcX + (srcY * PANEL_WIDTH);
   uint8_t *dstRow = (uint8_t *)panelLayerVram + dstStartX + (srcY * PANEL_LAYER_WIDTH);
+  const uint32_t copyBytes = (uint32_t)copyW * (uint32_t)copyH;
+  const uint32_t uploadStartUs = SDL_GetProfileMicros();
 
   for (int row = 0; row < copyH; row++)
   {
@@ -322,6 +332,9 @@ static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &di
     dstRow += PANEL_LAYER_WIDTH;
   }
   slDMAWait();
+
+  gScreenVdpPerfStats.panelUploadUs += SDL_GetProfileMicros() - uploadStartUs;
+  gScreenVdpPerfStats.panelUploadBytes += copyBytes;
 }
 
 static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect)
@@ -394,14 +407,31 @@ static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect
 
   const uint8_t *srcRow = src + srcX + (srcY * LAYER_WIDTH);
   uint8_t *dstRow = (uint8_t *)panelLayerVram + dstStartX + (srcY * PANEL_LAYER_WIDTH);
+  const uint32_t copyBytes = (uint32_t)copyW * (uint32_t)copyH;
+  const uint32_t uploadStartUs = SDL_GetProfileMicros();
+  const bool srcInHwram = ((((uintptr_t)srcRow) & 0xFF000000u) == 0x06000000u);
 
   for (int row = 0; row < copyH; row++)
   {
-    slDMACopy((void *)srcRow, dstRow, copyW);
+    if (srcInHwram)
+    {
+      // SH-2 DMAC path is unstable with HWRAM source on real hardware; use CPU copy.
+      memcpy(dstRow, srcRow, (size_t)copyW);
+    }
+    else
+    {
+      slDMACopy((void *)srcRow, dstRow, copyW);
+    }
     srcRow += LAYER_WIDTH;
     dstRow += PANEL_LAYER_WIDTH;
   }
-  slDMAWait();
+  if (!srcInHwram)
+  {
+    slDMAWait();
+  }
+
+  gScreenVdpPerfStats.playfieldUploadUs += SDL_GetProfileMicros() - uploadStartUs;
+  gScreenVdpPerfStats.playfieldUploadBytes += copyBytes;
 }
 
 static bool refreshPanelLayer()
@@ -416,42 +446,61 @@ static bool refreshPanelLayer()
     return false;
   }
 
+  // Iter G: Skip playfield upload every other frame to halve DMA cost (~8ms → ~4ms avg).
+  // Bullet/foe pixel positions are 1 frame stale on skipped frames. VDP1 hw-lines
+  // still update every frame. Acceptable at 25 FPS (1 frame = 40ms lag for box positions).
+  static uint8_t sPlayfieldUploadSkip = 0u;
+  const bool skipPlayfield = ((sPlayfieldUploadSkip & 1u) != 0u);
+  sPlayfieldUploadSkip++;
+
   bool uploaded = false;
 
   if (layer->dirty)
   {
-    SDL_Rect dirtyRect;
-    dirtyRect.x = layer->dirtyX1;
-    dirtyRect.y = layer->dirtyY1;
-    dirtyRect.w = layer->dirtyX2 - layer->dirtyX1;
-    dirtyRect.h = layer->dirtyY2 - layer->dirtyY1;
-    uploadPlayfieldBitmapRegion(buf, dirtyRect);
+    if (!skipPlayfield)
+    {
+      SDL_Rect dirtyRect;
+      dirtyRect.x = layer->dirtyX1;
+      dirtyRect.y = layer->dirtyY1;
+      dirtyRect.w = layer->dirtyX2 - layer->dirtyX1;
+      dirtyRect.h = layer->dirtyY2 - layer->dirtyY1;
+      uploadPlayfieldBitmapRegion(buf, dirtyRect);
+      uploaded = true;
+    }
     SDL_ClearDirtyRect(layer);
-    uploaded = true;
   }
 
   if (lpanel->dirty)
   {
-    SDL_Rect dirtyRect;
-    dirtyRect.x = lpanel->dirtyX1;
-    dirtyRect.y = lpanel->dirtyY1;
-    dirtyRect.w = lpanel->dirtyX2 - lpanel->dirtyX1;
-    dirtyRect.h = lpanel->dirtyY2 - lpanel->dirtyY1;
-    uploadPanelBitmapRegion(lpbuf, dirtyRect, 0);
+    // Iter K: Interleave panel upload with playfield — upload on odd frames (when PF is skipped).
+    // Score display lags by at most 1 frame — imperceptible.
+    if (skipPlayfield)
+    {
+      SDL_Rect dirtyRect;
+      dirtyRect.x = lpanel->dirtyX1;
+      dirtyRect.y = lpanel->dirtyY1;
+      dirtyRect.w = lpanel->dirtyX2 - lpanel->dirtyX1;
+      dirtyRect.h = lpanel->dirtyY2 - lpanel->dirtyY1;
+      uploadPanelBitmapRegion(lpbuf, dirtyRect, 0);
+      uploaded = true;
+    }
     SDL_ClearDirtyRect(lpanel);
-    uploaded = true;
   }
 
   if (rpanel->dirty)
   {
-    SDL_Rect dirtyRect;
-    dirtyRect.x = rpanel->dirtyX1;
-    dirtyRect.y = rpanel->dirtyY1;
-    dirtyRect.w = rpanel->dirtyX2 - rpanel->dirtyX1;
-    dirtyRect.h = rpanel->dirtyY2 - rpanel->dirtyY1;
-    uploadPanelBitmapRegion(rpbuf, dirtyRect, PANEL_LAYER_RIGHT_X);
+    // Iter K: Same interleaving for right panel.
+    if (skipPlayfield)
+    {
+      SDL_Rect dirtyRect;
+      dirtyRect.x = rpanel->dirtyX1;
+      dirtyRect.y = rpanel->dirtyY1;
+      dirtyRect.w = rpanel->dirtyX2 - rpanel->dirtyX1;
+      dirtyRect.h = rpanel->dirtyY2 - rpanel->dirtyY1;
+      uploadPanelBitmapRegion(rpbuf, dirtyRect, PANEL_LAYER_RIGHT_X);
+      uploaded = true;
+    }
     SDL_ClearDirtyRect(rpanel);
-    uploaded = true;
   }
 
   return uploaded;
@@ -712,14 +761,17 @@ void initSDL()
   lpanel = &lpanelSurface;
   rpanel = &rpanelSurface;
 
-  // Allocate frame buffers from LWRAM (1MB at 0x00200000), preserving main RAM heap for BLB parsers
+  // Allocate frame buffers: pbuf/l1buf/l2buf from LWRAM; buf from static HWRAM BSS array.
+  // gBufStorage[] lives in BSS before __heap_start so memset cannot corrupt TLSF metadata.
   const size_t lwrFreeBefore = SRL::Memory::LowWorkRam::GetFreeSpace();
-  SRL::Logger::LogInfo("[SCREEN] LWRAM free before frame buffers: %lu", (unsigned long)lwrFreeBefore);
+  const size_t hwrFreeBefore = SRL::Memory::HighWorkRam::GetFreeSpace();
+  SRL::Logger::LogInfo("[SCREEN] LWRAM free before frame buffers: %lu  HWRAM free: %lu",
+                       (unsigned long)lwrFreeBefore, (unsigned long)hwrFreeBefore);
 
   pbuf  = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
   l1buf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
   l2buf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
-  buf   = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
+  buf   = gBufStorage;   // static HWRAM BSS array — never touches TLSF pool
   lpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
   rpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
   if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
@@ -737,7 +789,7 @@ void initSDL()
     if (!pbuf)  pbuf  = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
     if (!l1buf) l1buf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
     if (!l2buf) l2buf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
-    if (!buf)   buf   = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
+    // buf always set to gBufStorage — no fallback needed
     if (!lpbuf) lpbuf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
     if (!rpbuf) rpbuf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
   }
@@ -746,6 +798,14 @@ void initSDL()
   {
     SRL::Logger::LogFatal("[SCREEN] Failed to allocate frame buffers (LWRAM+HWRAM)");
     SRL::System::Exit(1);
+  }
+
+  {
+    const bool bufHwram = ((uintptr_t)buf & 0xFF000000u) == 0x06000000u;
+    SRL::Logger::LogInfo("[SCREEN] buf=%p %s  HWRAM free after: %lu",
+                         buf,
+                         bufHwram ? "HWRAM-32bit" : "LWRAM-fallback",
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
   }
 
   memset(pbuf,  0, lyrSize);
@@ -832,19 +892,75 @@ void blendScreen()
   }
 #endif
 
-  // Rebuild this frame from the mid/background software layer first so
-  // foreground draws after blend do not accumulate stale pixels.
-  SDL_CopyBytes(buf, l2buf, lyrSize);
-
-  for (int i = lyrSize - 1; i >= 0; i--)
+  // Single-pass blend: combine the l2buf→buf copy and the l1buf alpha composite
+  // into one loop.  When an entire 4-pixel word of l1buf is zero (the common
+  // case on sparse bullet patterns) we write the 4 background pixels as a single
+  // 32-bit store, avoiding a separate full-surface SDL_CopyBytes pass (~12 ms).
+#if NOIZ2SA_BLEND_SKIP
+  // Skip per-pixel alpha table lookup — opaque composite only.
+  // Used to measure FPS headroom without alpha-blend cost.
   {
-    if (l1buf[i] == 0)
+    const uint32_t blendStart = SDL_GetProfileMicros();
+    const uint32_t *l1w = reinterpret_cast<const uint32_t *>(l1buf);
+    const uint32_t *l2w = reinterpret_cast<const uint32_t *>(l2buf);
+    uint32_t       *bufw = reinterpret_cast<uint32_t *>(buf);
+    const int words = lyrSize >> 2;
+    const int tail  = lyrSize & 3;
+    for (int w = 0; w < words; w++)
     {
-      continue;
+      if (l1w[w] == 0u) { bufw[w] = l2w[w]; continue; }
+      const int base = w << 2;
+      for (int j = base; j < base + 4; j++)
+        buf[j] = (l1buf[j] != 0) ? l1buf[j] : l2buf[j];
     }
-
-    buf[i] = (buf[i] == 0) ? l1buf[i] : colorAlp[l1buf[i]][buf[i]];
+    for (int i = lyrSize - tail; i < lyrSize; i++)
+      buf[i] = (l1buf[i] != 0) ? l1buf[i] : l2buf[i];
+    gScreenVdpPerfStats.blendCopyUs  += SDL_GetProfileMicros() - blendStart;
+    gScreenVdpPerfStats.blendAlphaUs += 0u;
   }
+#else
+  // Forward iteration is cache-friendly for sequential l1buf/buf access.
+  // Check 4 pixels at a time as uint32: when the entire foreground word is
+  // zero, write the background word directly (32-bit store, no table lookup).
+  {
+    const uint32_t blendStart = SDL_GetProfileMicros();
+    const uint32_t *l1w  = reinterpret_cast<const uint32_t *>(l1buf);
+    const uint32_t *l2w  = reinterpret_cast<const uint32_t *>(l2buf);
+    uint32_t       *bufw = reinterpret_cast<uint32_t *>(buf);
+    const int words = lyrSize >> 2;
+    const int tail  = lyrSize & 3;
+
+    for (int w = 0; w < words; w++)
+    {
+      if (l1w[w] == 0u)
+      {
+        bufw[w] = l2w[w]; // No foreground in this 4-pixel group — bulk copy bg
+        continue;
+      }
+      const int base = w << 2;
+      for (int j = base; j < base + 4; j++)
+      {
+        const Canvas::Pixel fg = l1buf[j];
+        if (fg == 0)
+        {
+          buf[j] = l2buf[j];
+          continue;
+        }
+        const Canvas::Pixel bg = l2buf[j];
+        buf[j] = (bg == 0) ? fg : colorAlp[fg][bg];
+      }
+    }
+    // Handle any remaining pixels (lyrSize not a multiple of 4)
+    for (int i = lyrSize - tail; i < lyrSize; i++)
+    {
+      const Canvas::Pixel fg = l1buf[i];
+      buf[i] = (fg == 0) ? l2buf[i] :
+               (l2buf[i] == 0) ? fg : colorAlp[fg][l2buf[i]];
+    }
+    gScreenVdpPerfStats.blendCopyUs  += 0u; // no separate copy pass
+    gScreenVdpPerfStats.blendAlphaUs += SDL_GetProfileMicros() - blendStart;
+  }
+#endif
 
   SDL_SetSurfaceDirty(layer);
 }
@@ -866,6 +982,8 @@ void flipScreen()
   const uint32_t panelStartUs = SDL_GetProfileMicros();
   const bool panelUploaded = refreshPanelLayer();
   const uint32_t timePanelUs = SDL_GetProfileMicros() - panelStartUs;
+  (void)panelUploaded;
+  (void)timePanelUs;
 
   uint32_t timeLayerUs = 0;
   if (layer->dirty)
@@ -874,6 +992,7 @@ void flipScreen()
     SDL_BlitSurface(layer, nullptr, video, &layerRect);
     timeLayerUs = SDL_GetProfileMicros() - blitStartUs;
   }
+  (void)timeLayerUs;
 
   uint32_t timeHwLineUs = 0;
   if (pendingLineCommandCount > 0)
@@ -882,11 +1001,32 @@ void flipScreen()
     flushHardwareLineCommands();
     timeHwLineUs = SDL_GetProfileMicros() - hwLineStartUs;
   }
+
+  const uint32_t flipPresentStartUs = SDL_GetProfileMicros();
   
   SDL_Flip(video);
 
+  gScreenVdpPerfStats.flipPresentUs += SDL_GetProfileMicros() - flipPresentStartUs;
+  gScreenVdpPerfStats.hwLineUs += timeHwLineUs;
+
   flipCounter++;
 
+}
+
+void consumeScreenVdpPerfStats(ScreenVdpPerfStats *outStats)
+{
+  if (outStats == nullptr)
+  {
+    gScreenVdpPerfStats = ScreenVdpPerfStats{};
+    SDL_ResetBlitStats();
+    return;
+  }
+
+  *outStats = gScreenVdpPerfStats;
+  gScreenVdpPerfStats = ScreenVdpPerfStats{};
+
+  SDL_GetBlitStats(nullptr, nullptr, nullptr, &outStats->vdp1BlitUploadUs, &outStats->vdp1BlitDrawUs);
+  SDL_ResetBlitStats();
 }
 
 void clearScreen()
@@ -987,8 +1127,10 @@ void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Ca
 
 
   // Configurable hardware/software line path
+  // Iter E: drawBulletsWake now passes ::buf instead of l1buf, so match both.
+  // Iter F: also allow hardware lines in GAMEOVER state (wake drawing is equally expensive).
 #if NOIZ2SA_ENABLE_HARDWARE_LINE
-  if (buf == l1buf && status == IN_GAME)
+  if ((buf == l1buf || buf == ::buf) && (status == IN_GAME || status == GAMEOVER))
   {
     if (width == 1)
     {
@@ -1332,6 +1474,9 @@ int drawNumCenter(int n, int x, int y, int s, int c1, int c2)
 
 int getPadState()
 {
+#if HW_DEBUG
+  return 0;
+#else
   int pad = 0;
 
   if (gamepad && gamepad->IsConnected())
@@ -1347,12 +1492,16 @@ int getPadState()
   }
 
   return pad;
+#endif
 }
 
 int buttonReversed = 0;
 
 int getButtonState()
 {
+#if HW_DEBUG
+  return 0;
+#else
   int btn = 0;
   int fireBtn1 = 0, fireBtn2 = 0, slowBtn1 = 0, slowBtn2 = 0;
   if (gamepad->IsConnected())
@@ -1385,4 +1534,5 @@ int getButtonState()
     }
   }
   return btn;
+#endif
 }
