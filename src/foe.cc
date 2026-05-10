@@ -321,6 +321,7 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
       totalProjectiles >= kMaxTotalProjectiles)
   {
     bulletSpawnFailed++;
+    delete state;
     return;
   }
 
@@ -328,12 +329,14 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
   if (!fe)
   {
     bulletSpawnFailed++;
+    delete state;
     return;
   }
   fe->cmd = createFoeCommand(state, fe);
   if (!fe->cmd)
   {
     bulletSpawnFailed++;
+    delete state;
     return;
   }
   fe->spos = fe->ppos = fe->pos = *pos;
