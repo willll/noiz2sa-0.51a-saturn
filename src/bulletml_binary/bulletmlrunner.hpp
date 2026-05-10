@@ -7,6 +7,47 @@
 #include "bulletmlparser_blb.hpp"
 #include <srl_log.hpp>
 
+inline uint32_t& getBulletMlAllocFailureCount() {
+    static uint32_t sAllocFailures = 0;
+    return sAllocFailures;
+}
+
+inline void logBulletMlAllocFailure(const char* tag, uint32_t count = 0) {
+    uint32_t& failCount = getBulletMlAllocFailureCount();
+    failCount++;
+    if (failCount <= 8 || (failCount % 64) == 0) {
+        if (count > 0) {
+            SRL::Logger::LogWarning("[BML-ALLOC] failed tag=%s count=%lu total_fail=%lu",
+                                    tag,
+                                    (unsigned long)count,
+                                    (unsigned long)failCount);
+        } else {
+            SRL::Logger::LogWarning("[BML-ALLOC] failed tag=%s total_fail=%lu",
+                                    tag,
+                                    (unsigned long)failCount);
+        }
+    }
+}
+
+template <typename T>
+inline T* allocBulletMlArray(const char* tag, uint32_t count) {
+    if (count == 0) return nullptr;
+    T* ptr = hwnew T[count];
+    if (!ptr) {
+        logBulletMlAllocFailure(tag, count);
+    }
+    return ptr;
+}
+
+template <typename T, typename... Args>
+inline T* allocBulletMlObject(const char* tag, Args... args) {
+    T* ptr = hwnew T(args...);
+    if (!ptr) {
+        logBulletMlAllocFailure(tag);
+    }
+    return ptr;
+}
+
 using SRL::Math::Types::Fxp;
 
 class BulletMLRunnerImpl;
@@ -108,7 +149,12 @@ public:
           spd_(Fxp::Convert(0)),
           dir_(Fxp::Convert(0)),
           prev_spd_(Fxp::Convert(0)),
-          prev_dir_(Fxp::Convert(0)) {
+          prev_dir_(Fxp::Convert(0)),
+          expand_name_(0),
+          expand_ref_id_(0),
+          expand_fanout_(0),
+          expand_child_count_(0),
+          capacity_fail_logs_(0) {
         if (!state || !runner_) {
             end_ = true;
             return;
@@ -118,7 +164,7 @@ public:
 
         node_count_ = state->getNodeCount();
         if (node_count_ > 0 && state->getNodes()) {
-            nodes_ = hwnew BulletMLNode*[node_count_];
+            nodes_ = allocBulletMlArray<BulletMLNode*>("runner.nodes", node_count_);
             if (!nodes_) {
                 end_ = true;
                 delete state;
@@ -210,6 +256,11 @@ public:
                     break;
             }
 
+            if (end_) {
+                task_count_ = 0;
+                return;
+            }
+
             // Guard against pathological no-wait scripts.
             ++safety;
             if (safety > 8192) {
@@ -226,6 +277,8 @@ public:
     }
 
 private:
+    static constexpr uint16_t kMaxTaskCapacity = 2048;
+
     enum TaskType {
         TASK_NODE = 0,
         TASK_REPEAT = 1,
@@ -254,8 +307,34 @@ private:
         Fxp gradient;
     };
 
-    bool ensureTaskCapacity(uint16_t needed) {
+    void setExpansionContext(BulletMLNode::Name name, uint32_t ref_id, uint32_t fanout, uint32_t child_count) {
+        expand_name_ = static_cast<uint8_t>(name);
+        expand_ref_id_ = ref_id;
+        expand_fanout_ = fanout;
+        expand_child_count_ = child_count;
+    }
+
+    bool ensureTaskCapacity(uint32_t needed) {
         if (needed <= task_capacity_) return true;
+
+        if (needed > kMaxTaskCapacity) {
+            if (capacity_fail_logs_ < 12) {
+                ++capacity_fail_logs_;
+                SRL::Logger::LogWarning(
+                    "[BML-RUNNER] Task capacity hard limit (needed=%u cap=%u count=%u curr_cap=%u turn=%d wait=%d ctx_name=%u ctx_ref=%u ctx_fanout=%u ctx_children=%u)",
+                    static_cast<unsigned>(needed),
+                    static_cast<unsigned>(kMaxTaskCapacity),
+                    static_cast<unsigned>(task_count_),
+                    static_cast<unsigned>(task_capacity_),
+                    runner_ ? runner_->getTurn() : -1,
+                    wait_until_turn_,
+                    static_cast<unsigned>(expand_name_),
+                    static_cast<unsigned>(expand_ref_id_),
+                    static_cast<unsigned>(expand_fanout_),
+                    static_cast<unsigned>(expand_child_count_));
+            }
+            return false;
+        }
 
         uint16_t new_cap = (task_capacity_ == 0) ? 16 : task_capacity_;
         while (new_cap < needed) {
@@ -267,7 +346,17 @@ private:
             new_cap = grown;
         }
 
-        Task* t = hwnew Task[new_cap];
+        if (new_cap > kMaxTaskCapacity) {
+            new_cap = kMaxTaskCapacity;
+        }
+
+        if (new_cap < needed) {
+            SRL::Logger::LogWarning("[BML-RUNNER] Task capacity clamp insufficient (needed=%u, capped=%u)",
+                                    static_cast<unsigned>(needed), new_cap);
+            return false;
+        }
+
+        Task* t = allocBulletMlArray<Task>("runner.tasks", new_cap);
         if (!t) return false;
         for (uint16_t i = 0; i < task_count_; ++i) {
             t[i] = tasks_[i];
@@ -278,15 +367,38 @@ private:
         return true;
     }
 
+    bool validateTaskStack(const char* where) {
+        if (task_count_ <= task_capacity_) return true;
+        SRL::Logger::LogWarning("[BML-RUNNER] Task stack corruption at %s (count=%u, cap=%u)",
+                                where, task_count_, task_capacity_);
+        end_ = true;
+        task_count_ = 0;
+        return false;
+    }
+
     bool pushTask(const Task& task) {
-        if (!ensureTaskCapacity(static_cast<uint16_t>(task_count_ + 1))) {
+        if (!validateTaskStack("push")) {
             return false;
         }
+
+        const uint32_t needed = static_cast<uint32_t>(task_count_) + 1U;
+        if (!ensureTaskCapacity(needed)) {
+            end_ = true;
+            return false;
+        }
+
+        if (!validateTaskStack("push-post-alloc")) {
+            return false;
+        }
+
         tasks_[task_count_++] = task;
         return true;
     }
 
     bool popTask(Task& out) {
+        if (!validateTaskStack("pop")) {
+            return false;
+        }
         if (task_count_ == 0) return false;
         out = tasks_[--task_count_];
         return true;
@@ -524,7 +636,7 @@ private:
 
         if (!src || count == 0) return;
 
-        Fxp* p = hwnew Fxp[count];
+        Fxp* p = allocBulletMlArray<Fxp>("runner.params.copy", count);
         if (!p) return;
         for (uint16_t i = 0; i < count; ++i) {
             p[i] = src[i];
@@ -777,7 +889,7 @@ private:
         if (param_nodes == 0) return nullptr;
 
         const uint16_t total = static_cast<uint16_t>(param_nodes + 1);
-        Fxp* out = hwnew Fxp[total];
+        Fxp* out = allocBulletMlArray<Fxp>("runner.params.collectRef", total);
         if (!out) return nullptr;
 
         out[0] = 0.0;  // 1-based parameters
@@ -824,7 +936,7 @@ private:
                     return;
                 }
 
-                BulletMLNode** acts = hwnew BulletMLNode*[total];
+                BulletMLNode** acts = allocBulletMlArray<BulletMLNode*>("runner.bullet.actions", total);
                 if (!acts) return;
 
                 uint16_t w = 0;
@@ -838,7 +950,7 @@ private:
                     if (c && c->getNameAsName() == BulletMLNode::actionRef) acts[w++] = c;
                 }
 
-                BulletMLState* st = hwnew BulletMLState(parser_, acts, total, params_, param_count_);
+                BulletMLState* st = allocBulletMlObject<BulletMLState>("runner.bullet.state", parser_, acts, total, params_, param_count_);
                 if (!st) {
                     delete[] acts;
                     SRL::Logger::LogWarning("[BML-RUNNER] Failed to allocate child state for bullet actions=%u", total);
@@ -856,15 +968,29 @@ private:
                 BulletMLNode* bullet = findChild(node, BulletMLNode::bullet);
                 if (!bullet) bullet = findChild(node, BulletMLNode::bulletRef);
                 if (bullet) {
-                    pushNodeTask(bullet);
+                    if (!pushNodeTask(bullet)) {
+                        end_ = true;
+                    }
                 }
                 return;
             }
 
             case BulletMLNode::action: {
                 const uint32_t child_count = node->getChildCount();
+                setExpansionContext(name, 0, child_count, child_count);
+                if (child_count >= 512 || (task_capacity_ > task_count_ && (task_capacity_ - task_count_) < child_count)) {
+                    SRL::Logger::LogWarning(
+                        "[BML-RUNNER] action fanout children=%u pending=%u cap=%u turn=%d",
+                        static_cast<unsigned>(child_count),
+                        static_cast<unsigned>(task_count_),
+                        static_cast<unsigned>(task_capacity_),
+                        runner_ ? runner_->getTurn() : -1);
+                }
                 for (int i = static_cast<int>(child_count) - 1; i >= 0; --i) {
-                    pushNodeTask(node->getChild(static_cast<uint32_t>(i)));
+                    if (!pushNodeTask(node->getChild(static_cast<uint32_t>(i)))) {
+                        end_ = true;
+                        return;
+                    }
                 }
                 return;
             }
@@ -885,8 +1011,19 @@ private:
                 int times_num = evalNodeValue(times).As<int>();
                 if (times_num <= 0) return;
 
-                pushRepeatTask(action, times_num - 1);
-                pushNodeTask(action);
+                setExpansionContext(name, 0, 2, static_cast<uint32_t>(times_num));
+                if (times_num >= 512) {
+                    SRL::Logger::LogWarning(
+                        "[BML-RUNNER] repeat fanout times=%d pending=%u cap=%u turn=%d",
+                        times_num,
+                        static_cast<unsigned>(task_count_),
+                        static_cast<unsigned>(task_capacity_),
+                        runner_ ? runner_->getTurn() : -1);
+                }
+
+                if (!pushRepeatTask(action, times_num - 1) || !pushNodeTask(action)) {
+                    end_ = true;
+                }
                 return;
             }
 
@@ -909,19 +1046,48 @@ private:
                     return;
                 }
 
+                setExpansionContext(name, id, target->getChildCount(), target->getChildCount());
+                if (target->getChildCount() >= 256) {
+                    SRL::Logger::LogWarning(
+                        "[BML-RUNNER] ref fanout name=%u id=%u target_children=%u pending=%u cap=%u turn=%d",
+                        static_cast<unsigned>(name),
+                        static_cast<unsigned>(id),
+                        static_cast<unsigned>(target->getChildCount()),
+                        static_cast<unsigned>(task_count_),
+                        static_cast<unsigned>(task_capacity_),
+                        runner_ ? runner_->getTurn() : -1);
+                }
+
                 uint16_t new_count = 0;
                 Fxp* new_params = collectRefParameters(node, new_count);
 
-                if (!pushPopParamsTask(params_, param_count_, owns_params_)) {
+                Fxp* saved_params = params_;
+                uint16_t saved_count = param_count_;
+                bool saved_owns = owns_params_;
+
+                if (!pushPopParamsTask(saved_params, saved_count, saved_owns)) {
                     delete[] new_params;
                     SRL::Logger::LogWarning("[BML-RUNNER] Failed to push param restore task for ref id=%u", id);
+                    end_ = true;
                     return;
                 }
 
                 params_ = new_params;
                 param_count_ = new_count;
                 owns_params_ = (new_params != nullptr);
-                pushNodeTask(target);
+
+                if (!pushNodeTask(target)) {
+                    if (task_count_ > 0 && tasks_[task_count_ - 1].type == TASK_POP_PARAMS) {
+                        --task_count_;
+                    }
+                    if (owns_params_) {
+                        delete[] params_;
+                    }
+                    params_ = saved_params;
+                    param_count_ = saved_count;
+                    owns_params_ = saved_owns;
+                    end_ = true;
+                }
                 return;
             }
 
@@ -1022,6 +1188,12 @@ private:
     Fxp prev_spd_;
     Fxp prev_dir_;
 
+    uint8_t expand_name_;
+    uint32_t expand_ref_id_;
+    uint32_t expand_fanout_;
+    uint32_t expand_child_count_;
+    uint16_t capacity_fail_logs_;
+
     BulletMLRunnerImpl(const BulletMLRunnerImpl&);
     BulletMLRunnerImpl& operator=(const BulletMLRunnerImpl&);
 };
@@ -1035,24 +1207,27 @@ inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
     if (!top_actions || top_count_u32 == 0) return;
 
     uint16_t top_count = (top_count_u32 > 65535U) ? 65535U : static_cast<uint16_t>(top_count_u32);
-    impls_ = hwnew BulletMLRunnerImpl*[top_count];
+    impls_ = allocBulletMlArray<BulletMLRunnerImpl*>("runner.impls.top", top_count);
     if (!impls_) return;
 
     for (uint16_t i = 0; i < top_count; ++i) impls_[i] = nullptr;
 
     for (uint16_t i = 0; i < top_count; ++i) {
-        BulletMLNode** nodes = hwnew BulletMLNode*[1];
+        BulletMLNode** nodes = allocBulletMlArray<BulletMLNode*>("runner.top.nodes", 1);
         if (!nodes) break;
         nodes[0] = top_actions[i];
 
-        BulletMLState* st = hwnew BulletMLState(parser_, nodes, 1, nullptr, 0);
+        BulletMLState* st = allocBulletMlObject<BulletMLState>("runner.top.state", parser_, nodes, 1, nullptr, 0);
         if (!st) {
             delete[] nodes;
             break;
         }
 
-        BulletMLRunnerImpl* impl = hwnew BulletMLRunnerImpl(st, this);
-        if (!impl) break;
+        BulletMLRunnerImpl* impl = allocBulletMlObject<BulletMLRunnerImpl>("runner.top.impl", st, this);
+        if (!impl) {
+            delete st;
+            break;
+        }
 
         impls_[impl_count_++] = impl;
     }
@@ -1063,10 +1238,10 @@ inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
     if (!state_) return;
 
     parser_ = state_->getParser();
-    impls_ = hwnew BulletMLRunnerImpl*[1];
+    impls_ = allocBulletMlArray<BulletMLRunnerImpl*>("runner.impls.single", 1);
     if (!impls_) return;
 
-    impls_[0] = hwnew BulletMLRunnerImpl(state_, this);
+    impls_[0] = allocBulletMlObject<BulletMLRunnerImpl>("runner.impl.single", state_, this);
     if (!impls_[0]) {
         delete[] impls_;
         impls_ = nullptr;

@@ -35,6 +35,7 @@ Environment:
     SATURN_PSU_IP              Optional REST API IP for PSU controller
     TIMEOUT                    Init timeout for full test (default 90)
     GAMEPLAY_MONITOR_SECONDS   Gameplay monitor window (default 90)
+    HEARTBEAT_MAX_SILENCE_SECONDS  Max allowed heartbeat silence after init (default 20)
     POWER_ON_SETTLE_SECONDS    Settle delay after power on (default 10)
 EOF
 }
@@ -42,6 +43,7 @@ EOF
 # Configuration
 TIMEOUT="${TIMEOUT:-90}"               # Maximum time to wait for game initialization (seconds)
 GAMEPLAY_MONITOR_SECONDS="${GAMEPLAY_MONITOR_SECONDS:-90}"  # Seconds to monitor gameplay after init for alloc violations
+HEARTBEAT_MAX_SILENCE_SECONDS="${HEARTBEAT_MAX_SILENCE_SECONDS:-20}"
 BINARY_PATH="./cd/data/0.bin"
 GAME_READY_MARKER="Reached stage"  # Marker indicating game is fully initialized
 POWER_ON_SETTLE_SECONDS="${POWER_ON_SETTLE_SECONDS:-10}"
@@ -262,6 +264,10 @@ init_time=0
 alloc_baseline_seen=0
 alloc_violations=0
 alloc_violation_lines=""
+heartbeat_seen=0
+heartbeat_last_time=0
+heartbeat_last_line=""
+heartbeat_failed=0
 
 TOTAL_TIMEOUT=$(( TIMEOUT + GAMEPLAY_MONITOR_SECONDS ))
 
@@ -283,6 +289,12 @@ while IFS= read -r line; do
             break
         fi
     else
+        if echo "$line" | grep -q "\[HEARTBEAT\]"; then
+            heartbeat_seen=1
+            heartbeat_last_time=$NOW
+            heartbeat_last_line="$line"
+        fi
+
         if echo "$line" | grep -q "\[ALLOC_STRESS\] baseline captured"; then
             echo "[ALLOC_STRESS] ✓ Baseline snapshot captured"
             alloc_baseline_seen=1
@@ -296,8 +308,25 @@ while IFS= read -r line; do
             echo "[MONITOR] Alloc-stress window complete"
             break
         fi
+
+        if [ $heartbeat_seen -eq 1 ] && [ $(( NOW - heartbeat_last_time )) -gt $HEARTBEAT_MAX_SILENCE_SECONDS ]; then
+            echo "[HEARTBEAT] ✗ Stale heartbeat detected (last seen $(( NOW - heartbeat_last_time ))s ago)"
+            heartbeat_failed=1
+            break
+        fi
     fi
 done < <(timeout -s TERM -k 5 "$TOTAL_TIMEOUT" ftx -c 2>&1 || true)
+
+NOW_END=$(date +%s)
+if [ $init_complete -eq 1 ]; then
+    if [ $heartbeat_seen -eq 0 ]; then
+        echo "[HEARTBEAT] ✗ No heartbeat lines observed after initialization"
+        heartbeat_failed=1
+    elif [ $(( NOW_END - heartbeat_last_time )) -gt $HEARTBEAT_MAX_SILENCE_SECONDS ]; then
+        echo "[HEARTBEAT] ✗ Heartbeat gap too large at end of monitor ($(( NOW_END - heartbeat_last_time ))s)"
+        heartbeat_failed=1
+    fi
+fi
 
 echo ""
 echo "========================================"
@@ -318,11 +347,24 @@ else
 fi
 if [ $alloc_violations -eq 0 ]; then
     echo "Alloc:    PASS — 0 runtime allocation violations in ${GAMEPLAY_MONITOR_SECONDS}s gameplay window"
-    echo ""
-    echo "✓ HARDWARE STRESS TEST PASSED"
 else
     echo "Alloc:    FAIL — ${alloc_violations} runtime allocation violation(s) detected:"
     printf '%b' "$alloc_violation_lines"
+fi
+
+if [ $heartbeat_failed -eq 0 ]; then
+    echo "Heartbeat: PASS — heartbeat active (max silence ${HEARTBEAT_MAX_SILENCE_SECONDS}s)"
+else
+    echo "Heartbeat: FAIL — heartbeat missing/stale"
+    if [ -n "$heartbeat_last_line" ]; then
+        echo "           Last heartbeat: $heartbeat_last_line"
+    fi
+fi
+
+if [ $alloc_violations -eq 0 ] && [ $heartbeat_failed -eq 0 ]; then
+    echo ""
+    echo "✓ HARDWARE STRESS TEST PASSED"
+else
     echo ""
     echo "✗ HARDWARE STRESS TEST FAILED"
     exit 1
