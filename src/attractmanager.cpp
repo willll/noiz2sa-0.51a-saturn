@@ -133,7 +133,18 @@ void initGameState(int stg)
   nextExtend = 200000;
   neAdd = 300000;
   dsc = -1;
+#if HW_DEBUG
+  // left is stock count, and game over happens when it drops below 0.
+  // Total ships = left + 1, so clamp to at least one starting ship.
+  int hwDebugStartingShips = HW_DEBUG_STARTING_SHIPS;
+  if (hwDebugStartingShips < 1)
+  {
+    hwDebugStartingShips = 1;
+  }
+  left = hwDebugStartingShips - 1;
+#else
   left = 2;
+#endif
   hiScore.stage = stage = stg;
   hsScene = -1;
   drawRPanel();
