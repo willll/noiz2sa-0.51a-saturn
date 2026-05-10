@@ -43,6 +43,10 @@ class FoeCommand : public BulletMLRunner {
  private:
   struct foe *foe;
 };
+
+FoeCommand* createFoeCommand(BulletMLParserBLB* parser, struct foe* f);
+FoeCommand* createFoeCommand(BulletMLState* state, struct foe* f);
+
 #endif
 
 

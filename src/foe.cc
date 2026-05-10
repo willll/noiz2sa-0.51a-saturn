@@ -263,7 +263,7 @@ Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
 
   fe->parser = parser;
 
-  fe->cmd = hwnew FoeCommand(parser, fe);
+  fe->cmd = createFoeCommand(parser, fe);
   if (!fe->cmd)
   {
     fe->spc = NOT_EXIST;
@@ -330,7 +330,7 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
     bulletSpawnFailed++;
     return;
   }
-  fe->cmd = hwnew FoeCommand(state, fe);
+  fe->cmd = createFoeCommand(state, fe);
   if (!fe->cmd)
   {
     bulletSpawnFailed++;
@@ -502,7 +502,7 @@ void moveFoes()
         if (fe->cmd->isEnd())
         {
           delete fe->cmd;
-          fe->cmd = hwnew FoeCommand(fe->parser, fe);
+          fe->cmd = createFoeCommand(fe->parser, fe);
           if (!fe->cmd)
           {
             removeFoeForced(fe);

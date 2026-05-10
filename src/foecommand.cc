@@ -13,6 +13,7 @@
 #include "foe.h"
 #include <cstdint>
 #include <srl_log.hpp>
+#include <srl_memory.hpp>
 
 #include "noiz2sa.h"
 #include "degutil.h"
@@ -73,6 +74,14 @@ FoeCommand::FoeCommand(BulletMLState *state, Foe *f)
 }
 
 FoeCommand::~FoeCommand() {}
+
+FoeCommand* createFoeCommand(BulletMLParserBLB* parser, Foe* f) {
+  return hwnew FoeCommand(parser, f);
+}
+
+FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
+  return hwnew FoeCommand(state, f);
+}
 
 Fxp FoeCommand::getBulletDirection() {
   return legacyDirectionIndexToFxpDegrees(foe->d);
