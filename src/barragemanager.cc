@@ -72,6 +72,11 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
   for (uint32_t patternIndex = 0; patternIndex < patternCount && i < BARRAGE_PATTERN_MAX; ++patternIndex)
   {
+    SRL::Logger::LogInfo("[BARRAGE] %s embedded %u/%u begin: %s",
+                         dirPath,
+                         (unsigned)(patternIndex + 1),
+                         (unsigned)patternCount,
+                         patterns[patternIndex].name);
     brg[i].bulletml = new BulletMLParserBLB(patterns[patternIndex].name, patterns[patternIndex].data, patterns[patternIndex].size);
     if (!brg[i].bulletml->build())
     {
@@ -80,6 +85,11 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
       brg[i].bulletml = nullptr;
       SRL::System::Exit(1);
     }
+    SRL::Logger::LogInfo("[BARRAGE] %s embedded %u/%u done: %s",
+                         dirPath,
+                         (unsigned)(patternIndex + 1),
+                         (unsigned)patternCount,
+                         patterns[patternIndex].name);
     i++;
   }
 

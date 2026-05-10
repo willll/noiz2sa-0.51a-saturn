@@ -32,6 +32,35 @@ static constexpr int BACKGROUND_BITMAP_WIDTH = 512;
 static constexpr int BACKGROUND_BITMAP_HEIGHT = 256;
 static constexpr int BACKGROUND_SCREEN_X = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
 
+#if HW_DEBUG
+static void assertBackgroundDestinationRange(const uint8_t *dst, uint32_t bytes)
+{
+  if (backgroundLayerVram == nullptr || backgroundLayerVramSize <= 0)
+  {
+    return;
+  }
+
+  const uintptr_t base = (uintptr_t)backgroundLayerVram;
+  const uintptr_t start = (uintptr_t)dst;
+  const uintptr_t end = start + (uintptr_t)bytes;
+  const uintptr_t limit = base + (uintptr_t)backgroundLayerVramSize;
+
+  const bool wrapped = (end < start);
+  const bool outOfVram = (start < base) || (end > limit);
+  const bool touchesLowHwram = (start < 0x06010000u) && (end > 0x06000000u);
+  if (wrapped || outOfVram || touchesLowHwram)
+  {
+    SRL::Logger::LogFatal(
+      "[CRASH_G] bg dst bad d=0x%08lx n=%lu b=0x%08lx l=0x%08lx",
+        (unsigned long)start,
+        (unsigned long)bytes,
+        (unsigned long)base,
+        (unsigned long)limit);
+    SRL::System::Exit(1);
+  }
+}
+#endif
+
 static int bdIdx;
 static int boardMx, boardMy;
 static int boardRepx, boardRepy;
@@ -230,6 +259,9 @@ static void uploadBackgroundBitmap(const uint16_t *src)
   uint8_t *dstRow = (uint8_t *)backgroundLayerVram + (BACKGROUND_SCREEN_X * (int)sizeof(uint16_t));
   for (int row = 0; row < LAYER_HEIGHT; row++)
   {
+#if HW_DEBUG
+    assertBackgroundDestinationRange(dstRow, (uint32_t)(LAYER_WIDTH * (int)sizeof(uint16_t)));
+#endif
     slDMAWait();  // Wait for previous SCU Level-0 DMA to complete before starting the next
     DMA_ScuMemCopy(dstRow, (void *)srcRow, LAYER_WIDTH * sizeof(uint16_t));
     srcRow += LAYER_WIDTH * sizeof(uint16_t);
@@ -346,7 +378,11 @@ static void submitBackgroundRender()
       backgroundRequestedGeneration,
       bufferIndex);
 
-  SRL::Slave::ExecuteOnSlave(backgroundRenderTask);
+  // Keep background rendering on Master SH2 in all builds.
+  // Running this task via slSlaveFunc can corrupt control flow and jump into
+  // VBR exception table addresses (e.g. 0x06000958) on some emulator/hardware paths.
+  backgroundRenderTask.ResetTask();
+  backgroundRenderTask.Start();
 }
 
 static void presentCompletedBackground()

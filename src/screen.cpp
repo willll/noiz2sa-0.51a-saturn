@@ -436,6 +436,10 @@ static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect
 
 static bool refreshPanelLayer()
 {
+#if HW_DEBUG
+  static uint32_t sRefreshCounter = 0u;
+#endif
+
   if (panelLayerVram == nullptr)
   {
     return false;
@@ -443,65 +447,53 @@ static bool refreshPanelLayer()
 
   if (!layer->dirty && !lpanel->dirty && !rpanel->dirty)
   {
+#if HW_DEBUG
+    sRefreshCounter++;
+#endif
     return false;
   }
-
-  // Iter G: Skip playfield upload every other frame to halve DMA cost (~8ms → ~4ms avg).
-  // Bullet/foe pixel positions are 1 frame stale on skipped frames. VDP1 hw-lines
-  // still update every frame. Acceptable at 25 FPS (1 frame = 40ms lag for box positions).
-  static uint8_t sPlayfieldUploadSkip = 0u;
-  const bool skipPlayfield = ((sPlayfieldUploadSkip & 1u) != 0u);
-  sPlayfieldUploadSkip++;
 
   bool uploaded = false;
 
   if (layer->dirty)
   {
-    if (!skipPlayfield)
-    {
-      SDL_Rect dirtyRect;
-      dirtyRect.x = layer->dirtyX1;
-      dirtyRect.y = layer->dirtyY1;
-      dirtyRect.w = layer->dirtyX2 - layer->dirtyX1;
-      dirtyRect.h = layer->dirtyY2 - layer->dirtyY1;
-      uploadPlayfieldBitmapRegion(buf, dirtyRect);
-      uploaded = true;
-    }
+    SDL_Rect dirtyRect;
+    dirtyRect.x = layer->dirtyX1;
+    dirtyRect.y = layer->dirtyY1;
+    dirtyRect.w = layer->dirtyX2 - layer->dirtyX1;
+    dirtyRect.h = layer->dirtyY2 - layer->dirtyY1;
+    uploadPlayfieldBitmapRegion(buf, dirtyRect);
+    uploaded = true;
     SDL_ClearDirtyRect(layer);
   }
 
   if (lpanel->dirty)
   {
-    // Iter K: Interleave panel upload with playfield — upload on odd frames (when PF is skipped).
-    // Score display lags by at most 1 frame — imperceptible.
-    if (skipPlayfield)
-    {
-      SDL_Rect dirtyRect;
-      dirtyRect.x = lpanel->dirtyX1;
-      dirtyRect.y = lpanel->dirtyY1;
-      dirtyRect.w = lpanel->dirtyX2 - lpanel->dirtyX1;
-      dirtyRect.h = lpanel->dirtyY2 - lpanel->dirtyY1;
-      uploadPanelBitmapRegion(lpbuf, dirtyRect, 0);
-      uploaded = true;
-    }
+    SDL_Rect dirtyRect;
+    dirtyRect.x = lpanel->dirtyX1;
+    dirtyRect.y = lpanel->dirtyY1;
+    dirtyRect.w = lpanel->dirtyX2 - lpanel->dirtyX1;
+    dirtyRect.h = lpanel->dirtyY2 - lpanel->dirtyY1;
+    uploadPanelBitmapRegion(lpbuf, dirtyRect, 0);
+    uploaded = true;
     SDL_ClearDirtyRect(lpanel);
   }
 
   if (rpanel->dirty)
   {
-    // Iter K: Same interleaving for right panel.
-    if (skipPlayfield)
-    {
-      SDL_Rect dirtyRect;
-      dirtyRect.x = rpanel->dirtyX1;
-      dirtyRect.y = rpanel->dirtyY1;
-      dirtyRect.w = rpanel->dirtyX2 - rpanel->dirtyX1;
-      dirtyRect.h = rpanel->dirtyY2 - rpanel->dirtyY1;
-      uploadPanelBitmapRegion(rpbuf, dirtyRect, PANEL_LAYER_RIGHT_X);
-      uploaded = true;
-    }
+    SDL_Rect dirtyRect;
+    dirtyRect.x = rpanel->dirtyX1;
+    dirtyRect.y = rpanel->dirtyY1;
+    dirtyRect.w = rpanel->dirtyX2 - rpanel->dirtyX1;
+    dirtyRect.h = rpanel->dirtyY2 - rpanel->dirtyY1;
+    uploadPanelBitmapRegion(rpbuf, dirtyRect, PANEL_LAYER_RIGHT_X);
+    uploaded = true;
     SDL_ClearDirtyRect(rpanel);
   }
+
+#if HW_DEBUG
+  sRefreshCounter++;
+#endif
 
   return uploaded;
 }
@@ -749,12 +741,62 @@ static void makeSmokeBuf()
 void initSDL()
 {
   // Initialize SDL timing wrappers so SDL_GetTicks()/profiling APIs advance in-game.
-  SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK);
+  SDL_Init(SDL_INIT_VIDEO);
+  SRL::Logger::LogInfo("[TRACE] initSDL: SDL_Init(video) done");
 
-  videoSurface = SRL_Surface(-1, SCREEN_WIDTH, SCREEN_HEIGHT);
-  layerSurface = SRL_Surface(-1, LAYER_WIDTH, LAYER_HEIGHT);
-  lpanelSurface = SRL_Surface(-1, PANEL_WIDTH, PANEL_HEIGHT);
-  rpanelSurface = SRL_Surface(-1, PANEL_WIDTH, PANEL_HEIGHT);
+  SRL::Logger::LogInfo("[TRACE] initSDL: surface init begin");
+  videoSurface.textureIndex = -1;
+  videoSurface.w = SCREEN_WIDTH;
+  videoSurface.h = SCREEN_HEIGHT;
+  videoSurface.pixels = nullptr;
+  videoSurface.dirty = true;
+  videoSurface.preferRGB555 = false;
+  videoSurface.dirtyX1 = 0;
+  videoSurface.dirtyY1 = 0;
+  videoSurface.dirtyX2 = (int16_t)SCREEN_WIDTH;
+  videoSurface.dirtyY2 = (int16_t)SCREEN_HEIGHT;
+  videoSurface.cachedPaletteBank = INT16_MIN;
+  videoSurface.cachedPaletteHash = 0;
+
+  layerSurface.textureIndex = -1;
+  layerSurface.w = LAYER_WIDTH;
+  layerSurface.h = LAYER_HEIGHT;
+  layerSurface.pixels = nullptr;
+  layerSurface.dirty = true;
+  layerSurface.preferRGB555 = false;
+  layerSurface.dirtyX1 = 0;
+  layerSurface.dirtyY1 = 0;
+  layerSurface.dirtyX2 = (int16_t)LAYER_WIDTH;
+  layerSurface.dirtyY2 = (int16_t)LAYER_HEIGHT;
+  layerSurface.cachedPaletteBank = INT16_MIN;
+  layerSurface.cachedPaletteHash = 0;
+
+  lpanelSurface.textureIndex = -1;
+  lpanelSurface.w = PANEL_WIDTH;
+  lpanelSurface.h = PANEL_HEIGHT;
+  lpanelSurface.pixels = nullptr;
+  lpanelSurface.dirty = true;
+  lpanelSurface.preferRGB555 = false;
+  lpanelSurface.dirtyX1 = 0;
+  lpanelSurface.dirtyY1 = 0;
+  lpanelSurface.dirtyX2 = (int16_t)PANEL_WIDTH;
+  lpanelSurface.dirtyY2 = (int16_t)PANEL_HEIGHT;
+  lpanelSurface.cachedPaletteBank = INT16_MIN;
+  lpanelSurface.cachedPaletteHash = 0;
+
+  rpanelSurface.textureIndex = -1;
+  rpanelSurface.w = PANEL_WIDTH;
+  rpanelSurface.h = PANEL_HEIGHT;
+  rpanelSurface.pixels = nullptr;
+  rpanelSurface.dirty = true;
+  rpanelSurface.preferRGB555 = false;
+  rpanelSurface.dirtyX1 = 0;
+  rpanelSurface.dirtyY1 = 0;
+  rpanelSurface.dirtyX2 = (int16_t)PANEL_WIDTH;
+  rpanelSurface.dirtyY2 = (int16_t)PANEL_HEIGHT;
+  rpanelSurface.cachedPaletteBank = INT16_MIN;
+  rpanelSurface.cachedPaletteHash = 0;
+  SRL::Logger::LogInfo("[TRACE] initSDL: surface init done");
 
   video = &videoSurface;
   layer = &layerSurface;
@@ -774,6 +816,7 @@ void initSDL()
   buf   = gBufStorage;   // static HWRAM BSS array — never touches TLSF pool
   lpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
   rpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
+  SRL::Logger::LogInfo("[TRACE] initSDL: buffer alloc done");
   if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
   {
     SRL::Logger::LogWarning(
@@ -802,10 +845,7 @@ void initSDL()
 
   {
     const bool bufHwram = ((uintptr_t)buf & 0xFF000000u) == 0x06000000u;
-    SRL::Logger::LogInfo("[SCREEN] buf=%p %s  HWRAM free after: %lu",
-                         buf,
-                         bufHwram ? "HWRAM-32bit" : "LWRAM-fallback",
-                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+    SRL::Logger::LogInfo("[SCREEN] buf=%p %s", buf, bufHwram ? "HWRAM-32bit" : "LWRAM-fallback");
   }
 
   memset(pbuf,  0, lyrSize);
@@ -814,6 +854,7 @@ void initSDL()
   memset(buf,   0, lyrSize);
   memset(lpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
   memset(rpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
+  SRL::Logger::LogInfo("[TRACE] initSDL: memset done");
 
   // Bind SDL surface wrappers to software pixel buffers for SDL_BlitSurface uploads.
   layer->pixels = buf;
@@ -827,6 +868,7 @@ void initSDL()
   SDL_SetSurfaceDirty(layer);
   SDL_SetSurfaceDirty(lpanel);
   SDL_SetSurfaceDirty(rpanel);
+  SRL::Logger::LogInfo("[TRACE] initSDL: surfaces bound");
 
   layerRect.x = (SCREEN_WIDTH - LAYER_WIDTH) / 2;
   layerRect.y = (SCREEN_HEIGHT - LAYER_HEIGHT) / 2;
@@ -845,21 +887,43 @@ void initSDL()
   panelClearRect.w = PANEL_WIDTH;
   panelClearRect.h = PANEL_HEIGHT;
 
+  SRL::Logger::LogInfo("[TRACE] initSDL: palette begin");
   const int32_t mainPaletteBank = Palette::initPalette();
+  SRL::Logger::LogInfo("[TRACE] initSDL: palette done");
   SDL_SetBlitPaletteBank((int16_t)mainPaletteBank);
+
+#if HW_DEBUG
+  if (Palette::palette != nullptr)
+  {
+    const SRL::Types::HighColor* palData = Palette::palette->GetData();
+    if (palData != nullptr)
+    {
+      SRL::Logger::LogInfo("[PAL] bank=%ld c0=%04lx c17=%04lx c255=%04lx",
+                           (long)mainPaletteBank,
+                           (unsigned long)palData[0],
+                           (unsigned long)palData[0x11],
+                           (unsigned long)palData[0xFF]);
+    }
+  }
+#endif
 
   // The software gameplay layer and title sprites are drawn through VDP1.
   // Raise the default RGB sprite bank above NBG0 so center-layer UI is not hidden by the background.
   SRL::VDP2::SpriteLayer::SetPriority(SRL::VDP2::Priority::Layer7);
 
-  initPanelLayer((int16_t)mainPaletteBank);
-  makeSmokeBuf();
+  SRL::Logger::LogInfo("[TRACE] initSDL: panel/smoke begin");
   clearLPanel();
   clearRPanel();
+  initPanelLayer((int16_t)mainPaletteBank);
+  makeSmokeBuf();
   refreshPanelLayer();
+  SRL::Logger::LogInfo("[TRACE] initSDL: panel/smoke done");
+  SRL::Logger::LogInfo("[TRACE] initSDL: complete");
 
 #if HW_DEBUG
   SRL::Logger::LogInfo("[HW_DEBUG] Skipping CD-backed sprite loading");
+#elif NOIZ2SA_SKIP_CD_SPRITE_LOAD
+  SRL::Logger::LogInfo("[TRACE] initSDL: sprite load skipped");
 #else
   loadSprites();
 #endif
@@ -978,12 +1042,26 @@ void markPlayfieldDirtyRect(int x, int y, int width, int height)
 void flipScreen()
 {
   static uint32_t flipCounter = 0;
+#if HW_DEBUG
+  static uint32_t sLastFlipTickMs = 0u;
+  static uint32_t sNoUploadStreak = 0u;
+#endif
 
   const uint32_t panelStartUs = SDL_GetProfileMicros();
   const bool panelUploaded = refreshPanelLayer();
   const uint32_t timePanelUs = SDL_GetProfileMicros() - panelStartUs;
-  (void)panelUploaded;
   (void)timePanelUs;
+
+#if HW_DEBUG
+  if (!panelUploaded)
+  {
+    sNoUploadStreak++;
+  }
+  else
+  {
+    sNoUploadStreak = 0u;
+  }
+#endif
 
   uint32_t timeLayerUs = 0;
   if (layer->dirty)
@@ -1003,14 +1081,30 @@ void flipScreen()
   }
 
   const uint32_t flipPresentStartUs = SDL_GetProfileMicros();
-  
   SDL_Flip(video);
+
+#if HW_DEBUG
+  const uint32_t flipPresentUs = SDL_GetProfileMicros() - flipPresentStartUs;
+
+  if ((flipCounter % 60u) == 0u)
+  {
+    const uint32_t nowMs = SDL_GetTicks();
+    const uint32_t deltaMs = (sLastFlipTickMs == 0u) ? 0u : (nowMs - sLastFlipTickMs);
+    sLastFlipTickMs = nowMs;
+    const bool likelyVblankWait = (flipPresentUs >= 10000u);
+    SRL::Logger::LogInfo("[FLIP] #%lu uploaded=%d streak=%lu dtms=%lu vsync=%d",
+                         (unsigned long)flipCounter,
+                         panelUploaded ? 1 : 0,
+                         (unsigned long)sNoUploadStreak,
+                         (unsigned long)deltaMs,
+                         likelyVblankWait ? 1 : 0);
+  }
+#endif
 
   gScreenVdpPerfStats.flipPresentUs += SDL_GetProfileMicros() - flipPresentStartUs;
   gScreenVdpPerfStats.hwLineUs += timeHwLineUs;
 
   flipCounter++;
-
 }
 
 void consumeScreenVdpPerfStats(ScreenVdpPerfStats *outStats)

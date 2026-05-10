@@ -47,3 +47,16 @@ void setFoeBudgetLimit(int limit);
 
 // Returns the total number of live projectiles (active + normal + boss active bullets).
 int getLiveProjectileCount();
+
+// FoeCommand pool diagnostics (HW_DEBUG/runtime validation).
+int getFoeCommandPoolUsedCount();
+int getFoeCommandPoolFreeCount();
+int getFoeCommandPoolHighWater();
+int getFoeCommandPoolRejectedAllocCount();
+
+uint32_t getBulletMLStatePoolRejectCount();
+uint32_t getBulletMLImplPoolRejectCount();
+uint32_t getBulletMLTaskCapRejectCount();
+uint32_t getBulletMLNodeCapRejectCount();
+uint32_t getBulletMLParamDepthRejectCount();
+uint32_t getBulletMLRefParamCapRejectCount();

@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.5)
+
 # === Line Drawing Path Options ===
 option(NOIZ2SA_ENABLE_HARDWARE_LINE "Enable hardware-accelerated line drawing" ON)
 option(NOIZ2SA_ENABLE_SOFTWARE_LINE "Enable software (buffer) line drawing" ON)
@@ -14,7 +16,6 @@ if(NOIZ2SA_ENABLE_SOFTWARE_LINE)
 else()
     add_compile_definitions(NOIZ2SA_ENABLE_SOFTWARE_LINE=0)
 endif()
-cmake_minimum_required(VERSION 3.5)
 
 # ============================================================================
 # Saturn Toolchain Configuration
@@ -47,7 +48,9 @@ set(CMAKE_STATIC_LIBRARY_PREFIX "")
 # SEGALIB and SEGASGL are set by sega_saturn.cmake, but available here
 # SATURN_COMMON and SATURN_CMAKE are also set by the toolchain file
 
-# Project definition
+# ============================================================================
+# Project Definition
+# ============================================================================
 project( noiz2sa VERSION 1.0
                   DESCRIPTION "Sega Saturn noiz2sa"
                   LANGUAGES C CXX ASM)
@@ -93,7 +96,7 @@ option(DEBUG "Enable debug mode" OFF)
 set(SRL_LOG_LEVEL "INFO" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
 set(SRL_LOG_OUTPUT "EMULATOR" CACHE STRING "Log output method")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
-set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
+set(SRL_DEBUG_MAX_LOG_LENGTH "400" CACHE STRING "Maximum debug log length")
 
 # Performance/Debug logging option
 option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
@@ -120,6 +123,7 @@ endif()
 
 # Gameplay performance toggles
 option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" ON)
+option(NOIZ2SA_SKIP_CD_SPRITE_LOAD "Skip CD sprite loading during startup for emulator reliability" ON)
 set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=half, 4=quarter)")
 set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
 option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
@@ -134,7 +138,9 @@ set(HW_DEBUG_ENDLESS_STAGE "10" CACHE STRING "Endless stage index to boot direct
 set_property(CACHE HW_DEBUG_ENDLESS_STAGE PROPERTY STRINGS 10 11 12 13)
 
 if(HW_DEBUG)
-    set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
+    if(NOT DEFINED SRL_LOG_OUTPUT_OVERRIDE)
+        set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
+    endif()
     set(NOIZ2SA_ENABLE_SOUND OFF CACHE BOOL "Enable in-game sound (PCM SFX + CDDA BGM)" FORCE)
     set(NOIZ2SA_ENABLE_PCM_SFX OFF CACHE BOOL "Enable PCM SFX loading through Ponesound backend" FORCE)
 
@@ -151,10 +157,10 @@ set(NOIZ2SA_POST_LOAD_BG_COLOR "BLUE" CACHE STRING "Background color after loadi
 set_property(CACHE NOIZ2SA_POST_LOAD_BG_COLOR PROPERTY STRINGS BLUE WHITE BLACK)
 
 # SGL Work Area Settings
-set(SGL_MAX_VERTICES "1800" CACHE STRING "Maximum vertices")
-set(SGL_MAX_POLYGONS "1200" CACHE STRING "Maximum polygons")
-set(SGL_MAX_EVENTS "64" CACHE STRING "Maximum events")
-set(SGL_MAX_WORKS "256" CACHE STRING "Maximum work units")
+set(SGL_MAX_VERTICES "2400" CACHE STRING "Maximum vertices")
+set(SGL_MAX_POLYGONS "1600" CACHE STRING "Maximum polygons")
+set(SGL_MAX_EVENTS "256" CACHE STRING "Maximum events")
+set(SGL_MAX_WORKS "1024" CACHE STRING "Maximum work units")
 
 # Memory allocator
 set(SRL_MALLOC_METHOD "TLSF" CACHE STRING "Memory allocator method (TLSF or empty)")
@@ -258,6 +264,12 @@ if(NOIZ2SA_ENABLE_SMOKE)
     add_compile_definitions(NOIZ2SA_ENABLE_SMOKE=1)
 else()
     add_compile_definitions(NOIZ2SA_ENABLE_SMOKE=0)
+endif()
+
+if(NOIZ2SA_SKIP_CD_SPRITE_LOAD)
+    add_compile_definitions(NOIZ2SA_SKIP_CD_SPRITE_LOAD=1)
+else()
+    add_compile_definitions(NOIZ2SA_SKIP_CD_SPRITE_LOAD=0)
 endif()
 
 add_compile_definitions(NOIZ2SA_SCREEN_DIVISOR=${NOIZ2SA_SCREEN_DIVISOR})

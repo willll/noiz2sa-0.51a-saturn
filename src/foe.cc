@@ -14,6 +14,8 @@
 
 #include "SDL.h"
 #include <stdlib.h>
+#include <cstdint>
+#include <new>
 #include <srl_memory.hpp>
 
 #include "noiz2sa.h"
@@ -71,6 +73,171 @@ static constexpr int kMaxTotalProjectiles = 420;
 static int sLiveActiveBullets = 0;
 static int sLiveNormalBullets = 0;
 static int sLiveBossActiveBullets = 0;
+
+// Fixed-capacity pool for FoeCommand object memory.
+// This removes high-churn heap alloc/free for command wrappers during gameplay.
+static constexpr int kFoeCommandPoolCapacity = FOE_MAX;
+alignas(FoeCommand) static unsigned char sFoeCommandPool[kFoeCommandPoolCapacity][sizeof(FoeCommand)];
+static int sFoeCommandFreeSlots[kFoeCommandPoolCapacity];
+static int sFoeCommandFreeCount = 0;
+static bool sFoeCommandPoolInitialized = false;
+static bool sFoeCommandPoolFallbackWarned = false;
+static int sFoeCommandPoolHighWater = 0;
+static int sFoeCommandPoolRejectedAllocCount = 0;
+
+static void initFoeCommandPool()
+{
+  for (int i = 0; i < kFoeCommandPoolCapacity; i++)
+  {
+    sFoeCommandFreeSlots[i] = i;
+  }
+  sFoeCommandFreeCount = kFoeCommandPoolCapacity;
+  sFoeCommandPoolInitialized = true;
+  sFoeCommandPoolHighWater = 0;
+}
+
+int getFoeCommandPoolUsedCount()
+{
+  return kFoeCommandPoolCapacity - sFoeCommandFreeCount;
+}
+
+int getFoeCommandPoolFreeCount()
+{
+  return sFoeCommandFreeCount;
+}
+
+int getFoeCommandPoolHighWater()
+{
+  return sFoeCommandPoolHighWater;
+}
+
+int getFoeCommandPoolRejectedAllocCount()
+{
+  return sFoeCommandPoolRejectedAllocCount;
+}
+
+uint32_t getBulletMLStatePoolRejectCount()
+{
+  return BulletMLState::getPoolRejectCount();
+}
+
+uint32_t getBulletMLImplPoolRejectCount()
+{
+  return BulletMLRunnerImpl::getImplPoolRejectCount();
+}
+
+uint32_t getBulletMLTaskCapRejectCount()
+{
+  return BulletMLRunnerImpl::getTaskCapRejectCount();
+}
+
+uint32_t getBulletMLNodeCapRejectCount()
+{
+  return BulletMLRunnerImpl::getNodeCapRejectCount();
+}
+
+uint32_t getBulletMLParamDepthRejectCount()
+{
+  return BulletMLRunnerImpl::getParamDepthRejectCount();
+}
+
+uint32_t getBulletMLRefParamCapRejectCount()
+{
+  return BulletMLRunnerImpl::getRefParamCapRejectCount();
+}
+
+static inline bool isFoeCommandFromPool(const FoeCommand *cmd)
+{
+  if (!cmd)
+    return false;
+
+  const uintptr_t poolStart = (uintptr_t)&sFoeCommandPool[0][0];
+  const uintptr_t poolEnd = (uintptr_t)&sFoeCommandPool[kFoeCommandPoolCapacity - 1][0] + sizeof(sFoeCommandPool[0]);
+  const uintptr_t p = (uintptr_t)cmd;
+  return (p >= poolStart && p < poolEnd);
+}
+
+static inline int getFoeCommandPoolSlot(const FoeCommand *cmd)
+{
+  const uintptr_t poolStart = (uintptr_t)&sFoeCommandPool[0][0];
+  const uintptr_t p = (uintptr_t)cmd;
+  return (int)((p - poolStart) / sizeof(sFoeCommandPool[0]));
+}
+
+static FoeCommand *createFoeCommand(BulletMLParserBLB *parser, Foe *fe)
+{
+  if (!sFoeCommandPoolInitialized)
+  {
+    initFoeCommandPool();
+  }
+
+  if (sFoeCommandFreeCount <= 0)
+  {
+    sFoeCommandPoolRejectedAllocCount++;
+    if (!sFoeCommandPoolFallbackWarned)
+    {
+      SRL::Logger::LogWarning("[FOE] FoeCommand pool exhausted; rejecting spawn (no runtime heap fallback)");
+      sFoeCommandPoolFallbackWarned = true;
+    }
+    return nullptr;
+  }
+
+  const int slot = sFoeCommandFreeSlots[--sFoeCommandFreeCount];
+  const int usedNow = kFoeCommandPoolCapacity - sFoeCommandFreeCount;
+  if (usedNow > sFoeCommandPoolHighWater)
+  {
+    sFoeCommandPoolHighWater = usedNow;
+  }
+  void *mem = (void *)&sFoeCommandPool[slot][0];
+  return new (mem) FoeCommand(parser, fe);
+}
+
+static FoeCommand *createFoeCommand(BulletMLState *state, Foe *fe)
+{
+  if (!sFoeCommandPoolInitialized)
+  {
+    initFoeCommandPool();
+  }
+
+  if (sFoeCommandFreeCount <= 0)
+  {
+    sFoeCommandPoolRejectedAllocCount++;
+    if (!sFoeCommandPoolFallbackWarned)
+    {
+      SRL::Logger::LogWarning("[FOE] FoeCommand pool exhausted; rejecting spawn (no runtime heap fallback)");
+      sFoeCommandPoolFallbackWarned = true;
+    }
+    return nullptr;
+  }
+
+  const int slot = sFoeCommandFreeSlots[--sFoeCommandFreeCount];
+  const int usedNow = kFoeCommandPoolCapacity - sFoeCommandFreeCount;
+  if (usedNow > sFoeCommandPoolHighWater)
+  {
+    sFoeCommandPoolHighWater = usedNow;
+  }
+  void *mem = (void *)&sFoeCommandPool[slot][0];
+  return new (mem) FoeCommand(state, fe);
+}
+
+static void destroyFoeCommand(FoeCommand *cmd)
+{
+  if (!cmd)
+    return;
+
+  if (isFoeCommandFromPool(cmd))
+  {
+    const int slot = getFoeCommandPoolSlot(cmd);
+    cmd->~FoeCommand();
+    if (slot >= 0 && slot < kFoeCommandPoolCapacity)
+    {
+      sFoeCommandFreeSlots[sFoeCommandFreeCount++] = slot;
+    }
+    return;
+  }
+
+  delete cmd;
+}
 
 int getLiveProjectileCount()
 {
@@ -188,7 +355,7 @@ static void removeFoeForced(Foe *fe)
   removeFoeForcedNoDeleteCmd(fe);
   if (fe->cmd)
   {
-    delete fe->cmd;
+    destroyFoeCommand(fe->cmd);
     fe->cmd = nullptr;
   }
 }
@@ -203,6 +370,10 @@ void removeFoe(Foe *fe)
 void initFoes()
 {
   int i;
+  if (!sFoeCommandPoolInitialized)
+  {
+    initFoeCommandPool();
+  }
   foeActiveCount = 0;
   for (i = 0; i < FOE_MAX; i++)
   {
@@ -222,6 +393,10 @@ void initFoes()
   sLiveActiveBullets = 0;
   sLiveNormalBullets = 0;
   sLiveBossActiveBullets = 0;
+  sFoeCommandPoolRejectedAllocCount = 0;
+  sFoeCommandPoolFallbackWarned = false;
+  BulletMLState::resetPoolRejectCount();
+  BulletMLRunnerImpl::resetRejectCounters();
 }
 
 void closeFoes()
@@ -231,7 +406,7 @@ void closeFoes()
   {
     Foe *fe = &(foe[foeActiveIndices[i]]);
     if (fe->cmd)
-      delete fe->cmd;
+      destroyFoeCommand(fe->cmd);
   }
 }
 
@@ -256,14 +431,12 @@ static Foe *getNextFoe()
 Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
             BulletMLParserBLB *parser)
 {
-  int i;
   Foe *fe = getNextFoe();
-  if (!fe)
-    return nullptr;
+  if (!fe) return nullptr;
 
   fe->parser = parser;
-
-  fe->cmd = hwnew FoeCommand(parser, fe);
+  fe->cmd = createFoeCommand(parser, fe);
+  if (!fe->cmd) return nullptr;
 
   fe->pos.x = x;
   fe->pos.y = y;
@@ -325,7 +498,12 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
     bulletSpawnFailed++;
     return;
   }
-  fe->cmd = hwnew FoeCommand(state, fe);
+  fe->cmd = createFoeCommand(state, fe);
+  if (!fe->cmd)
+  {
+    bulletSpawnFailed++;
+    return;
+  }
   fe->spos = fe->ppos = fe->pos = *pos;
   fe->vel.x = fe->vel.y = 0;
   fe->rank = rank;
@@ -491,8 +669,8 @@ void moveFoes()
       {
         if (fe->cmd->isEnd())
         {
-          delete fe->cmd;
-          fe->cmd = hwnew FoeCommand(fe->parser, fe);
+          destroyFoeCommand(fe->cmd);
+          fe->cmd = createFoeCommand(fe->parser, fe);
           // fe->cmd->reset();
         }
       }
@@ -505,14 +683,14 @@ void moveFoes()
 #if HW_DEBUG
         if (probeFoe && processed <= 20)
         {
-          SRL::Logger::LogInfo("[FOE] cmd-run p=%d hwfree=%u", processed, (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
+          SRL::Logger::LogInfo("[FOE] cmd-run begin p=%d cnt=%d", processed, fe->cnt);
         }
 #endif
         fe->cmd->run();
 #if HW_DEBUG
         if (probeFoe && processed <= 20)
         {
-          SRL::Logger::LogInfo("[FOE] cmd-done p=%d", processed);
+          SRL::Logger::LogInfo("[FOE] cmd-run end p=%d cnt=%d", processed, fe->cnt);
         }
 #endif
       }
@@ -520,7 +698,7 @@ void moveFoes()
       {
         if (fe->cmd)
         {
-          delete fe->cmd;
+          destroyFoeCommand(fe->cmd);
           fe->cmd = nullptr;
         }
         continue;

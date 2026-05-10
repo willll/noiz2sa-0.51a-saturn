@@ -111,7 +111,11 @@ int FoeCommand::getTurn() {
 }
 
 void FoeCommand::doVanish() {
+#if HW_DEBUG
+  SRL::Logger::LogInfo("[FOE] vanish cnt=%d spc=%d", foe ? foe->cnt : -1, foe ? foe->spc : -1);
+#endif
   removeFoe(foe);
+  requestStop();
 }
 
 void FoeCommand::doChangeDirection(Fxp d) {

@@ -43,7 +43,12 @@ static int noSound = 0;
 // (barragemanager.cc, screen.cpp).  All logic lives in LoadingScreen.
 void updateLoadingProgress(const char *step, int percent)
 {
+#if HW_DEBUG
+  (void)step;
+  (void)percent;
+#else
   g_loadingScreen.Update(step, percent);
+#endif
 }
 
 // Global random number generator (using SRL::Math namespace which is aliased to SaturnMath)
@@ -65,24 +70,32 @@ static void initFirst()
   SRL::Logger::LogInfo("[INIT] First initialization starting");
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
+  SRL::Logger::LogInfo("[TRACE] initFirst: loadPreference begin");
   loadPreference();
+  SRL::Logger::LogInfo("[TRACE] initFirst: loadPreference done");
   SRL::Logger::LogDebug("[INIT] Preferences loaded");
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
   // Initialize random number generator with current time
+  SRL::Logger::LogInfo("[TRACE] initFirst: random begin");
   uint32_t seed = SDL_GetTicks();
   g_random = new SRL::Math::Random<unsigned int>(seed);
+  SRL::Logger::LogInfo("[TRACE] initFirst: random done seed=%u", seed);
   SRL::Logger::LogDebug("[INIT] Random generator initialized with seed: %u", seed);
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
+  SRL::Logger::LogInfo("[TRACE] initFirst: barrage begin");
   initBarragemanager();
+  SRL::Logger::LogInfo("[TRACE] initFirst: barrage done");
   SRL::Logger::LogDebug("[INIT] Barrage manager initialized");
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
+  SRL::Logger::LogInfo("[TRACE] initFirst: attract begin");
   initAttractManager();
+  SRL::Logger::LogInfo("[TRACE] initFirst: attract done");
   SRL::Logger::LogDebug("[INIT] Attract manager initialized");
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
@@ -154,22 +167,44 @@ void initTitle()
   int stg;
   status = TITLE;
 
+  SRL::Logger::LogInfo("[TRACE] initTitle: initTitleAtr begin");
   stg = initTitleAtr();
+  SRL::Logger::LogInfo("[TRACE] initTitle: initTitleAtr done stg=%d", stg);
   SRL::Logger::LogDebug("[TITLE] Title attributes initialized (stage: %d)", stg);
 
+  SRL::Logger::LogInfo("[TRACE] initTitle: initShip begin");
   initShip();
+  SRL::Logger::LogInfo("[TRACE] initTitle: initShip done");
+  SRL::Logger::LogInfo("[TRACE] initTitle: initShots begin");
   initShots();
+  SRL::Logger::LogInfo("[TRACE] initTitle: initShots done");
+  SRL::Logger::LogInfo("[TRACE] initTitle: initFrags begin");
   initFrags();
+  SRL::Logger::LogInfo("[TRACE] initTitle: initFrags done");
+  SRL::Logger::LogInfo("[TRACE] initTitle: initBonuses begin");
   initBonuses();
+  SRL::Logger::LogInfo("[TRACE] initTitle: initBonuses done");
+  SRL::Logger::LogInfo("[TRACE] initTitle: initBackground begin");
   initBackground();
+  SRL::Logger::LogInfo("[TRACE] initTitle: initBackground done");
   SRL::Logger::LogDebug("[TITLE] Game objects initialized");
 
+  SRL::Logger::LogInfo("[TRACE] initTitle: setStageBackground begin");
   setStageBackground(1);
+  SRL::Logger::LogInfo("[TRACE] initTitle: setStageBackground done");
   SRL::Logger::LogDebug("[CDDA] TITLE: forcing menu BGM playMusic(0)");
+  SRL::Logger::LogInfo("[TRACE] initTitle: playMusic begin");
   playMusic(0);
+  SRL::Logger::LogInfo("[TRACE] initTitle: playMusic done");
+  SRL::Logger::LogInfo("[TRACE] initTitle: initTitleStage begin");
   initTitleStage(stg);
+  SRL::Logger::LogInfo("[TRACE] initTitle: initTitleStage done");
+  SRL::Logger::LogInfo("[TRACE] initTitle: showScore begin");
   showScore();
+  SRL::Logger::LogInfo("[TRACE] initTitle: showScore done");
+  SRL::Logger::LogInfo("[TRACE] initTitle: clearRPanel begin");
   clearRPanel();
+  SRL::Logger::LogInfo("[TRACE] initTitle: clearRPanel done");
 
   SRL::Logger::LogInfo("[STATE] TITLE screen ready");
 }
@@ -310,89 +345,33 @@ static void move()
     break;
     
   case IN_GAME:
-#if HW_DEBUG
-    {
-      static uint32_t sMoveProbeCount = 0u;
-      const bool probeMove = (sMoveProbeCount < 4u);
-      if (probeMove)
-      {
-        SRL::Logger::LogInfo("[MOVE] begin idx=%lu", (unsigned long)sMoveProbeCount);
-      }
-#endif
     phaseStart = SDL_GetProfileMicros();
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-bg");
-    #endif
     moveBackground();
     gMovePhaseTimings.background += SDL_GetProfileMicros() - phaseStart;
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-bg");
-    #endif
     
     phaseStart = SDL_GetProfileMicros();
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-addBullets");
-    #endif
     addBullets();
     gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-addBullets");
-    #endif
     
     phaseStart = SDL_GetProfileMicros();
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-shots");
-    #endif
     moveShots();
     gMovePhaseTimings.shots += SDL_GetProfileMicros() - phaseStart;
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-shots");
-    #endif
     
     phaseStart = SDL_GetProfileMicros();
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-ship");
-    #endif
     moveShip();
     gMovePhaseTimings.ship += SDL_GetProfileMicros() - phaseStart;
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-ship");
-    #endif
     
     phaseStart = SDL_GetProfileMicros();
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-foes");
-    #endif
     moveFoes();
     gMovePhaseTimings.foes += SDL_GetProfileMicros() - phaseStart;
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-foes");
-    #endif
     
     phaseStart = SDL_GetProfileMicros();
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-frags");
-    #endif
     moveFrags();
     gMovePhaseTimings.frags += SDL_GetProfileMicros() - phaseStart;
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-frags");
-    #endif
     
     phaseStart = SDL_GetProfileMicros();
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-bonuses");
-    #endif
     moveBonuses();
     gMovePhaseTimings.bonuses += SDL_GetProfileMicros() - phaseStart;
-    #if HW_DEBUG
-    if (probeMove) SRL::Logger::LogInfo("[MOVE] post-bonuses");
-    if (probeMove)
-    {
-      sMoveProbeCount++;
-    }
-    }
-    #endif
     break;
     
   case GAMEOVER:
@@ -459,6 +438,14 @@ static void move()
 
 static void draw()
 {
+#if HW_DEBUG
+  static uint32_t sDrawCount = 0;
+  if (sDrawCount < 10 || (sDrawCount % 60) == 0)
+  {
+    SRL::Logger::LogInfo("[DRAW] start count=%lu status=%d", (unsigned long)sDrawCount, status);
+  }
+#endif
+
   const auto traceDraw = [](uint32_t &accumUs, auto drawCall)
   {
     const uint32_t startUs = SDL_GetProfileMicros();
@@ -585,6 +572,34 @@ static void draw()
     traceDraw(gDrawPhaseTimings.pause, []() { drawPause(); });
     break;
   }
+
+#if HW_DEBUG
+  // Flashing checkerboard marker in the top-left corner proves playfield writes
+  // are changing frame-to-frame even when gameplay visuals look static.
+  {
+    const int markerW = 96;
+    const int markerH = 32;
+    const Canvas::Pixel colorA = ((sDrawCount >> 3) & 1u) ? 0x3Fu : 0x11u;
+    const Canvas::Pixel colorB = ((sDrawCount >> 3) & 1u) ? 0x21u : 0x3Eu;
+    for (int y = 0; y < markerH; ++y)
+    {
+      const int row = y * LAYER_WIDTH;
+      for (int x = 0; x < markerW; ++x)
+      {
+        const bool checker = (((x >> 3) + (y >> 3) + (int)(sDrawCount >> 2)) & 1) != 0;
+        buf[row + x] = checker ? colorA : colorB;
+      }
+    }
+    markPlayfieldDirtyRect(0, 0, markerW, markerH);
+
+    if (sDrawCount < 10u || (sDrawCount % 60u) == 0u)
+    {
+      SRL::Logger::LogInfo("[DRAW] marker frame=%lu", (unsigned long)sDrawCount);
+    }
+  }
+
+  sDrawCount++;
+#endif
 
   gDrawPhaseFrameCount++;
 
@@ -923,7 +938,9 @@ int main()
 
   // Initialize the SRL core (graphics/video setup?)
   // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
+  SRL::Logger::LogInfo("[TRACE] main: core init begin");
   SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
+  SRL::Logger::LogInfo("[TRACE] main: core init done");
 
   // Define loading steps for main()
   const char* mainSteps[] = {
@@ -936,36 +953,44 @@ int main()
   const int mainNumSteps = sizeof(mainSteps) / sizeof(mainSteps[0]);
   int mainStepIdx = 0;
 
-  SRL::Logger::LogDebug("[MAIN] Initializing game config");
+  SRL::Logger::LogInfo("[TRACE] main: game config begin");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initGameConfig();
+  SRL::Logger::LogInfo("[TRACE] main: game config done");
   mainStepIdx++;
 
-  SRL::Logger::LogDebug("[MAIN] Initializing degree utilities");
+  SRL::Logger::LogInfo("[TRACE] main: degutil begin");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initDegutil();
+  SRL::Logger::LogInfo("[TRACE] main: degutil done");
   mainStepIdx++;
 
-  SRL::Logger::LogDebug("[MAIN] Initializing SDL");
+  SRL::Logger::LogInfo("[TRACE] main: sdl begin");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initSDL();
+  SRL::Logger::LogInfo("[TRACE] main: sdl done");
   mainStepIdx++;
 
   if (!noSound)
   {
-    SRL::Logger::LogDebug("[MAIN] Initializing sound");
+    SRL::Logger::LogInfo("[TRACE] main: sound init begin");
     updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
     initSound();
+    SRL::Logger::LogInfo("[TRACE] main: sound init done");
+    SRL::Logger::LogInfo("[TRACE] main: loadSounds begin");
     loadSounds();
+    SRL::Logger::LogInfo("[TRACE] main: loadSounds done");
   }
   else
   {
-    SRL::Logger::LogInfo("[MAIN] Sound disabled");
+    SRL::Logger::LogInfo("[MAIN] Sound disabled for startup");
     updateLoadingProgress("Sound disabled", (mainStepIdx + 1) * 100 / mainNumSteps);
   }
   mainStepIdx++;
 
+  SRL::Logger::LogInfo("[TRACE] main: initFirst begin");
   initFirst();
+  SRL::Logger::LogInfo("[TRACE] main: initFirst done");
 #if HW_DEBUG
   updateLoadingProgress("Entering HW_DEBUG endless", (mainStepIdx + 1) * 100 / mainNumSteps);
   insane = 1;
@@ -977,15 +1002,26 @@ int main()
   SRL::Logger::LogInfo("[HW_DEBUG] Skipping title/menu and booting directly into endless INSANE stage %d", hwDebugStage);
   initGame(hwDebugStage);
 #else
+  SRL::Logger::LogInfo("[TRACE] main: initTitle begin");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initTitle();
+  SRL::Logger::LogInfo("[TRACE] main: initTitle done");
 #endif
   g_loadingScreen.Clear();
 
+  SRL::Logger::LogInfo("[TRACE] main: gamepad init begin");
   initGamepad();
+  SRL::Logger::LogInfo("[TRACE] main: gamepad init done");
   SRL::Logger::LogDebug("[MAIN] Gamepad initialized");
 
   SRL::Logger::LogInfo("[MAIN] Main game loop starting");
+
+  prvTickCount = SDL_GetTicks();
+  gStalledTickFrames = 0;
+  gUseFixedFramePacing = false;
+#if HW_DEBUG
+  SRL::Logger::LogInfo("[TRACE] main: timing primed tick=%ld interval=%d", prvTickCount, interval);
+#endif
 
   gFpsTimes100 = 0u;
   gFpsWindowStartMs = SDL_GetTicks();
@@ -996,8 +1032,15 @@ int main()
 
   //playMusic(7);
 
+  static uint32_t sLoopFrameCount = 0u;
   while (!done)
   {
+#if HW_DEBUG
+    if (sLoopFrameCount < 10u || (sLoopFrameCount % 60u) == 0u)
+    {
+      SRL::Logger::LogInfo("[LOOP] frame=%lu status=%d", (unsigned long)sLoopFrameCount, status);
+    }
+#endif
 #if HW_DEBUG
     static uint32_t sPhaseProbeLoops = 0u;
     const bool probePhase = (sPhaseProbeLoops < 8u);
@@ -1206,34 +1249,16 @@ int main()
     // Process game logic for calculated frames
     uint32_t phaseStartUs = SDL_GetProfileMicros();
 #if HW_DEBUG
-    if (probePhase)
-    {
-      SRL::Logger::LogInfo("[PHASE] pre-move loop=%lu frame=%d", (unsigned long)sPhaseProbeLoops, frame);
-    }
+    SRL::Logger::LogInfo("[LOOP] move_start frame=%lu", (unsigned long)sLoopFrameCount);
 #endif
     for (i = 0; i < frame; i++)
     {
-#if HW_DEBUG
-      if (probePhase && i == 0)
-      {
-        SRL::Logger::LogInfo("[PHASE] pre-move-call loop=%lu i=%d", (unsigned long)sPhaseProbeLoops, i);
-      }
-#endif
       move();
-#if HW_DEBUG
-      if (probePhase && i == 0)
-      {
-        SRL::Logger::LogInfo("[PHASE] post-move-call loop=%lu i=%d", (unsigned long)sPhaseProbeLoops, i);
-      }
-#endif
       tick++;
     }
     uint32_t timeMoveUs = SDL_GetProfileMicros() - phaseStartUs;
 #if HW_DEBUG
-    if (probePhase)
-    {
-      SRL::Logger::LogInfo("[PHASE] post-move loop=%lu us=%lu frame=%d", (unsigned long)sPhaseProbeLoops, (unsigned long)timeMoveUs, frame);
-    }
+    SRL::Logger::LogInfo("[LOOP] move_done us=%lu", (unsigned long)timeMoveUs);
 #endif
 
     uint32_t renderDivisor = 1;
@@ -1248,6 +1273,17 @@ int main()
 
     const bool renderThisLoop =
         (renderDivisor <= 1u) || ((gInGameRenderCounter++ % renderDivisor) == 0u);
+
+  #if HW_DEBUG
+    if (probePhase)
+    {
+      SRL::Logger::LogInfo("[PHASE] render-decision loop=%lu divisor=%lu render=%d gctr=%lu",
+                 (unsigned long)sPhaseProbeLoops,
+                 (unsigned long)renderDivisor,
+                 renderThisLoop ? 1 : 0,
+                 (unsigned long)gInGameRenderCounter);
+    }
+  #endif
 
     uint32_t timeSmokeUs = 0;
     uint32_t timeDrawUs = 0;
@@ -1268,22 +1304,10 @@ int main()
       phaseStartUs = SDL_GetProfileMicros();
       draw();
       timeDrawUs = SDL_GetProfileMicros() - phaseStartUs;
-#if HW_DEBUG
-      if (probePhase)
-      {
-        SRL::Logger::LogInfo("[PHASE] post-draw loop=%lu us=%lu hwfree=%u", (unsigned long)sPhaseProbeLoops, (unsigned long)timeDrawUs, (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
-      }
-#endif
 
       phaseStartUs = SDL_GetProfileMicros();
       flipScreen();
       timeFlipUs = SDL_GetProfileMicros() - phaseStartUs;
-#if HW_DEBUG
-      if (probePhase)
-      {
-        SRL::Logger::LogInfo("[PHASE] post-flip loop=%lu us=%lu", (unsigned long)sPhaseProbeLoops, (unsigned long)timeFlipUs);
-      }
-#endif
 
       consumeScreenVdpPerfStats(&frameVdpStats);
 
@@ -1329,25 +1353,17 @@ int main()
     // Bypass synchronized frame swap/wait path for max throughput.
     // Keep input polling active so controls still update.
     SRL::Input::Management::RefreshPeripherals();
+  #elif HW_DEBUG
+    // HW_DEBUG: Skip synchronization to avoid vblank stalls during intensive BulletML
+    SRL::Input::Management::RefreshPeripherals();
+    soundTick();
   #else
     // Prefer synchronized presentation when timer is healthy (normal emulator/hardware path).
     // Fall back to non-blocking refresh only when ticks are stalled to avoid hard lockups.
     if (!gUseFixedFramePacing && nowTick > 0)
     {
-#if HW_DEBUG
-      if (probePhase)
-      {
-        SRL::Logger::LogInfo("[PHASE] pre-sync loop=%lu", (unsigned long)sPhaseProbeLoops);
-      }
-#endif
       SRL::Core::Synchronize();
       gSyncCount++;
-#if HW_DEBUG
-      if (probePhase)
-      {
-        SRL::Logger::LogInfo("[PHASE] post-sync loop=%lu", (unsigned long)sPhaseProbeLoops);
-      }
-#endif
       soundTick(); // Pump M68K driver every frame
     }
     else
@@ -1387,6 +1403,16 @@ int main()
     gPerfTraceWindow.foeBudgetTotal += frameFoeStats.foeBudget;
     gPerfTraceWindow.peakFoeCount = maxU32(gPerfTraceWindow.peakFoeCount, frameFoeStats.foeCount);
     gPerfTraceWindow.peakBulletCount = maxU32(gPerfTraceWindow.peakBulletCount, frameFoeStats.bulletCount);
+#if HW_DEBUG
+    sLoopFrameCount++;
+    if (sLoopFrameCount < 10u || (sLoopFrameCount % 60u) == 0u)
+    {
+      SRL::Logger::LogInfo("[LOOP] complete frame=%lu us=%lu move=%lu draw=%lu flip=%lu sync=%lu", 
+                           (unsigned long)sLoopFrameCount, (unsigned long)totalUs, 
+                           (unsigned long)timeMoveUs, (unsigned long)timeDrawUs, 
+                           (unsigned long)timeFlipUs, (unsigned long)timeSyncUs);
+    }
+#endif
     gPerfTraceWindow.loopCount++;
     if (renderThisLoop)
     {

@@ -1,7 +1,9 @@
 #ifndef BULLETMLRUNNER_HPP_
 #define BULLETMLRUNNER_HPP_
 
+#include <cstddef>
 #include <cstdint>
+#include <new>
 #include <srl.hpp>
 
 #include "bulletmlparser_blb.hpp"
@@ -14,6 +16,8 @@ class BulletMLRunnerImpl;
 /// BulletML Runner - Base class for BulletML execution.
 class BulletMLRunner {
 public:
+    static constexpr uint16_t kMaxImpls = 8;
+
     explicit BulletMLRunner(BulletMLParserBLB* parser);
     explicit BulletMLRunner(BulletMLState* state);
     virtual ~BulletMLRunner();
@@ -72,10 +76,14 @@ public:
     BulletMLParserBLB* getParser() const { return parser_; }
 
 protected:
+    void requestStop() { stop_requested_ = true; }
+
     BulletMLParserBLB* parser_;
     BulletMLState* state_;
     BulletMLRunnerImpl** impls_;
+    BulletMLRunnerImpl* impls_local_[kMaxImpls];
     uint16_t impl_count_;
+    bool stop_requested_;
 
 private:
     BulletMLRunner(const BulletMLRunner&);
@@ -84,19 +92,40 @@ private:
 
 class BulletMLRunnerImpl {
 public:
+    static constexpr uint16_t kMaxTasks = 128;
+    static constexpr uint16_t kMaxParamDepth = 8;
+    static constexpr uint16_t kPoolCapacity = 256;
+
+    static uint32_t getImplPoolRejectCount() { return sImplPoolRejectCount; }
+    static uint32_t getTaskCapRejectCount() { return sTaskCapRejectCount; }
+    static uint32_t getNodeCapRejectCount() { return sNodeCapRejectCount; }
+    static uint32_t getParamDepthRejectCount() { return sParamDepthRejectCount; }
+    static uint32_t getRefParamCapRejectCount() { return sRefParamCapRejectCount; }
+    static void resetRejectCounters() {
+        sImplPoolRejectCount = 0;
+        sTaskCapRejectCount = 0;
+        sNodeCapRejectCount = 0;
+        sParamDepthRejectCount = 0;
+        sRefParamCapRejectCount = 0;
+    }
+
+    // Must be called once at startup (preloader initializes LWRAM before main()).
+    static void initPool();
+
     BulletMLRunnerImpl(BulletMLState* state, BulletMLRunner* runner)
         : parser_(nullptr),
           runner_(runner),
           end_(false),
           wait_until_turn_(0),
-          nodes_(nullptr),
+          nodes_(nodes_local_),
           node_count_(0),
-          tasks_(nullptr),
+          tasks_(tasks_local_),
           task_count_(0),
-          task_capacity_(0),
+          task_capacity_(kMaxTasks),
+          tasks_owned_(false),
           params_(nullptr),
           param_count_(0),
-          owns_params_(false),
+          ref_param_depth_(0),
           change_dir_active_(false),
           change_speed_active_(false),
           accel_x_active_(false),
@@ -109,65 +138,149 @@ public:
           dir_(Fxp::Convert(0)),
           prev_spd_(Fxp::Convert(0)),
           prev_dir_(Fxp::Convert(0)) {
+#if HW_DEBUG
+        static uint32_t sImplCtorProbeCount = 0u;
+        const bool probeImplCtor = (sImplCtorProbeCount < 8u) || ((sImplCtorProbeCount % 240u) == 0u);
+        if (probeImplCtor) {
+            SRL::Logger::LogInfo("[BML-IMPL] init idx=%lu state=%08lx",
+                                 (unsigned long)sImplCtorProbeCount,
+                                 (unsigned long)(uintptr_t)state);
+        }
+#endif
         if (!state || !runner_) {
             end_ = true;
+#if HW_DEBUG
+            sImplCtorProbeCount++;
+#endif
             return;
         }
 
         parser_ = state->getParser();
+        params_ = local_params_;
 
-        node_count_ = state->getNodeCount();
-        if (node_count_ > 0 && state->getNodes()) {
-            nodes_ = hwnew BulletMLNode*[node_count_];
-            if (!nodes_) {
-                end_ = true;
-                delete state;
-                return;
-            }
-            for (uint16_t i = 0; i < node_count_; ++i) {
-                nodes_[i] = state->getNodes()[i];
-            }
+        const uint16_t stateNodeCount = state->getNodeCount();
+        BulletMLNode** stateNodes = state->getNodes();
+        uint16_t copyNodeCount = stateNodeCount;
+        if (copyNodeCount > BulletMLState::kMaxNodes) {
+            sNodeCapRejectCount++;
+            SRL::Logger::LogWarning("[BML-RUNNER] Node count %u exceeds cap %u; truncating",
+                                    (unsigned int)copyNodeCount,
+                                    (unsigned int)BulletMLState::kMaxNodes);
+            copyNodeCount = BulletMLState::kMaxNodes;
         }
+
+        const uint16_t seededNodeCount = (stateNodes && copyNodeCount > 0) ? copyNodeCount : 0;
+        node_count_ = seededNodeCount;
 
         copyParameters(state->getParameters(), state->getParameterCount());
 
+        const uint32_t requiredTaskCount32 = static_cast<uint32_t>(seededNodeCount) + 16u;
+        const uint16_t requiredTaskCount = (requiredTaskCount32 > 0xFFFFu)
+                                               ? 0xFFFFu
+                                               : static_cast<uint16_t>(requiredTaskCount32);
+
+        if (requiredTaskCount > kMaxTasks) {
+            task_capacity_ = requiredTaskCount;
+            tasks_ = static_cast<Task*>(SRL::Memory::LowWorkRam::Malloc(sizeof(Task) * task_capacity_));
+            if (!tasks_) {
+                tasks_ = static_cast<Task*>(SRL::Memory::HighWorkRam::Malloc(sizeof(Task) * task_capacity_));
+            }
+            if (!tasks_) {
+                sTaskCapRejectCount++;
+                SRL::Logger::LogWarning("[BML-RUNNER] Task buffer alloc failed (%u)", task_capacity_);
+                end_ = true;
+#if HW_DEBUG
+                sImplCtorProbeCount++;
+#endif
+                return;
+            }
+            tasks_owned_ = true;
+        } else {
+            tasks_ = tasks_local_;
+            task_capacity_ = kMaxTasks;
+        }
+
+        for (int i = static_cast<int>(seededNodeCount) - 1; i >= 0; --i) {
+            pushNodeTask(stateNodes ? stateNodes[i] : nullptr);
+        }
+        // wait_until_turn_ initialized to 0 in member initializer list.
+        // Avoid calling runner_->getTurn() here: virtual dispatch on a partially-
+        // constructed object (vtable is still base-class during base-ctor execution).
+
         delete state;
 
-        if (!ensureTaskCapacity(static_cast<uint16_t>(node_count_ + 8))) {
-            end_ = true;
-            return;
+#if HW_DEBUG
+        if (probeImplCtor) {
+            SRL::Logger::LogInfo("[BML-IMPL] done idx=%lu nodes=%u tasks=%u",
+                                 (unsigned long)sImplCtorProbeCount,
+                                 (unsigned int)seededNodeCount,
+                                 (unsigned int)task_count_);
         }
-
-        for (int i = static_cast<int>(node_count_) - 1; i >= 0; --i) {
-            pushNodeTask(nodes_[i]);
-        }
-        wait_until_turn_ = runner_->getTurn();
+        sImplCtorProbeCount++;
+#endif
     }
 
     ~BulletMLRunnerImpl() {
-        delete[] nodes_;
+        Task* ownedTasks = tasks_;
+        const bool owned = tasks_owned_;
         nodes_ = nullptr;
         node_count_ = 0;
 
-        delete[] tasks_;
-        tasks_ = nullptr;
         task_count_ = 0;
         task_capacity_ = 0;
-
-        if (owns_params_) {
-            delete[] params_;
+        if (owned && ownedTasks) {
+            SRL::Memory::Free(ownedTasks);
         }
-        params_ = nullptr;
+        tasks_ = nullptr;
+        tasks_owned_ = false;
+
+        params_ = local_params_;
         param_count_ = 0;
-        owns_params_ = false;
+        ref_param_depth_ = 0;
     }
 
+    static void* operator new(std::size_t) noexcept;
+    static void operator delete(void* ptr) noexcept;
+
     bool isEnd() const { return end_; }
+
+#if HW_DEBUG
+    void debugLogRawState(uint16_t idx) const {
+        const uintptr_t self = (uintptr_t)this;
+        const uintptr_t vptr = *(const uintptr_t*)this;
+        const uintptr_t runner = (uintptr_t)runner_;
+        SRL::Logger::LogInfo("[BML-RAW] idx=%u self=%08x vptr=%08x runner=%08x end=%d tasks=%u wait=%d nodes=%u",
+                             idx,
+                             (unsigned int)self,
+                             (unsigned int)vptr,
+                             (unsigned int)runner,
+                             end_ ? 1 : 0,
+                             (unsigned int)task_count_,
+                             wait_until_turn_,
+                             (unsigned int)node_count_);
+    }
+#endif
 
     void run() {
         if (end_) return;
 
+#if HW_DEBUG
+        static uint32_t sProbeRuns = 0u;
+        const bool probeRun = (sProbeRuns < 8u) && (runner_ != nullptr) && (runner_->getTurn() < 2);
+        if (probeRun) {
+            SRL::Logger::LogInfo("[BML-RUN] begin turn=%d tasks=%u wait=%d end=%d",
+                                 runner_->getTurn(), task_count_, wait_until_turn_, end_ ? 1 : 0);
+        }
+#endif
+
         applyChanges();
+
+#if HW_DEBUG
+        if (probeRun) {
+            SRL::Logger::LogInfo("[BML-RUN] post-apply turn=%d tasks=%u wait=%d",
+                                 runner_->getTurn(), task_count_, wait_until_turn_);
+        }
+#endif
 
         const int now = runner_->getTurn();
         if (task_count_ == 0) {
@@ -183,6 +296,15 @@ public:
         while (task_count_ > 0 && runner_->getTurn() >= wait_until_turn_) {
             Task task;
             if (!popTask(task)) break;
+
+#if HW_DEBUG
+            if (probeRun) {
+                SRL::Logger::LogInfo("[BML-RUN] task type=%d node=%d remain=%u",
+                                     static_cast<int>(task.type),
+                                     task.node ? static_cast<int>(task.node->getNameAsName()) : -1,
+                                     task_count_);
+            }
+#endif
 
             switch (task.type) {
                 case TASK_NODE:
@@ -201,14 +323,18 @@ public:
                     }
                     break;
                 case TASK_POP_PARAMS:
-                    if (owns_params_) {
-                        delete[] params_;
-                    }
                     params_ = task.saved_params;
                     param_count_ = task.saved_count;
-                    owns_params_ = task.saved_owns;
+                    ref_param_depth_ = task.saved_ref_param_depth;
                     break;
             }
+
+#if HW_DEBUG
+            if (probeRun) {
+                SRL::Logger::LogInfo("[BML-RUN] task-done type=%d remain=%u wait=%d",
+                                     static_cast<int>(task.type), task_count_, wait_until_turn_);
+            }
+#endif
 
             // Guard against pathological no-wait scripts.
             ++safety;
@@ -223,6 +349,14 @@ public:
                 end_ = true;
             }
         }
+
+#if HW_DEBUG
+        if (probeRun) {
+            SRL::Logger::LogInfo("[BML-RUN] end tasks=%u wait=%d end=%d",
+                                 task_count_, wait_until_turn_, end_ ? 1 : 0);
+            sProbeRuns++;
+        }
+#endif
     }
 
 private:
@@ -243,7 +377,7 @@ private:
         // param restore task fields
         Fxp* saved_params;
         uint16_t saved_count;
-        bool saved_owns;
+        uint8_t saved_ref_param_depth;
     };
 
     struct LinearChange {
@@ -254,32 +388,10 @@ private:
         Fxp gradient;
     };
 
-    bool ensureTaskCapacity(uint16_t needed) {
-        if (needed <= task_capacity_) return true;
-
-        uint16_t new_cap = (task_capacity_ == 0) ? 16 : task_capacity_;
-        while (new_cap < needed) {
-            uint16_t grown = static_cast<uint16_t>(new_cap * 2);
-            if (grown <= new_cap) {
-                new_cap = needed;
-                break;
-            }
-            new_cap = grown;
-        }
-
-        Task* t = hwnew Task[new_cap];
-        if (!t) return false;
-        for (uint16_t i = 0; i < task_count_; ++i) {
-            t[i] = tasks_[i];
-        }
-        delete[] tasks_;
-        tasks_ = t;
-        task_capacity_ = new_cap;
-        return true;
-    }
-
     bool pushTask(const Task& task) {
-        if (!ensureTaskCapacity(static_cast<uint16_t>(task_count_ + 1))) {
+        if (task_count_ >= task_capacity_) {
+            sTaskCapRejectCount++;
+            SRL::Logger::LogWarning("[BML-RUNNER] Task cap reached (%u)", task_capacity_);
             return false;
         }
         tasks_[task_count_++] = task;
@@ -300,7 +412,7 @@ private:
         t.repeat_remaining = 0;
         t.saved_params = nullptr;
         t.saved_count = 0;
-        t.saved_owns = false;
+        t.saved_ref_param_depth = ref_param_depth_;
         return pushTask(t);
     }
 
@@ -312,11 +424,11 @@ private:
         t.repeat_remaining = remaining;
         t.saved_params = nullptr;
         t.saved_count = 0;
-        t.saved_owns = false;
+        t.saved_ref_param_depth = ref_param_depth_;
         return pushTask(t);
     }
 
-    bool pushPopParamsTask(Fxp* saved_params, uint16_t saved_count, bool saved_owns) {
+    bool pushPopParamsTask(Fxp* saved_params, uint16_t saved_count, uint8_t saved_ref_param_depth) {
         Task t;
         t.type = TASK_POP_PARAMS;
         t.node = nullptr;
@@ -324,7 +436,7 @@ private:
         t.repeat_remaining = 0;
         t.saved_params = saved_params;
         t.saved_count = saved_count;
-        t.saved_owns = saved_owns;
+        t.saved_ref_param_depth = saved_ref_param_depth;
         return pushTask(t);
     }
 
@@ -515,23 +627,22 @@ private:
     }
 
     void copyParameters(const Fxp* src, uint16_t count) {
-        if (owns_params_) {
-            delete[] params_;
-            owns_params_ = false;
-        }
-        params_ = nullptr;
+        params_ = local_params_;
         param_count_ = 0;
+        ref_param_depth_ = 0;
 
         if (!src || count == 0) return;
 
-        Fxp* p = hwnew Fxp[count];
-        if (!p) return;
-        for (uint16_t i = 0; i < count; ++i) {
-            p[i] = src[i];
+        if (count > BulletMLState::kMaxParameters) {
+            SRL::Logger::LogWarning("[BML-RUNNER] Param count %u exceeds cap %u; truncating", count, BulletMLState::kMaxParameters);
+            count = BulletMLState::kMaxParameters;
         }
-        params_ = p;
+
+        for (uint16_t i = 0; i < count; ++i) {
+            local_params_[i] = src[i];
+        }
+
         param_count_ = count;
-        owns_params_ = true;
     }
 
     BulletMLNode* findChild(BulletMLNode* node, BulletMLNode::Name name) {
@@ -769,29 +880,32 @@ private:
         }
     }
 
-    Fxp* collectRefParameters(BulletMLNode* ref_node, uint16_t& out_count) {
+    bool collectRefParameters(BulletMLNode* ref_node, Fxp* out_params, uint16_t& out_count) {
         out_count = 0;
-        if (!ref_node) return nullptr;
+        if (!ref_node || !out_params) return false;
 
         const uint16_t param_nodes = countChildren(ref_node, BulletMLNode::param);
-        if (param_nodes == 0) return nullptr;
+        if (param_nodes == 0) return true;
 
         const uint16_t total = static_cast<uint16_t>(param_nodes + 1);
-        Fxp* out = hwnew Fxp[total];
-        if (!out) return nullptr;
+        if (total > BulletMLState::kMaxParameters) {
+            sRefParamCapRejectCount++;
+            SRL::Logger::LogWarning("[BML-RUNNER] Ref param count %u exceeds cap %u", total, BulletMLState::kMaxParameters);
+            return false;
+        }
 
-        out[0] = 0.0;  // 1-based parameters
+        out_params[0] = 0.0;  // 1-based parameters
         uint16_t w = 1;
         const uint32_t child_count = ref_node->getChildCount();
         for (uint32_t i = 0; i < child_count && w < total; ++i) {
             BulletMLNode* c = ref_node->getChild(i);
             if (c && c->getNameAsName() == BulletMLNode::param) {
-                out[w++] = evalNodeValue(c);
+                out_params[w++] = evalNodeValue(c);
             }
         }
 
         out_count = total;
-        return out;
+        return true;
     }
 
     void executeNode(BulletMLNode* node) {
@@ -824,8 +938,13 @@ private:
                     return;
                 }
 
-                BulletMLNode** acts = hwnew BulletMLNode*[total];
-                if (!acts) return;
+                if (total > BulletMLState::kMaxNodes) {
+                    sNodeCapRejectCount++;
+                    SRL::Logger::LogWarning("[BML-RUNNER] Bullet action count %u exceeds cap %u; dropping bullet", total, BulletMLState::kMaxNodes);
+                    return;
+                }
+
+                BulletMLNode* acts[BulletMLState::kMaxNodes] = {};
 
                 uint16_t w = 0;
                 const uint32_t child_count = node->getChildCount();
@@ -840,7 +959,6 @@ private:
 
                 BulletMLState* st = hwnew BulletMLState(parser_, acts, total, params_, param_count_);
                 if (!st) {
-                    delete[] acts;
                     SRL::Logger::LogWarning("[BML-RUNNER] Failed to allocate child state for bullet actions=%u", total);
                     return;
                 }
@@ -909,18 +1027,26 @@ private:
                     return;
                 }
 
-                uint16_t new_count = 0;
-                Fxp* new_params = collectRefParameters(node, new_count);
+                if (ref_param_depth_ >= kMaxParamDepth) {
+                    sParamDepthRejectCount++;
+                    SRL::Logger::LogWarning("[BML-RUNNER] Ref param depth exceeded cap %u", kMaxParamDepth);
+                    return;
+                }
 
-                if (!pushPopParamsTask(params_, param_count_, owns_params_)) {
-                    delete[] new_params;
+                uint16_t new_count = 0;
+                Fxp* new_params = ref_params_[ref_param_depth_];
+                if (!collectRefParameters(node, new_params, new_count)) {
+                    return;
+                }
+
+                if (!pushPopParamsTask(params_, param_count_, ref_param_depth_)) {
                     SRL::Logger::LogWarning("[BML-RUNNER] Failed to push param restore task for ref id=%u", id);
                     return;
                 }
 
+                ref_param_depth_++;
                 params_ = new_params;
                 param_count_ = new_count;
-                owns_params_ = (new_params != nullptr);
                 pushNodeTask(target);
                 return;
             }
@@ -987,6 +1113,12 @@ private:
     }
 
 private:
+    static inline uint32_t sImplPoolRejectCount = 0;
+    static inline uint32_t sTaskCapRejectCount = 0;
+    static inline uint32_t sNodeCapRejectCount = 0;
+    static inline uint32_t sParamDepthRejectCount = 0;
+    static inline uint32_t sRefParamCapRejectCount = 0;
+
     BulletMLParserBLB* parser_;
     BulletMLRunner* runner_;
 
@@ -995,14 +1127,19 @@ private:
 
     BulletMLNode** nodes_;
     uint16_t node_count_;
+    BulletMLNode* nodes_local_[BulletMLState::kMaxNodes];
 
     Task* tasks_;
     uint16_t task_count_;
     uint16_t task_capacity_;
+    Task tasks_local_[kMaxTasks];
+    bool tasks_owned_;
 
     Fxp* params_;
     uint16_t param_count_;
-    bool owns_params_;
+    uint8_t ref_param_depth_;
+    Fxp local_params_[BulletMLState::kMaxParameters];
+    Fxp ref_params_[kMaxParamDepth][BulletMLState::kMaxParameters];
 
     LinearChange change_dir_;
     LinearChange change_speed_;
@@ -1026,50 +1163,125 @@ private:
     BulletMLRunnerImpl& operator=(const BulletMLRunnerImpl&);
 };
 
+namespace bulletml_runner_impl_pool_internal {
+struct Storage {
+    alignas(std::max_align_t) unsigned char pool[BulletMLRunnerImpl::kPoolCapacity][sizeof(BulletMLRunnerImpl)];
+    bool used[BulletMLRunnerImpl::kPoolCapacity];
+};
+
+inline Storage* gStoragePtr = nullptr;
+
+inline Storage& getStorage()
+{
+    return *gStoragePtr;
+}
+} // namespace bulletml_runner_impl_pool_internal
+
+inline void* BulletMLRunnerImpl::operator new(std::size_t) noexcept
+{
+    auto& sStorage = bulletml_runner_impl_pool_internal::getStorage();
+    for (uint16_t i = 0; i < kPoolCapacity; ++i)
+    {
+        if (!sStorage.used[i])
+        {
+            sStorage.used[i] = true;
+            return (void*)&sStorage.pool[i][0];
+        }
+    }
+
+    sImplPoolRejectCount++;
+    SRL::Logger::LogWarning("[BML-RUNNER] Impl pool exhausted (%u)", kPoolCapacity);
+    return nullptr;
+}
+
+inline void BulletMLRunnerImpl::operator delete(void* ptr) noexcept
+{
+    if (!ptr)
+    {
+        return;
+    }
+
+    auto& sStorage = bulletml_runner_impl_pool_internal::getStorage();
+    const uintptr_t poolStart = (uintptr_t)&sStorage.pool[0][0];
+    const uintptr_t poolEnd = (uintptr_t)&sStorage.pool[kPoolCapacity - 1][0] + sizeof(sStorage.pool[0]);
+    const uintptr_t p = (uintptr_t)ptr;
+    if (p < poolStart || p >= poolEnd)
+    {
+        return;
+    }
+
+    const uintptr_t offset = p - poolStart;
+    if ((offset % sizeof(sStorage.pool[0])) != 0u)
+    {
+        SRL::Logger::LogFatal("[BML-RUNNER] Bad free ptr=%08lx", (unsigned long)p);
+        SRL::System::Exit(1);
+    }
+
+    const uint16_t slot = (uint16_t)(offset / sizeof(sStorage.pool[0]));
+    if (slot < kPoolCapacity)
+    {
+        sStorage.used[slot] = false;
+    }
+}
+
+inline void BulletMLRunnerImpl::initPool() {
+    // SGL preloader (runs before main()) calls SRL::Memory::Initialize() which sets up
+    // LWRAM TLSF at 0x00200000. Allocate pool here so it doesn't consume HWRAM BSS.
+    // sizeof(Storage) ~389KB; LWRAM has ~410KB free after screen buffers.
+    const size_t storageSize = sizeof(bulletml_runner_impl_pool_internal::Storage);
+
+    void* mem = SRL::Memory::LowWorkRam::Malloc(storageSize);
+    if (!mem)
+    {
+        SRL::Logger::LogWarning("[BML-RUNNER] LWRAM pool alloc failed (%lu), trying HWRAM", (unsigned long)storageSize);
+        mem = SRL::Memory::HighWorkRam::Malloc(storageSize);
+    }
+
+    if (!mem)
+    {
+        SRL::Logger::LogFatal("[BML-RUNNER] Pool alloc failed (%lu)", (unsigned long)storageSize);
+        SRL::System::Exit(1);
+    }
+
+    bulletml_runner_impl_pool_internal::gStoragePtr =
+        new (mem) bulletml_runner_impl_pool_internal::Storage{};
+}
+
 inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
-    : parser_(parser), state_(nullptr), impls_(nullptr), impl_count_(0) {
+    : parser_(parser), state_(nullptr), impls_(impls_local_), impl_count_(0), stop_requested_(false) {
     if (!parser_) return;
+
+    for (uint16_t i = 0; i < kMaxImpls; ++i) impls_local_[i] = nullptr;
 
     uint32_t top_count_u32 = 0;
     BulletMLNode** top_actions = parser_->getTopActions(&top_count_u32);
     if (!top_actions || top_count_u32 == 0) return;
 
-    uint16_t top_count = (top_count_u32 > 65535U) ? 65535U : static_cast<uint16_t>(top_count_u32);
-    impls_ = hwnew BulletMLRunnerImpl*[top_count];
-    if (!impls_) return;
+    uint16_t top_count = (top_count_u32 > BulletMLState::kMaxNodes)
+                             ? BulletMLState::kMaxNodes
+                             : static_cast<uint16_t>(top_count_u32);
 
-    for (uint16_t i = 0; i < top_count; ++i) impls_[i] = nullptr;
+    BulletMLState* st = hwnew BulletMLState(parser_, top_actions, top_count, nullptr, 0);
+    if (!st) return;
 
-    for (uint16_t i = 0; i < top_count; ++i) {
-        BulletMLNode** nodes = hwnew BulletMLNode*[1];
-        if (!nodes) break;
-        nodes[0] = top_actions[i];
-
-        BulletMLState* st = hwnew BulletMLState(parser_, nodes, 1, nullptr, 0);
-        if (!st) {
-            delete[] nodes;
-            break;
-        }
-
-        BulletMLRunnerImpl* impl = hwnew BulletMLRunnerImpl(st, this);
-        if (!impl) break;
-
-        impls_[impl_count_++] = impl;
+    BulletMLRunnerImpl* impl = hwnew BulletMLRunnerImpl(st, this);
+    if (!impl) {
+        delete st;
+        return;
     }
+
+    impls_[impl_count_++] = impl;
 }
 
 inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
-    : parser_(nullptr), state_(state), impls_(nullptr), impl_count_(0) {
+    : parser_(nullptr), state_(state), impls_(impls_local_), impl_count_(0), stop_requested_(false) {
     if (!state_) return;
 
-    parser_ = state_->getParser();
-    impls_ = hwnew BulletMLRunnerImpl*[1];
-    if (!impls_) return;
+    for (uint16_t i = 0; i < kMaxImpls; ++i) impls_local_[i] = nullptr;
 
+    parser_ = state_->getParser();
     impls_[0] = hwnew BulletMLRunnerImpl(state_, this);
     if (!impls_[0]) {
-        delete[] impls_;
-        impls_ = nullptr;
         return;
     }
 
@@ -1082,8 +1294,7 @@ inline BulletMLRunner::~BulletMLRunner() {
         delete impls_[i];
         impls_[i] = nullptr;
     }
-    delete[] impls_;
-    impls_ = nullptr;
+    impls_ = impls_local_;
     impl_count_ = 0;
 
     delete state_;
@@ -1092,6 +1303,7 @@ inline BulletMLRunner::~BulletMLRunner() {
 
 inline void BulletMLRunner::run() {
     for (uint16_t i = 0; i < impl_count_; ++i) {
+        if (stop_requested_) break;
         if (impls_[i]) impls_[i]->run();
     }
 }

@@ -17,3 +17,6 @@ void fadeMusic();
 void stopMusic();
 void playChunk(int idx);
 void soundTick();
+
+// Number of runtime SFX play requests rejected to avoid in-game allocation.
+int getAudioRuntimeAllocRejectCount();
