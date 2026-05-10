@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.5)
+
 # === Line Drawing Path Options ===
 option(NOIZ2SA_ENABLE_HARDWARE_LINE "Enable hardware-accelerated line drawing" ON)
 option(NOIZ2SA_ENABLE_SOFTWARE_LINE "Enable software (buffer) line drawing" ON)
@@ -14,7 +16,6 @@ if(NOIZ2SA_ENABLE_SOFTWARE_LINE)
 else()
     add_compile_definitions(NOIZ2SA_ENABLE_SOFTWARE_LINE=0)
 endif()
-cmake_minimum_required(VERSION 3.5)
 
 # ============================================================================
 # Saturn Toolchain Configuration
@@ -47,7 +48,9 @@ set(CMAKE_STATIC_LIBRARY_PREFIX "")
 # SEGALIB and SEGASGL are set by sega_saturn.cmake, but available here
 # SATURN_COMMON and SATURN_CMAKE are also set by the toolchain file
 
-# Project definition
+# ============================================================================
+# Project Definition
+# ============================================================================
 project( noiz2sa VERSION 1.0
                   DESCRIPTION "Sega Saturn noiz2sa"
                   LANGUAGES C CXX ASM)

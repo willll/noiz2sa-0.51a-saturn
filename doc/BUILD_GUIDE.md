@@ -147,3 +147,249 @@ cmake --build build
 |--------|------|-------------|
 | `SRL_CUSTOM_CCFLAGS` | string | Additional compiler flags |
 | `SRL_CUSTOM_LDFLAGS` | string | Additional linker flags |
+
+### Hardware Debug Mode (HW_DEBUG)
+
+The `HW_DEBUG` option enables a special build configuration for testing on real Saturn hardware using development cartridges (USBGamers) and optional remote power control via ESP-SaturnPSU_Control.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `HW_DEBUG` | ON/OFF | OFF | Enable hardware debug mode (no CD assets) |
+| `HW_DEBUG_ENDLESS_STAGE` | 10-13 | 10 | Endless stage to boot directly (10=Zako, 11=Middle, 12=Boss, 13=Bonus) |
+
+**When HW_DEBUG=ON:**
+- BulletML patterns are embedded at compile time (no CD load)
+- Sound system is disabled (PCM SFX + CDDA disabled)
+- Logs output to DEV_CART (Saturn debug cartridge)
+- Game boots directly to specified endless stage
+- No CD image required for testing
+
+**Quick Start:**
+```bash
+# Hardware debug build
+cmake -B build_hw_debug -DHW_DEBUG=ON
+
+# Boot to Boss stage instead of default (Zako)
+cmake -B build_hw_debug -DHW_DEBUG=ON -DHW_DEBUG_ENDLESS_STAGE=12
+
+# Build
+cmake --build build_hw_debug
+
+# Upload to Saturn via USBGamers cartridge
+./tools/run_on_saturn.bat
+```
+
+**Complete HW_DEBUG documentation**: See [HW_DEBUG_GUIDE.md](HW_DEBUG_GUIDE.md)
+
+**Use Cases:**
+- Rapid iteration testing on real hardware without CD image overhead
+- Debugging collision or rendering issues in hardware context
+- Automated test campaigns with optional ESP-SaturnPSU_Control hardware power control
+- Verifying hardware compatibility before CD release
+
+## Build Process Details
+
+### 1. Configuration Phase
+
+CMake configures the project with your chosen options:
+
+```bash
+cmake -B build [OPTIONS]
+```
+
+This phase:
+- Validates SaturnRingLib installation
+- Checks for required libraries
+- Sets up compiler/linker flags
+- Generates build files
+- Displays configuration summary
+
+### 2. Compilation Phase
+
+CMake builds the project:
+
+```bash
+cmake --build build
+```
+
+This phase:
+- Compiles all source files
+- Links against BulletML, SDL, SDL_mixer, SaturnRingLib
+- Generates `noiz2sa.elf`
+
+**Automatic Post-Build Steps:**
+After successful compilation, the following happens automatically:
+- Creates `build/cd/data/` and `build/cd/music/` directories
+- Creates required metadata files (`ABS.TXT`, `BIB.TXT`, `CPY.TXT`)
+- Converts `noiz2sa.elf` → `build/cd/data/0.bin` (binary format)
+- Copies SGL sound driver files (if `SRL_USE_SGL_SOUND_DRIVER=ON`)
+- Copies frequency analysis DSP (if `SRL_ENABLE_FREQ_ANALYSIS=ON`)
+
+**Build Outputs:**
+- `build/noiz2sa.elf` - Main executable (ELF format)
+- `build/cd/data/0.bin` - Binary format for Saturn CD
+- `build/cd/data/` - Asset directory with all required files
+- `build/cd/music/` - Music asset directory
+- `build/noiz2sa.map` - Linker map file
+
+### 3. Post-Build (Optional)
+
+If `postbuild.cmake` exists in project root, it runs automatically:
+
+```cmake
+# Example postbuild.cmake
+message(STATUS "Creating binary...")
+execute_process(
+    COMMAND sh-elf-objcopy -O binary noiz2sa.elf noiz2sa.bin
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+```
+
+**ISO Image Creation:**
+
+To create a Saturn ISO image, copy the example script:
+```bash
+cp postbuild.cmake.example postbuild.cmake
+```
+
+Then rebuild:
+```bash
+cmake --build build
+```
+
+This will create:
+- `build/noiz2sa.iso` - Saturn CD-ROM image
+- `build/noiz2sa.cue` - CUE sheet for burning/emulation
+
+**Requirements for ISO creation:**
+- `xorrisofs` or `mkisofs` installed on your system
+- `IP.BIN` file in `SaturnRingLib/modules/sgl/`
+
+**Testing the ISO:**
+- Load in Mednafen: `mednafen build/noiz2sa.cue`
+- Load in SSF: Open `build/noiz2sa.iso`
+- Load in Yabause/Kronos: Open `build/noiz2sa.cue`
+- Burn to CD-R: Use the `.cue` file with burning software
+
+## Source Organization
+
+### Game Sources (`src/`)
+
+All game logic and rendering code:
+- `noiz2sa.cpp` - Main game loop
+- `ship.cpp` - Player ship
+- `shot.cpp` - Projectile system
+- `foe.cc` - Enemy entities
+- `barragemanager.cc` - Bullet pattern manager
+- `screen.cpp` - Display rendering
+- `background.cpp` - Background effects
+- `soundmanager.cpp` - Audio system
+- And more...
+
+### BulletML (`src/bulletml/`)
+
+Bullet pattern library and binary format support:
+- Original XML parser
+- Binary format parser (`bulletml_binary/`)
+- Python converter (`bulletml_binary/bulletml_converter.py`)
+
+### SaturnRingLib Integration
+
+Automatically included sources:
+- `SaturnRingLib/modules/sgl/SRC/workarea.c` - SGL workspace
+- `SaturnRingLib/modules/sgl/SRC/preloader.cxx` - C++ initialization
+- `SaturnRingLib/modules/tlsf/tlsf.c` - Optional TLSF allocator
+
+## Troubleshooting
+
+### CMake Can't Find SaturnRingLib
+
+**Error**: `SaturnRingLib not found at: ...`
+
+**Solution**: Ensure SaturnRingLib is properly initialized:
+```bash
+git submodule update --init --recursive
+```
+
+### Missing Libraries
+
+**Error**: `Could not find LIBSGL.A`
+
+**Solution**: Build SaturnRingLib libraries first:
+```bash
+cd SaturnRingLib/saturnringlib
+make
+```
+
+### Linker Errors (undefined references)
+
+**Error**: `undefined reference to '_exit'`, `_sbrk`, etc.
+
+**Solution**: These are Saturn-specific syscalls. Ensure your toolchain includes:
+- Proper `crt0.s` startup file
+- `Saturn.lnk` linker script
+- Newlib syscall stubs
+
+### Configuration Summary Not Showing
+
+**Issue**: Build works but no "SaturnRingLib Configuration" output
+
+**Solution**: This is normal - the summary only appears during CMake configuration:
+```bash
+cmake -B build  # Summary appears here
+```
+
+## Advanced Usage
+
+### Changing Options Without Reconfiguring
+
+```bash
+# Use ccmake for interactive configuration
+ccmake build
+
+# Or cmake-gui
+cmake-gui build
+```
+
+### Parallel Builds
+
+```bash
+# Use all CPU cores
+cmake --build build -j$(nproc)
+```
+
+### Verbose Build Output
+
+```bash
+cmake --build build --verbose
+```
+
+### Clean Build
+
+```bash
+rm -rf build
+cmake -B build
+cmake --build build
+```
+
+### Build with Specific Generator
+
+```bash
+# Use Ninja instead of Make
+cmake -B build -G Ninja
+cmake --build build
+```
+
+## Related Documentation
+
+- [BUILD_SYSTEM_SUMMARY.md](BUILD_SYSTEM_SUMMARY.md) - CMake and build system summary
+- [src/bulletml_binary/BINARY_PARSER_README.md](src/bulletml_binary/BINARY_PARSER_README.md) - Binary BulletML format
+- SaturnRingLib docs: [../SaturnRingLib/readme.md](../SaturnRingLib/readme.md)
+- [README.md](README.md) - Project overview
+
+## Support
+
+For build issues specific to:
+- **SaturnRingLib**: See `../SaturnRingLib/Documentation/`
+- **BulletML**: See `src/bulletml/`
+- **Saturn toolchain**: Consult your toolchain documentation
