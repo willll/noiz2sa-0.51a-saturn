@@ -86,7 +86,7 @@ The script is executable and can be run directly:
 
 ### File Format
 
-See [`BINARY_FORMAT.md`](BINARY_FORMAT.md) for complete binary format specification.
+See [`../doc/BINARY_FORMAT.md`](../doc/BINARY_FORMAT.md) for complete binary format specification.
 
 ### Requirements
 

@@ -9,33 +9,29 @@ cmake --build build
 ```
 
 **What this does:**
-1. ✅ Compiles game to `build/noiz2sa.elf`
-2. ✅ Extracts binary to `build/cd/data/0.bin`
-3. ✅ **Automatically generates** `build/cd.iso` (if xorrisofs available)
+1. ✅ Compiles game to `BuildDrop/noiz2sa.elf`
+2. ✅ Extracts binary and assets to build directory
+3. ✅ **Automatically generates** `BuildDrop/noiz2sa.iso` (if xorrisofs available)
 4. ✅ **Automatically processes audio** and adds to CD image (if sox available)
 
 ## Output Files
 
 After the build completes:
 ```
-build/
-├── noiz2sa.elf              # Compiled game
-├── cd.iso                   # ISO image (always generated if xorrisofs available)
-├── cd.bin                   # CD binary data (requires iso2raw - separate install)
-├── cd.cue                   # CUE sheet with track info
-└── cd/data/
-    ├── 0.bin                # Game binary
-    ├── ABS.TXT
-    ├── BIB.TXT
-    └── CPY.TXT
+BuildDrop/
+├── noiz2sa.elf              # Compiled game executable
+├── noiz2sa.iso              # ISO image (always generated if xorrisofs available)
+├── noiz2sa.bin              # CD binary data (generated if iso2raw available)
+├── noiz2sa.cue              # CUE sheet with track info (paired with .bin)
+└── IP.BIN                   # System boot sector
 ```
 
 ## Next Steps
 
 ### Option 1: Use ISO Immediately
-The `build/cd.iso` file is ready to use with emulators:
+The `BuildDrop/noiz2sa.iso` file is ready to use with emulators:
 ```bash
-mednafen build/cd.iso
+mednafen BuildDrop/noiz2sa.iso
 ```
 
 ### Option 2: Get BIN/CUE Format (Requires iso2raw)
@@ -50,8 +46,8 @@ cmake --build build
 ```
 
 After iso2raw is installed, `cmake --build build` will automatically generate:
-- `build/cd.bin` - Complete CD image
-- `build/cd.cue` - Track information
+- `BuildDrop/noiz2sa.bin` - Complete CD image
+- `BuildDrop/noiz2sa.cue` - Track information
 
 ### Option 3: Add Audio Files
 Place audio files in `noiz2sa_share/music/`:

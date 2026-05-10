@@ -71,9 +71,9 @@ cmake --build build
 ```
 
 **Output:**
-- `build/noiz2sa.elf` - Compiled executable
-- `build/cd.iso` - ISO image (if xorrisofs available)
-- `build/cd.bin` + `build/cd.cue` - BIN/CUE format with audio (if all tools available)
+- `BuildDrop/noiz2sa.elf` - Compiled executable
+- `BuildDrop/noiz2sa.iso` - ISO image (if xorrisofs available)
+- `BuildDrop/noiz2sa.bin` + `BuildDrop/noiz2sa.cue` - BIN/CUE format with audio (if all tools available)
 
 ### Install Missing Tools (Optional)
 ```bash
@@ -205,8 +205,8 @@ cmake -B build
    # Generate ISO
    cmake --build build --target cd-iso
    
-   # Test in emulator (requires cd.iso)
-   mednafen build/cd.iso
+   # Test in emulator (uses BuildDrop/noiz2sa.iso)
+   mednafen BuildDrop/noiz2sa.iso
    ```
 
 4. **Prepare Audio Files** (optional)

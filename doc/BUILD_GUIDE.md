@@ -232,37 +232,26 @@ After successful compilation, the following happens automatically:
 - `build/cd/music/` - Music asset directory
 - `build/noiz2sa.map` - Linker map file
 
-### 3. Post-Build (Optional)
+### 3. ISO Image Creation (Automatic)
 
-If `postbuild.cmake` exists in project root, it runs automatically:
+Saturn ISO image creation is now **automatic** during the default build if `xorrisofs` is available:
 
-```cmake
-# Example postbuild.cmake
-message(STATUS "Creating binary...")
-execute_process(
-    COMMAND sh-elf-objcopy -O binary noiz2sa.elf noiz2sa.bin
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-```
-
-**ISO Image Creation:**
-
-To create a Saturn ISO image, copy the example script:
 ```bash
-cp postbuild.cmake.example postbuild.cmake
-```
+# Install xorrisofs (one-time setup)
+apt-get install xorriso      # Linux
+brew install xorriso         # macOS
 
-Then rebuild:
-```bash
+# Build normally - ISO generation happens automatically
+cmake -B build
 cmake --build build
 ```
 
-This will create:
-- `build/noiz2sa.iso` - Saturn CD-ROM image
-- `build/noiz2sa.cue` - CUE sheet for burning/emulation
+**Output files created automatically:**
+- `BuildDrop/noiz2sa.iso` - Saturn CD-ROM image
+- `BuildDrop/noiz2sa.cue` - CUE sheet for burning/emulation
+- `BuildDrop/noiz2sa.bin` - CD data (if iso2raw available)
 
-**Requirements for ISO creation:**
-- `xorrisofs` or `mkisofs` installed on your system
+**For complete details on CD generation**, see [CD_GENERATION_GUIDE.md](CD_GENERATION_GUIDE.md)
 - `IP.BIN` file in `SaturnRingLib/modules/sgl/`
 
 **Testing the ISO:**

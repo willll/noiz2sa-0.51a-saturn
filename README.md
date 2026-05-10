@@ -40,17 +40,21 @@ cmake --build build
 
 ### Create ISO Image
 
-ISO images are generated automatically if `postbuild.cmake` is present:
+ISO images are generated automatically during the build if `xorrisofs` is available:
 
 ```bash
-# Enable ISO creation
-cp postbuild.cmake.example postbuild.cmake
+# Ensure you have xorrisofs installed
+apt-get install xorriso  # (Linux)
+brew install xorriso     # (macOS)
 
-# Rebuild
+# Build normally - ISO generation happens automatically
+cmake -B build
 cmake --build build
 
-# Outputs: BuildDrop/noiz2sa.iso and BuildDrop/noiz2sa.cue
+# Outputs: BuildDrop/noiz2sa.iso, BuildDrop/noiz2sa.cue, etc.
 ```
+
+See [doc/CD_GENERATION_GUIDE.md](doc/CD_GENERATION_GUIDE.md) for complete details.
 
 ### Documentation
 

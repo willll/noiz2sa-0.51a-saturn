@@ -21,10 +21,9 @@ cmake --build build    # This builds ELF, ISO, and audio automatically!
 ```
 
 **Output files created:**
-- `build/noiz2sa.elf` - Compiled game executable
-- `build/cd.iso` - ISO 9660 image (if xorrisofs available)
-- `build/cd.bin` & `build/cd.cue` - BIN/CUE format (if iso2raw available)
-- `build/cd.bin` - Updated with audio tracks (if sox available)
+- `BuildDrop/noiz2sa.elf` - Compiled game executable
+- `BuildDrop/noiz2sa.iso` - ISO 9660 image (if xorrisofs available)
+- `BuildDrop/noiz2sa.bin` & `BuildDrop/noiz2sa.cue` - BIN/CUE format (if iso2raw available)
 
 ## Build Targets
 
@@ -42,7 +41,7 @@ cmake --build build --target cd-iso
   - Linux: `apt-get install xorriso`
   - macOS: `brew install xorriso`
 
-**Output:** `build/cd.iso`
+**Output:** `BuildDrop/noiz2sa.iso`
 
 ### `cd-bin-cue` - Manually Convert ISO to BIN/CUE Format
 Re-generates BIN/CUE format without rebuilding.
@@ -58,8 +57,8 @@ cmake --build build --target cd-bin-cue
   - macOS: Build from source
 
 **Output:** 
-- `build/cd.bin` (CD image data)
-- `build/cd.cue` (Cue sheet with track information)
+- `BuildDrop/noiz2sa.bin` (CD image data)
+- `BuildDrop/noiz2sa.cue` (Cue sheet with track information)
 
 ### `cd-audio` - Manually Add Audio Tracks
 Re-processes and adds audio tracks without full rebuild.
@@ -91,12 +90,11 @@ cmake --build build
 ```
 
 This automatically creates:
-- `build/noiz2sa.elf` - Compiled game executable
-- `build/cd/data/0.bin` - Game binary (extracted from ELF)
-- `build/cd/data/ABS.TXT`, `BIB.TXT`, `CPY.TXT` - Required metadata files
-- `build/cd.iso` - ISO image (if xorrisofs available)
-- `build/cd.bin` & `build/cd.cue` - BIN/CUE format (if iso2raw available later)
-- Audio tracks in `build/cd.bin` (if sox available)
+- `BuildDrop/noiz2sa.elf` - Compiled game executable
+- Build directory `cd/data/` with assets (internal)
+- `BuildDrop/noiz2sa.iso` - ISO image (if xorrisofs available)
+- `BuildDrop/noiz2sa.bin` & `BuildDrop/noiz2sa.cue` - BIN/CUE format (if iso2raw available later)
+- Audio tracks appended to `BuildDrop/noiz2sa.bin` (if sox available)
 
 ### What Happens During Build
 
@@ -111,17 +109,17 @@ This automatically creates:
 
 3. **ISO Generation (POST_BUILD, if xorrisofs available)**
    - Runs `generate_iso.sh` automatically
-   - Creates `build/cd.iso` with all assets
+   - Creates `BuildDrop/noiz2sa.iso` with all assets
 
 4. **BIN/CUE Conversion (POST_BUILD, if iso2raw available)**
    - Runs `generate_bin_cue.sh` automatically
-   - Creates `build/cd.bin` and `build/cd.cue`
+   - Creates `BuildDrop/noiz2sa.bin` and `BuildDrop/noiz2sa.cue`
    - Converts ISO to emulator-compatible format
 
 5. **Audio Integration (POST_BUILD, if sox available)**
    - Runs `add_audio_tracks.sh` automatically
-   - Appends audio tracks to `build/cd.bin`
-   - Updates `build/cd.cue` with track indices
+   - Appends audio tracks to `BuildDrop/noiz2sa.bin`
+   - Updates `BuildDrop/noiz2sa.cue` with track indices
 
 ### Manual Regeneration
 
@@ -140,12 +138,12 @@ cmake --build build --target cd-audio
 
 ### Step-by-Step Build (Legacy)
 
-If you want to see each step, you can run the generated scripts manually:
+If you want to see each step, you can run the generated scripts manually from the build directory:
 
 ```bash
 cd build
-bash generate_iso.sh         # Creates cd.iso
-bash generate_bin_cue.sh     # Creates cd.bin and cd.cue
+bash generate_iso.sh         # Creates BuildDrop/noiz2sa.iso
+bash generate_bin_cue.sh     # Creates BuildDrop/noiz2sa.bin and .cue
 bash add_audio_tracks.sh     # Appends audio and updates cue
 ```
 
@@ -199,15 +197,15 @@ If not found, the build will warn but not fail (ISO generation will fail at runt
 
 ### Mednafen
 ```bash
-mednafen build/cd.cue
+mednafen BuildDrop/noiz2sa.cue
 ```
 
 ### Yabause
-1. Load `build/cd.cue` as CD image
+1. Load `BuildDrop/noiz2sa.cue` as CD image
 2. Boot the emulator
 
 ### SSF
-Use `build/cd.bin` + `build/cd.cue` (both files must be in same directory)
+Use `BuildDrop/noiz2sa.bin` + `BuildDrop/noiz2sa.cue` (both files must be in same directory)
 
 ## Troubleshooting
 
