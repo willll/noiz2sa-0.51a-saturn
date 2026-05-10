@@ -433,7 +433,7 @@ set(BUILD_ISO "${BUILD_DROP}/${CD_NAME}.iso")
 set(BUILD_BIN "${BUILD_DROP}/${CD_NAME}.bin")
 set(BUILD_CUE "${BUILD_DROP}/${CD_NAME}.cue")
 set(BUILD_MAP "${BUILD_DROP}/${CD_NAME}.map")
-set(BUILD_IPBIN "${BUILD_DROP}/IP.BIN")
+set(BUILD_IPBIN "${ASSETS_DIR}/IP.BIN")
 
 # Generate IP.BIN using IPMaker for this project.
 set(ip_maker_verbose "")

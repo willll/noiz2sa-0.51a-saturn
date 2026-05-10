@@ -57,3 +57,4 @@ build-hwdebug/*
 build_hw_debug/*
 logs/*
 src/bulletml_binary/Makefile
+cd/data/IP.BIN

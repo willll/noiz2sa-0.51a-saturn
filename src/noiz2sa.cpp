@@ -400,7 +400,6 @@ static void draw()
   case IN_GAME:
     // Draw background.
     drawBackground();
-    drawBonuses();
     drawFoes();
 #if NOIZ2SA_PERF_MODE
     if ((tick & 1) == 0)
@@ -417,6 +416,7 @@ static void draw()
 #endif
     blendScreen();
     // Draw forground.
+  drawBonuses();
     drawShots();
     drawShip();
     drawBullets();
@@ -440,10 +440,10 @@ static void draw()
   case STAGE_CLEAR:
     // Draw background.
     drawBackground();
-    drawBonuses();
     drawFrags();
     blendScreen();
     // Draw forground.
+    drawBonuses();
     drawShots();
     drawShip();
     drawScore();
@@ -452,7 +452,6 @@ static void draw()
   case PAUSE:
     // Draw background.
     drawBackground();
-    drawBonuses();
     drawFoes();
 #if NOIZ2SA_PERF_MODE
     // Keep pause overlay responsive with lower VDP1 workload.
@@ -466,6 +465,7 @@ static void draw()
     drawFrags();
     blendScreen();
     // Draw forground.
+    drawBonuses();
     drawShots();
     drawShip();
     drawBullets();
