@@ -1359,6 +1359,24 @@ int main()
   #endif
     uint32_t timeSyncUs = SDL_GetProfileMicros() - phaseStartUs;
 
+#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    {
+      static uint32_t sLastHeartbeatMs = 0;
+      const uint32_t hbNowMs = SDL_GetTicks();
+      if (sLastHeartbeatMs == 0 || (hbNowMs - sLastHeartbeatMs) >= 1000u)
+      {
+        sLastHeartbeatMs = hbNowMs;
+        SRL::Logger::LogInfo("[HEARTBEAT] ms=%lu tick=%lu status=%d fps=%u.%02u loops=%lu",
+                             (unsigned long)hbNowMs,
+                             (unsigned long)tick,
+                             status,
+                             (unsigned)(gFpsTimes100 / 100u),
+                             (unsigned)(gFpsTimes100 % 100u),
+                             (unsigned long)gPerfTraceWindow.loopCount);
+      }
+    }
+#endif
+
     const uint32_t totalUs = timeMoveUs + timeSmokeUs + timeDrawUs + timeFlipUs + timeSyncUs;
 
     gPerfTraceWindow.totalUs += totalUs;
