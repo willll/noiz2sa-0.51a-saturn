@@ -12,9 +12,20 @@ inline uint32_t& getBulletMlAllocFailureCount() {
     return sAllocFailures;
 }
 
+inline bool& getBulletMlAllocFailureLatch() {
+    static bool sAllocFailureLatched = false;
+    return sAllocFailureLatched;
+}
+
+inline bool hasBulletMlAllocFailureLatched() {
+    return getBulletMlAllocFailureLatch();
+}
+
 inline void logBulletMlAllocFailure(const char* tag, uint32_t count = 0) {
     uint32_t& failCount = getBulletMlAllocFailureCount();
+    bool& latched = getBulletMlAllocFailureLatch();
     failCount++;
+    latched = true;
     if (failCount <= 8 || (failCount % 64) == 0) {
         if (count > 0) {
             SRL::Logger::LogWarning("[BML-ALLOC] failed tag=%s count=%lu total_fail=%lu",
