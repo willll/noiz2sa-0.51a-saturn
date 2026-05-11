@@ -35,6 +35,7 @@
 #include "attractmanager.h"
 #include "gamepad.h"
 #include "loading_screen.h"
+#include "bulletml_binary/bulletmlrunner.hpp"
 
 
 static int noSound = 0;
@@ -151,6 +152,10 @@ void initTitle()
 {
   SRL::Logger::LogInfo("[STATE] Entering TITLE screen");
 
+  // Start each title/game flow with BulletML fail-safe cleared.
+  // This prevents a previous run's alloc latch from suppressing bullets forever.
+  resetBulletMlAllocFailureState();
+
   int stg;
   status = TITLE;
 
@@ -177,6 +182,9 @@ void initTitle()
 void initGame(int stg)
 {
   SRL::Logger::LogInfo("[STATE] Entering IN_GAME (stage %d)", stg);
+
+  // Clear any previous BulletML alloc-failure latch before new gameplay init.
+  resetBulletMlAllocFailureState();
 
   status = IN_GAME;
 
@@ -1439,6 +1447,47 @@ int main()
   if (sLastHeartbeatMs == 0 || (hbNowMs - sLastHeartbeatMs) >= heartbeatIntervalMs)
       {
         sLastHeartbeatMs = hbNowMs;
+        const uint32_t loops = maxU32(gPerfTraceWindow.loopCount, 1u);
+        const uint32_t moveFrames = maxU32(gMovePhaseFrameCount, 1u);
+        const uint32_t drawFrames = maxU32(gDrawPhaseFrameCount, 1u);
+        const uint32_t avgTotalUs = (uint32_t)(gPerfTraceWindow.totalUs / loops);
+        const uint32_t avgMoveUs = (uint32_t)(gPerfTraceWindow.moveUs / loops);
+        const uint32_t avgDrawUs = (uint32_t)((gPerfTraceWindow.drawUs + gPerfTraceWindow.smokeUs + gPerfTraceWindow.flipUs) / loops);
+        const uint32_t avgSyncUs = (uint32_t)(gPerfTraceWindow.syncUs / loops);
+        const uint32_t avgBulletCount = (uint32_t)(gPerfTraceWindow.bulletTotalCount / loops);
+        const uint32_t avgFoeCount = (uint32_t)(gPerfTraceWindow.foeTotalCount / loops);
+        const uint32_t avgFoeBudget = (uint32_t)(gPerfTraceWindow.foeBudgetTotal / loops);
+        uint32_t moveHotspotUs = gMovePhaseTimings.background;
+        const char* moveHotspotName = "moveBackground";
+        if (gMovePhaseTimings.addBullets > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.addBullets; moveHotspotName = "addBullets"; }
+        if (gMovePhaseTimings.shots > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.shots; moveHotspotName = "moveShots"; }
+        if (gMovePhaseTimings.ship > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.ship; moveHotspotName = "moveShip"; }
+        if (gMovePhaseTimings.foes > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.foes; moveHotspotName = "moveFoes"; }
+        if (gMovePhaseTimings.frags > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.frags; moveHotspotName = "moveFrags"; }
+        if (gMovePhaseTimings.bonuses > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.bonuses; moveHotspotName = "moveBonuses"; }
+        if (gMovePhaseTimings.titleMenu > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.titleMenu; moveHotspotName = "moveTitleMenu"; }
+        if (gMovePhaseTimings.gameOver > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.gameOver; moveHotspotName = "moveGameover"; }
+        if (gMovePhaseTimings.stageClear > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.stageClear; moveHotspotName = "moveStageClear"; }
+        if (gMovePhaseTimings.pause > moveHotspotUs) { moveHotspotUs = gMovePhaseTimings.pause; moveHotspotName = "movePause"; }
+        uint32_t drawHotspotUs = gDrawPhaseTimings.memset;
+        const char* drawHotspotName = "clearBuf";
+        if (gDrawPhaseTimings.background > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.background; drawHotspotName = "drawBackground"; }
+        if (gDrawPhaseTimings.bonuses > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.bonuses; drawHotspotName = "drawBonuses"; }
+        if (gDrawPhaseTimings.foes > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.foes; drawHotspotName = "drawFoes"; }
+        if (gDrawPhaseTimings.bulletsWake > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.bulletsWake; drawHotspotName = "drawBulletsWake"; }
+        if (gDrawPhaseTimings.frags > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.frags; drawHotspotName = "drawFrags"; }
+        if (gDrawPhaseTimings.blend > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.blend; drawHotspotName = "blendScreen"; }
+        if (gDrawPhaseTimings.shots > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.shots; drawHotspotName = "drawShots"; }
+        if (gDrawPhaseTimings.ship > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.ship; drawHotspotName = "drawShip"; }
+        if (gDrawPhaseTimings.bullets > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.bullets; drawHotspotName = "drawBullets"; }
+        if (gDrawPhaseTimings.bulletOverlay > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.bulletOverlay; drawHotspotName = "drawBulletOverlay"; }
+        if (gDrawPhaseTimings.score > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.score; drawHotspotName = "drawScore"; }
+        if (gDrawPhaseTimings.clearRPanel > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.clearRPanel; drawHotspotName = "clearRPanel"; }
+        if (gDrawPhaseTimings.title > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.title; drawHotspotName = "drawTitle"; }
+        if (gDrawPhaseTimings.titleMenu > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.titleMenu; drawHotspotName = "drawTitleMenu"; }
+        if (gDrawPhaseTimings.gameover > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.gameover; drawHotspotName = "drawGameover"; }
+        if (gDrawPhaseTimings.stageClear > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.stageClear; drawHotspotName = "drawStageClear"; }
+        if (gDrawPhaseTimings.pause > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.pause; drawHotspotName = "drawPause"; }
         SRL::Logger::LogInfo("[HEARTBEAT] ms=%lu tick=%lu status=%d fps=%u.%02u loops=%lu",
                              (unsigned long)hbNowMs,
                              (unsigned long)tick,
@@ -1450,6 +1499,31 @@ int main()
                              (unsigned)gDiagPhaseTag,
                              (unsigned long)sPhaseTraceCounter,
                              (unsigned long)gSyncCount);
+        SRL::Logger::LogInfo("[HEARTBEAT-BML] latch=%u fails=%u",
+                 hasBulletMlAllocFailureLatched() ? 1u : 0u,
+                 (unsigned)getBulletMlAllocFailureCount());
+        SRL::Logger::LogInfo("[HEARTBEAT-HOT] move=%s:%u draw=%s:%u budget=%u",
+           moveHotspotName,
+           (unsigned)(moveHotspotUs / moveFrames),
+           drawHotspotName,
+           (unsigned)(drawHotspotUs / drawFrames),
+           (unsigned)avgFoeBudget);
+        SRL::Logger::LogInfo("[HEARTBEAT-PERF] avg_us(total=%u move=%u draw=%u sync=%u)",
+                 (unsigned)avgTotalUs,
+                 (unsigned)avgMoveUs,
+                 (unsigned)avgDrawUs,
+                 (unsigned)avgSyncUs);
+        SRL::Logger::LogInfo("[HEARTBEAT-PERF] worst_us(total=%u move=%u draw=%u sync=%u)",
+                 (unsigned)gPerfTraceWindow.worstTotalUs,
+                 (unsigned)gPerfTraceWindow.worstMoveUs,
+                 (unsigned)gPerfTraceWindow.worstDrawUs,
+                 (unsigned)gPerfTraceWindow.worstSyncUs);
+        SRL::Logger::LogInfo("[HEARTBEAT-PERF] entities(avg=%u peak=%u) bullets(avg=%u peak=%u live=%d)",
+                 (unsigned)avgFoeCount,
+                 (unsigned)gPerfTraceWindow.peakFoeCount,
+                 (unsigned)avgBulletCount,
+                 (unsigned)gPerfTraceWindow.peakBulletCount,
+                 getLiveProjectileCount());
       }
       sPhaseTraceCounter++;
     }
