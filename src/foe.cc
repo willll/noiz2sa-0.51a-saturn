@@ -502,7 +502,12 @@ void moveFoes()
     {
       if (fe->type == BOSS_TYPE)
       {
-        if (fe->cmd->isEnd())
+        if (hasBulletMlAllocFailureLatched())
+        {
+          delete fe->cmd;
+          fe->cmd = nullptr;
+        }
+        else if (fe->cmd->isEnd())
         {
           delete fe->cmd;
           fe->cmd = createFoeCommand(fe->parser, fe);
@@ -523,11 +528,16 @@ void moveFoes()
         if (hasBulletMlAllocFailureLatched())
         {
           // Keep simulation alive after BulletML OOM by skipping command execution.
-          // Active bullet command carriers are removed to prevent lingering stale state.
+          // Remove BulletML bullet carriers; keep enemies visible to preserve gameplay readability.
           if (fe->spc == ACTIVE_BULLET || fe->spc == BOSS_ACTIVE_BULLET)
           {
             removeFoeForced(fe);
             continue;
+          }
+          if (fe->spc == FOE)
+          {
+            delete fe->cmd;
+            fe->cmd = nullptr;
           }
         }
         else
