@@ -9,6 +9,7 @@
 #include <srl_memory.hpp>  // for memory allocation
 #include <srl_input.hpp>   // for Digital input
 #include <srl_log.hpp>     // for logging
+#include "system_factory.h"
 #include "gamepad.h"
 
 using namespace SRL::Input;
@@ -16,7 +17,7 @@ using namespace SRL::Input;
 static int g_joystick_initialized = 0;
 
 bool initGamepad() {
-    gamepad = new Digital(0);
+    gamepad = createDigitalGamepad(0);
     if(gamepad == nullptr) {
         SRL::Logger::LogFatal("[GAMEPAD] Failed to initialize gamepad");
         return false;
@@ -31,6 +32,10 @@ bool initGamepad() {
         SRL::Logger::LogWarning("[GAMEPAD] No gamepad detected");
         return false;
     }
+}
+
+void closeGamepad() {
+    destroyObject(gamepad);
 }
 
 // Initialize game controller subsystem

@@ -26,6 +26,7 @@
 #  endif
 #endif
 
+#include "sound_factory.h"
 #include "soundmanager.h"
 
 static int useAudio = 0;
@@ -96,19 +97,19 @@ static int16_t loadPonesoundChunkFromCd(int idx)
   }
 
   const int32_t size = file.Size.Bytes;
-  uint8_t* raw = new uint8_t[size];
+  uint8_t* raw = createArray<uint8_t>(size);
   const int32_t readBytes = file.LoadBytes(0, size, raw);
   file.Close();
   SRL::Cd::ChangeDir((char *)nullptr);
 
   if (readBytes != size)
   {
-    delete[] raw;
+    destroyArray(raw);
     return -2;
   }
 
   const int16_t id = loadPonesoundChunkWithRetry(raw, size);
-  delete[] raw;
+  destroyArray(raw);
   return id;
 }
 #endif
@@ -127,8 +128,7 @@ void closeSound() {
   for (int i = 0; i < CHUNK_NUM; i++) {
     sglChunkFileName[i][0] = '\0';
     if (sglChunks[i] != nullptr) {
-      delete sglChunks[i];
-      sglChunks[i] = nullptr;
+      destroyObject(sglChunks[i]);
     }
   }
 #  else
@@ -190,8 +190,8 @@ void loadSounds() {
     snprintf(sglChunkFileName[i], sizeof(sglChunkFileName[i]), "%s", selectedName);
     SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loading %s", sglChunkFileName[i]);
 
-    SRL::Sound::Pcm::WaveSound* preload = new SRL::Sound::Pcm::WaveSound(sglChunkFileName[i]);
-    delete preload;
+    SRL::Sound::Pcm::WaveSound* preload = createWaveSound(sglChunkFileName[i]);
+    destroyObject(preload);
     sglChunkExists[i] = true;
     SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loaded WAV %s during init (released)", sglChunkFileName[i]);
     loaded++;
@@ -224,14 +224,13 @@ void loadSounds() {
     }
 
     rawSizes[i] = file.Size.Bytes;
-    rawBuffers[i] = new uint8_t[rawSizes[i]];
+    rawBuffers[i] = createArray<uint8_t>(rawSizes[i]);
     const int32_t loadedBytes = file.LoadBytes(0, rawSizes[i], rawBuffers[i]);
     file.Close();
 
     if (loadedBytes != rawSizes[i]) {
       SRL::Logger::LogWarning("[SOUND] loadSounds (Ponesound): Failed to read %s (%d/%d)", name, loadedBytes, rawSizes[i]);
-      delete[] rawBuffers[i];
-      rawBuffers[i] = nullptr;
+      destroyArray(rawBuffers[i]);
       rawSizes[i] = 0;
       continue;
     }
@@ -269,8 +268,7 @@ void loadSounds() {
     }
 
     chunk[i] = loadPonesoundChunkWithRetry(rawBuffers[i], rawSizes[i]);
-    delete[] rawBuffers[i];
-    rawBuffers[i] = nullptr;
+    destroyArray(rawBuffers[i]);
 
     if (chunk[i] < 0) {
       SRL::Logger::LogWarning("[SOUND] loadSounds (Ponesound): Failed to register %s (code=%d)", name, chunk[i]);
@@ -410,7 +408,7 @@ void playChunk(int idx) {
     // Runtime reload happens from root dir; switch into SOUNDS for WaveSound file open.
     SRL::Cd::ChangeDir((char *)nullptr);
     SRL::Cd::ChangeDir("SOUNDS");
-    sglChunks[idx] = new SRL::Sound::Pcm::WaveSound(sglChunkFileName[idx]);
+    sglChunks[idx] = createWaveSound(sglChunkFileName[idx]);
     SRL::Cd::ChangeDir((char *)nullptr);
   }
 

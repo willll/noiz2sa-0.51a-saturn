@@ -74,6 +74,7 @@ typedef enum
 } SDL_GameControllerAxis;
 
 bool initGamepad();
+void closeGamepad();
 
 Uint8 SDL_GameControllerGetButton(SRL::Input::Digital * gamecontroller, SDL_GameControllerButton button);
 

@@ -35,6 +35,7 @@
 #include "attractmanager.h"
 #include "gamepad.h"
 #include "loading_screen.h"
+#include "system_factory.h"
 #include "bulletml_binary/bulletmlrunner.hpp"
 
 
@@ -73,7 +74,7 @@ static void initFirst()
 
   // Initialize random number generator with current time
   uint32_t seed = SDL_GetTicks();
-  g_random = new SRL::Math::Random<unsigned int>(seed);
+  g_random = createRandomGenerator(seed);
   SRL::Logger::LogDebug("[INIT] Random generator initialized with seed: %u", seed);
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
@@ -108,8 +109,8 @@ void quitLast()
   closeBarragemanager();
   SRL::Logger::LogDebug("[QUIT] Barrage manager closed");
 
-  delete g_random;
-  g_random = nullptr;
+  destroyObject(g_random);
+  closeGamepad();
   SRL::Logger::LogInfo("[QUIT] Random generator cleaned up");
 
   SRL::Logger::LogInfo("[QUIT] Shutdown sequence complete - Exiting");

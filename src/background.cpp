@@ -15,6 +15,7 @@
 #include <srl_log.hpp>    // for logging
 #include <srl_system.hpp> // for exit
 
+#include "memory_factory.h"
 #include "noiz2sa.h"
 #include "screen.h"
 #include "clrtbl.h"
@@ -293,7 +294,7 @@ static void ensureBackgroundLayer()
   for (int i = 0; i < 2; i++)
   {
     const size_t bufSize = LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t);
-    backgroundBuffers[i] = (uint16_t *)SRL::Memory::LowWorkRam::Malloc(bufSize);
+    backgroundBuffers[i] = allocateLowWorkRamItems<uint16_t>(LAYER_WIDTH * LAYER_HEIGHT);
     if (backgroundBuffers[i] == nullptr)
     {
       SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate CPU background buffer %d (LWRAM free=%lu)",

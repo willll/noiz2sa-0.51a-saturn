@@ -18,6 +18,7 @@
 #include "brgmng_mtd.h"
 #include "soundmanager.h"
 #include "attractmanager.h"
+#include "bulletml_factory.h"
 
 #include "barragemanager.h"
 #include "foe.h"
@@ -72,12 +73,11 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
   for (uint32_t patternIndex = 0; patternIndex < patternCount && i < BARRAGE_PATTERN_MAX; ++patternIndex)
   {
-    brg[i].bulletml = new BulletMLParserBLB(patterns[patternIndex].name, patterns[patternIndex].data, patterns[patternIndex].size);
+    brg[i].bulletml = createEmbeddedBulletMlParser(patterns[patternIndex].name, patterns[patternIndex].data, patterns[patternIndex].size);
     if (!brg[i].bulletml->build())
     {
       SRL::Logger::LogFatal("[HW_DEBUG] Failed to parse embedded BulletML file: %s/%s", dirPath, patterns[patternIndex].name);
-      delete brg[i].bulletml;
-      brg[i].bulletml = nullptr;
+      destroyObject(brg[i].bulletml);
       SRL::System::Exit(1);
     }
     i++;
@@ -180,12 +180,11 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
     SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s/%s", dirPath, line);
 
-    brg[i].bulletml = new BulletMLParserBLB(line);
+    brg[i].bulletml = createFileBulletMlParser(line);
     if (!brg[i].bulletml->build()) {
       parseFailures++;
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
-      delete brg[i].bulletml;
-      brg[i].bulletml = nullptr;
+      destroyObject(brg[i].bulletml);
       continue;
     }
     i++;
@@ -230,8 +229,7 @@ void closeBarragemanager() {
   
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
-      delete barragePattern[i][j].bulletml;
-      barragePattern[i][j].bulletml = nullptr;
+      destroyObject(barragePattern[i][j].bulletml);
     }
   }
   

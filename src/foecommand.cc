@@ -15,6 +15,7 @@
 #include <srl_log.hpp>
 #include <srl_memory.hpp>
 
+#include "bulletml_runtime_factory.h"
 #include "noiz2sa.h"
 #include "degutil.h"
 #include "ship.h"
@@ -76,7 +77,7 @@ FoeCommand::FoeCommand(BulletMLState *state, Foe *f)
 FoeCommand::~FoeCommand() {}
 
 FoeCommand* createFoeCommand(BulletMLParserBLB* parser, Foe* f) {
-  return hwnew FoeCommand(parser, f);
+  return createBulletMlRuntimeObject<FoeCommand>(parser, f);
 }
 
 FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
@@ -84,7 +85,7 @@ FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
     delete state;
     return nullptr;
   }
-  return hwnew FoeCommand(state, f);
+  return createBulletMlRuntimeObject<FoeCommand>(state, f);
 }
 
 Fxp FoeCommand::getBulletDirection() {

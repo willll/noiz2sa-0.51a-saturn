@@ -1,5 +1,7 @@
 #include "canvas.h"
 
+#include "graphics_factory.h"
+
 #include <algorithm>
 
 #include <srl_log.hpp>
@@ -10,15 +12,15 @@ using namespace SRL::Types;
 Canvas::Canvas(uint16_t width, uint16_t height, Palette& palette)
     : width_(width),
       height_(height),
-      imageData_(new Pixel[width * height]),
-      bitmap_(new SRL::Bitmap::BitmapInfo(width, height, &palette))
+            imageData_(createArray<Pixel>(width * height)),
+            bitmap_(createBitmapInfo(width, height, &palette))
 {
 }
 
 Canvas::~Canvas()
 {
-    delete[] imageData_;
-    delete bitmap_;
+        destroyArray(imageData_);
+        destroyObject(bitmap_);
 }
 
 uint8_t* Canvas::GetData()

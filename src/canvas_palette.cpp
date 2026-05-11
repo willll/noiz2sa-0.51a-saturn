@@ -1,5 +1,7 @@
 #include "canvas_palette.h"
 
+#include "graphics_factory.h"
+
 #include "clrtbl.h"
 
 #include <srl_cram.hpp>
@@ -101,7 +103,7 @@ int32_t Palette::initPalette()
         return id;
     }
 
-    palette = new SRL::CRAM::Palette(SRL::CRAM::TextureColorMode::Paletted256, id);
+    palette = createCramPalette(SRL::CRAM::TextureColorMode::Paletted256, id);
     if (palette == nullptr)
     {
         return -1;
@@ -110,6 +112,7 @@ int32_t Palette::initPalette()
     SRL::Types::HighColor* data = palette->GetData();
     if (data == nullptr)
     {
+        destroyObject(palette);
         return -1;
     }
 

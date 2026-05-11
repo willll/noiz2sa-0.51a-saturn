@@ -27,6 +27,7 @@
 #include "letterrender.h"
 #include "attractmanager.h"
 #include "gamepad.h"
+#include "graphics_factory.h"
 #include "canvas_palette.h"
 
 
@@ -569,7 +570,7 @@ static void loadSprites()
     strcpy(name, spriteFile[i]);
 
     // Load TGA file using SRL bitmap loader
-    tga = new SRL::Bitmap::TGA(name);
+    tga = createBitmapTga(name);
 
     if (tga == nullptr || tga->GetData() == nullptr)
     {
@@ -628,7 +629,7 @@ static void loadSprites()
     sprite[i] = SRL_Surface(textureIndex, info.Width, info.Height);
     SRL::Logger::LogTrace("[SPRITE] SDL surface created for sprite %d", i);
 
-    delete tga;
+    destroyObject(tga);
 
     // SDL_ConvertSurface(img,
     // 		   video->format,
@@ -716,11 +717,10 @@ static void makeSmokeBuf()
 
   if (smokeBuf != nullptr)
   {
-    free(smokeBuf);
-    smokeBuf = nullptr;
+    freeHeapItems(smokeBuf);
   }
 
-  smokeBuf = (Canvas::Pixel **)malloc(sizeof(Canvas::Pixel *) * pitch * LAYER_HEIGHT);
+  smokeBuf = allocateHeapItems<Canvas::Pixel*>(pitch * LAYER_HEIGHT);
   if (smokeBuf == nullptr)
   {
     SRL::Logger::LogWarning("Couldn't allocate smokeBuf lookup table. Using fallback smoke mode.");
@@ -768,12 +768,12 @@ void initSDL()
   SRL::Logger::LogInfo("[SCREEN] LWRAM free before frame buffers: %lu  HWRAM free: %lu",
                        (unsigned long)lwrFreeBefore, (unsigned long)hwrFreeBefore);
 
-  pbuf  = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
-  l1buf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
-  l2buf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(lyrSize);
+  pbuf  = allocateLowWorkRamItems<Canvas::Pixel>(lyrSize);
+  l1buf = allocateLowWorkRamItems<Canvas::Pixel>(lyrSize);
+  l2buf = allocateLowWorkRamItems<Canvas::Pixel>(lyrSize);
   buf   = gBufStorage;   // static HWRAM BSS array — never touches TLSF pool
-  lpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
-  rpbuf = (Canvas::Pixel *)SRL::Memory::LowWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
+  lpbuf = allocateLowWorkRamItems<Canvas::Pixel>(PANEL_WIDTH * PANEL_HEIGHT);
+  rpbuf = allocateLowWorkRamItems<Canvas::Pixel>(PANEL_WIDTH * PANEL_HEIGHT);
   if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
   {
     SRL::Logger::LogWarning(
@@ -786,12 +786,12 @@ void initSDL()
         rpbuf,
         (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
 
-    if (!pbuf)  pbuf  = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
-    if (!l1buf) l1buf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
-    if (!l2buf) l2buf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(lyrSize);
+    if (!pbuf)  pbuf  = allocateHighWorkRamItems<Canvas::Pixel>(lyrSize);
+    if (!l1buf) l1buf = allocateHighWorkRamItems<Canvas::Pixel>(lyrSize);
+    if (!l2buf) l2buf = allocateHighWorkRamItems<Canvas::Pixel>(lyrSize);
     // buf always set to gBufStorage — no fallback needed
-    if (!lpbuf) lpbuf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
-    if (!rpbuf) rpbuf = (Canvas::Pixel *)SRL::Memory::HighWorkRam::Malloc(PANEL_WIDTH * PANEL_HEIGHT);
+    if (!lpbuf) lpbuf = allocateHighWorkRamItems<Canvas::Pixel>(PANEL_WIDTH * PANEL_HEIGHT);
+    if (!rpbuf) rpbuf = allocateHighWorkRamItems<Canvas::Pixel>(PANEL_WIDTH * PANEL_HEIGHT);
   }
 
   if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf)

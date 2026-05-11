@@ -25,6 +25,19 @@ SKIP_RUN=0
 STRICT=0
 LOG_FILE="$ROOT_DIR/Tests/uts_background.log"
 
+ensure_emulator_log_output() {
+  # UT runners detect completion via emulator console marker (***UT_END***).
+  # Force EMULATOR log sink so markers are visible when using emulator backends.
+  if [[ "$EMULATOR" == "USBGamers" ]]; then
+    return
+  fi
+
+  echo "[campaign] Configuring build for emulator-visible logs (SRL_LOG_OUTPUT=EMULATOR)"
+  cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" \
+    -DSRL_LOG_OUTPUT=EMULATOR \
+    -DNOIZ2SA_ENABLE_REAL_HW_LOGS=OFF
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --emulator)
@@ -47,6 +60,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $SKIP_BUILD -eq 0 ]]; then
+  ensure_emulator_log_output
   echo "[campaign] Building SH2 background tests (cmake --build build --target noiz2sa_background_ut_bin_cue)"
   cmake --build "$ROOT_DIR/build" --target noiz2sa_background_ut_bin_cue
 fi
@@ -55,7 +69,9 @@ if [[ $SKIP_RUN -eq 0 ]]; then
   echo "[campaign] Running SH2 background tests via emulator: $EMULATOR"
   (
     cd "$ROOT_DIR/Tests"
-    UT_LOG_FILE="$LOG_FILE" bash "$ROOT_DIR/Tests/run_tests.bat" "$EMULATOR" "BuildDrop/noiz2sa_background_ut.cue"
+    MEDNAFEN_ALLOWMULTI="${MEDNAFEN_ALLOWMULTI:-1}" \
+      UT_LOG_FILE="$LOG_FILE" \
+      bash "$ROOT_DIR/Tests/run_tests.bat" "$EMULATOR" "BuildDrop/noiz2sa_background_ut.cue"
   )
 fi
 
