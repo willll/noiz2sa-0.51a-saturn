@@ -151,6 +151,14 @@ void initTitleStage(int stg)
 
 void initTitle()
 {
+  static bool sTitleWasInitialized = false;
+
+  if (sTitleWasInitialized)
+  {
+    savePreference();
+  }
+  sTitleWasInitialized = true;
+
   SRL::Logger::LogInfo("[STATE] Entering TITLE screen");
 
   // Start each title/game flow with BulletML fail-safe cleared.

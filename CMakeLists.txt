@@ -387,6 +387,7 @@ set(SOURCES_NOIZ2SA
   src/rand.cpp
   src/attractmanager.cpp
     src/hiscore_persistence.cpp
+        src/hiscore_persistence_format.cpp
   src/loading_screen.cpp
   src/soundmanager.cpp
   src/background.cpp
@@ -1146,6 +1147,11 @@ set(BULLETML_TEST_NAME "bulletml_parity_ut")
 set(BULLETML_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_parity_tests.cpp")
 set(BULLETML_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_TEST_NAME}")
 
+set(HISCORE_TEST_NAME "hiscore_persistence_ut")
+set(HISCORE_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/hiscore/hiscore_persistence_unit_tests.cpp")
+set(HISCORE_TEST_SUPPORT_SOURCE "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.cpp")
+set(HISCORE_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${HISCORE_TEST_NAME}")
+
 # Build bulletml parity test with native compiler (not Saturn SH-ELF)
 add_custom_command(
     OUTPUT "${BULLETML_TEST_EXECUTABLE}"
@@ -1158,6 +1164,19 @@ add_custom_command(
 
 add_custom_target(bulletml_parity_ut_build ALL
     DEPENDS "${BULLETML_TEST_EXECUTABLE}"
+)
+
+add_custom_command(
+    OUTPUT "${HISCORE_TEST_EXECUTABLE}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/Tests"
+    COMMAND g++ -std=c++11 -Wall -Wextra -I${CMAKE_SOURCE_DIR}/src -o "${HISCORE_TEST_EXECUTABLE}" "${HISCORE_TEST_SOURCE}" "${HISCORE_TEST_SUPPORT_SOURCE}"
+    DEPENDS "${HISCORE_TEST_SOURCE}" "${HISCORE_TEST_SUPPORT_SOURCE}" "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.h"
+    COMMENT "Building hi-score persistence unit test with native compiler"
+    VERBATIM
+)
+
+add_custom_target(hiscore_persistence_ut_build ALL
+    DEPENDS "${HISCORE_TEST_EXECUTABLE}"
 )
 
 # ============================================================================
@@ -1181,6 +1200,12 @@ add_test(
     COMMAND "${BULLETML_TEST_EXECUTABLE}"
 )
 set_tests_properties(bulletml_parity_test PROPERTIES TIMEOUT 60)
+
+add_test(
+    NAME hiscore_persistence_test
+    COMMAND "${HISCORE_TEST_EXECUTABLE}"
+)
+set_tests_properties(hiscore_persistence_test PROPERTIES TIMEOUT 60)
 
 add_test(
     NAME bulletml_all_xml_recursive_test
