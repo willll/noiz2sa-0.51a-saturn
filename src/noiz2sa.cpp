@@ -1520,6 +1520,38 @@ int main()
         if (gDrawPhaseTimings.gameover > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.gameover; drawHotspotName = "drawGameover"; }
         if (gDrawPhaseTimings.stageClear > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.stageClear; drawHotspotName = "drawStageClear"; }
         if (gDrawPhaseTimings.pause > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.pause; drawHotspotName = "drawPause"; }
+#if HW_DEBUG
+        SRL::Logger::LogInfo(
+          "[HEARTBEAT] ms=%lu tick=%lu status=%d fps=%u.%02u loops=%lu phase=%u trace=%lu sync=%lu bml=%u/%u hot=%s:%u/%s:%u perf(total=%u move=%u draw=%u sync=%u) worst(total=%u move=%u draw=%u sync=%u) entities(avg=%u peak=%u) bullets(avg=%u peak=%u live=%d)",
+          (unsigned long)hbNowMs,
+          (unsigned long)tick,
+          status,
+          (unsigned)(gFpsTimes100 / 100u),
+          (unsigned)(gFpsTimes100 % 100u),
+          (unsigned long)gPerfTraceWindow.loopCount,
+          (unsigned)gDiagPhaseTag,
+          (unsigned long)sPhaseTraceCounter,
+          (unsigned long)gSyncCount,
+          hasBulletMlAllocFailureLatched() ? 1u : 0u,
+          (unsigned)getBulletMlAllocFailureCount(),
+          moveHotspotName,
+          (unsigned)(moveHotspotUs / moveFrames),
+          drawHotspotName,
+          (unsigned)(drawHotspotUs / drawFrames),
+          (unsigned)avgTotalUs,
+          (unsigned)avgMoveUs,
+          (unsigned)avgDrawUs,
+          (unsigned)avgSyncUs,
+          (unsigned)gPerfTraceWindow.worstTotalUs,
+          (unsigned)gPerfTraceWindow.worstMoveUs,
+          (unsigned)gPerfTraceWindow.worstDrawUs,
+          (unsigned)gPerfTraceWindow.worstSyncUs,
+          (unsigned)avgFoeCount,
+          (unsigned)gPerfTraceWindow.peakFoeCount,
+          (unsigned)avgBulletCount,
+          (unsigned)gPerfTraceWindow.peakBulletCount,
+          getLiveProjectileCount());
+#else
         SRL::Logger::LogInfo("[HEARTBEAT] ms=%lu tick=%lu status=%d fps=%u.%02u loops=%lu",
                              (unsigned long)hbNowMs,
                              (unsigned long)tick,
@@ -1556,6 +1588,7 @@ int main()
                  (unsigned)avgBulletCount,
                  (unsigned)gPerfTraceWindow.peakBulletCount,
                  getLiveProjectileCount());
+#endif
       }
       sPhaseTraceCounter++;
     }
