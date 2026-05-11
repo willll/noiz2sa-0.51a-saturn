@@ -107,6 +107,15 @@ cmake --build build_hw_debug
 
 See [doc/HW_DEBUG_GUIDE.md](doc/HW_DEBUG_GUIDE.md) for complete instructions, including optional ESP-SaturnPSU_Control device integration for automated hardware control via REST API.
 
+## Development Environment
+
+Recommended external tooling used in this project workflow:
+
+- [Saturn-SDK-GCC-SH2](https://github.com/willll/Saturn-SDK-GCC-SH2): GCC SH-2 toolchain for Sega Saturn development.
+- [saturn-docker](https://github.com/willll/saturn-docker): Containerized build environment for reproducible Saturn builds.
+- [ftx](https://github.com/willll/ftx): Development cartridge interface/tooling for upload and debug workflows.
+- [ESP-SaturnPSU_Control](https://github.com/willll/ESP-SaturnPSU_Control): Hardware power-control integration used for real-Saturn automated testing.
+
 - [Jump to Upstream / Legacy Readme](#sym:Upstream)
 
 <a id="sym:Upstream"></a>
