@@ -110,6 +110,11 @@ void FoeCommand::createSimpleBullet(Fxp direction, Fxp speed) {
 }
 
 void FoeCommand::createBullet(BulletMLState* state, Fxp direction, Fxp speed) {
+  if (hasBulletMlAllocFailureLatched()) {
+    delete state;
+    return;
+  }
+
   int d = fxpDirectionToLegacyWrapped(direction);
   addFoeActiveBullet(&(foe->pos), foe->rank, 
 		     d, fxpToLegacyScaledInt(speed, COMMAND_SCREEN_SPD_RATE), foe->color+1, state);
