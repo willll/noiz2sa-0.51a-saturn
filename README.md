@@ -18,6 +18,8 @@ Recent maintenance in this fork includes:
 - XML-to-binary conversion tooling in `tools/`
 - Complete SaturnRingLib CMake integration with shared.mk feature parity
 
+The Saturn title screen uses sprite-based title glyphs loaded from the original title image assets (`TITLE*.TGA`), following the layout conventions used by the Windows 0.52 release and the GP32 codebase.
+
 ### Historical Context
 
 Noiz2sa is one of Kenta Cho's early ABA Games freeware shooters, first released for Windows in 2002 and listed on the official ABA Games page as version 0.52. Contemporary descriptions characterize it as an abstract top-down shooter focused on dense projectile patterns, precision movement with a slowdown key, and score optimization through chained green-star collection rather than weapon-upgrade progression. Community-maintained game catalogs also record later ports to additional platforms.
