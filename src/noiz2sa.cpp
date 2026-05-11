@@ -285,6 +285,18 @@ static uint32_t gMovePhaseFrameCount = 0;
 static DrawPhaseTimings gDrawPhaseTimings{};
 static uint32_t gDrawPhaseFrameCount = 0;
 
+#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+static volatile uint8_t gDiagPhaseTag = 0u;
+static inline void setDiagPhase(uint8_t tag)
+{
+  gDiagPhaseTag = tag;
+}
+#else
+static inline void setDiagPhase(uint8_t)
+{
+}
+#endif
+
 static void move()
 {
   uint32_t phaseStart;
@@ -292,18 +304,22 @@ static void move()
   switch (status)
   {
   case TITLE:
+    setDiagPhase(11u);
     phaseStart = SDL_GetProfileMicros();
     moveTitleMenu();
     gMovePhaseTimings.titleMenu += SDL_GetProfileMicros() - phaseStart;
     
+    setDiagPhase(12u);
     phaseStart = SDL_GetProfileMicros();
     moveBackground();
     gMovePhaseTimings.background += SDL_GetProfileMicros() - phaseStart;
     
+    setDiagPhase(13u);
     phaseStart = SDL_GetProfileMicros();
     addBullets();
     gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
     
+    setDiagPhase(14u);
     phaseStart = SDL_GetProfileMicros();
     moveFoes();
     gMovePhaseTimings.foes += SDL_GetProfileMicros() - phaseStart;
@@ -319,6 +335,7 @@ static void move()
         SRL::Logger::LogInfo("[MOVE] begin idx=%lu", (unsigned long)sMoveProbeCount);
       }
 #endif
+  setDiagPhase(21u);
     phaseStart = SDL_GetProfileMicros();
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-bg");
@@ -329,6 +346,7 @@ static void move()
     if (probeMove) SRL::Logger::LogInfo("[MOVE] post-bg");
     #endif
     
+    setDiagPhase(22u);
     phaseStart = SDL_GetProfileMicros();
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-addBullets");
@@ -339,6 +357,7 @@ static void move()
     if (probeMove) SRL::Logger::LogInfo("[MOVE] post-addBullets");
     #endif
     
+    setDiagPhase(23u);
     phaseStart = SDL_GetProfileMicros();
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-shots");
@@ -349,6 +368,7 @@ static void move()
     if (probeMove) SRL::Logger::LogInfo("[MOVE] post-shots");
     #endif
     
+    setDiagPhase(24u);
     phaseStart = SDL_GetProfileMicros();
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-ship");
@@ -359,6 +379,7 @@ static void move()
     if (probeMove) SRL::Logger::LogInfo("[MOVE] post-ship");
     #endif
     
+    setDiagPhase(25u);
     phaseStart = SDL_GetProfileMicros();
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-foes");
@@ -369,6 +390,7 @@ static void move()
     if (probeMove) SRL::Logger::LogInfo("[MOVE] post-foes");
     #endif
     
+    setDiagPhase(26u);
     phaseStart = SDL_GetProfileMicros();
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-frags");
@@ -379,6 +401,7 @@ static void move()
     if (probeMove) SRL::Logger::LogInfo("[MOVE] post-frags");
     #endif
     
+    setDiagPhase(27u);
     phaseStart = SDL_GetProfileMicros();
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-bonuses");
@@ -485,15 +508,24 @@ static void draw()
   {
   case TITLE:
     // Draw background.
+    setDiagPhase(41u);
     traceDraw(gDrawPhaseTimings.background, []() { drawBackground(); });
+    setDiagPhase(42u);
     traceDraw(gDrawPhaseTimings.foes, []() { drawFoes(); });
+    setDiagPhase(43u);
     traceDraw(gDrawPhaseTimings.bulletsWake, []() { drawBulletsWake(); });
+    setDiagPhase(44u);
     traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
     // Draw foreground.
+    setDiagPhase(45u);
     traceDraw(gDrawPhaseTimings.bullets, []() { drawBullets(); });
+    setDiagPhase(46u);
     traceDraw(gDrawPhaseTimings.score, []() { drawScore(); });
+    setDiagPhase(47u);
     traceDraw(gDrawPhaseTimings.clearRPanel, []() { clearRPanel(); });
+    setDiagPhase(48u);
     traceDraw(gDrawPhaseTimings.title, []() { drawTitle(); });
+    setDiagPhase(49u);
     traceDraw(gDrawPhaseTimings.titleMenu, []() { drawTitleMenu(); });
     break;
   case IN_GAME:
@@ -998,6 +1030,9 @@ int main()
 
   while (!done)
   {
+#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    static uint32_t sPhaseTraceCounter = 0u;
+#endif
 #if HW_DEBUG
     static uint32_t sPhaseProbeLoops = 0u;
     const bool probePhase = (sPhaseProbeLoops < 8u);
@@ -1205,6 +1240,9 @@ int main()
 
     // Process game logic for calculated frames
     uint32_t phaseStartUs = SDL_GetProfileMicros();
+  #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    setDiagPhase(1u); // move/update phase
+  #endif
 #if HW_DEBUG
     if (probePhase)
     {
@@ -1255,6 +1293,9 @@ int main()
     ScreenVdpPerfStats frameVdpStats{};
     if (renderThisLoop)
     {
+    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+      setDiagPhase(2u); // render phase
+    #endif
 #if HW_DEBUG
       if (probePhase)
       {
@@ -1334,6 +1375,18 @@ int main()
     // Fall back to non-blocking refresh only when ticks are stalled to avoid hard lockups.
     if (!gUseFixedFramePacing && nowTick > 0)
     {
+    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+      setDiagPhase(3u); // pre-sync wait
+    #if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
+      if ((sPhaseTraceCounter % 120u) == 0u)
+      {
+        SRL::Logger::LogInfo("[PHASE] pre-sync tick=%lu status=%d phase=%u",
+                 (unsigned long)tick,
+                 status,
+                 (unsigned)gDiagPhaseTag);
+      }
+    #endif
+    #endif
 #if HW_DEBUG
       if (probePhase)
       {
@@ -1342,6 +1395,18 @@ int main()
 #endif
       SRL::Core::Synchronize();
       gSyncCount++;
+    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+      setDiagPhase(4u); // post-sync
+    #if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
+      if ((sPhaseTraceCounter % 120u) == 0u)
+      {
+        SRL::Logger::LogInfo("[PHASE] post-sync tick=%lu status=%d phase=%u",
+                 (unsigned long)tick,
+                 status,
+                 (unsigned)gDiagPhaseTag);
+      }
+    #endif
+    #endif
 #if HW_DEBUG
       if (probePhase)
       {
@@ -1352,6 +1417,9 @@ int main()
     }
     else
     {
+#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+  setDiagPhase(5u); // fixed-frame input refresh path
+#endif
       SRL::Input::Management::RefreshPeripherals();
       // Keep Ponesound command pump alive when synchronized vblank is bypassed.
       soundTick();
@@ -1363,7 +1431,12 @@ int main()
     {
       static uint32_t sLastHeartbeatMs = 0;
       const uint32_t hbNowMs = SDL_GetTicks();
-      if (sLastHeartbeatMs == 0 || (hbNowMs - sLastHeartbeatMs) >= 1000u)
+#if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
+  const uint32_t heartbeatIntervalMs = 100u;
+#else
+  const uint32_t heartbeatIntervalMs = 1000u;
+#endif
+  if (sLastHeartbeatMs == 0 || (hbNowMs - sLastHeartbeatMs) >= heartbeatIntervalMs)
       {
         sLastHeartbeatMs = hbNowMs;
         SRL::Logger::LogInfo("[HEARTBEAT] ms=%lu tick=%lu status=%d fps=%u.%02u loops=%lu",
@@ -1373,7 +1446,12 @@ int main()
                              (unsigned)(gFpsTimes100 / 100u),
                              (unsigned)(gFpsTimes100 % 100u),
                              (unsigned long)gPerfTraceWindow.loopCount);
+        SRL::Logger::LogInfo("[HEARTBEAT-PHASE] phase=%u trace=%lu sync=%lu",
+                             (unsigned)gDiagPhaseTag,
+                             (unsigned long)sPhaseTraceCounter,
+                             (unsigned long)gSyncCount);
       }
+      sPhaseTraceCounter++;
     }
 #endif
 
