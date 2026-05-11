@@ -6,7 +6,7 @@ Sega Saturn-focused port and modernization of Kenta Cho's abstract shoot-em-up *
 
 This repository contains the Saturn build of Noiz2sa with platform integrations for:
 
-- SDL and SDL_mixer Saturn submodules
+- SDL and SDL_mixer Saturn integration
 - SaturnRingLib integration
 - BulletML-based barrage pattern system
 - CMake-based cross-build flow for Saturn toolchains
@@ -18,11 +18,39 @@ Recent maintenance in this fork includes:
 - XML-to-binary conversion tooling in `tools/`
 - Complete SaturnRingLib CMake integration with shared.mk feature parity
 
+### Historical Context
+
+Noiz2sa is one of Kenta Cho's early ABA Games freeware shooters, first released for Windows in 2002 and listed on the official ABA Games page as version 0.52. Contemporary descriptions characterize it as an abstract top-down shooter focused on dense projectile patterns, precision movement with a slowdown key, and score optimization through chained green-star collection rather than weapon-upgrade progression. Community-maintained game catalogs also record later ports to additional platforms.
+
+Sources:
+
+- [Official Noiz2sa page (ABA Games)](https://www.asahi-net.or.jp/~cs8k-cyu/windows/noiz2sa_e.html)
+- [ABA Games catalog](https://www.asahi-net.or.jp/~cs8k-cyu/)
+- [MobyGames: Noiz2sa](https://www.mobygames.com/game/noiz2sa)
+
+### Sega Saturn Controls
+
+- D-Pad: Move ship (in game), navigate stage select (title)
+- A or B: Fire (in game), confirm/start stage (title)
+- L or R: Reserved (slowdown currently not implemented)
+- START: Pause / resume during gameplay
+
+Notes:
+
+- Pause is toggled with START only while in-game.
+- The legacy PC controls listed later in this README are kept for historical reference.
+
 ## Building
 
 The build system uses `/opt/saturn/CMake/sega_saturn.cmake` for toolchain configuration.
 
 ### Quick Start
+
+Prerequisites on PATH for the default full CD image flow:
+
+- `IPMaker` (from Saturn toolchain)
+- `xorrisofs` (package: `xorriso`)
+- `iso2raw` (from SaturnRingLib tool setup)
 
 ```bash
 # Configure (toolchain auto-loaded)
@@ -35,7 +63,7 @@ cmake --build build
 **Build Outputs:**
 - `BuildDrop/noiz2sa.elf` - Main executable
 - `BuildDrop/noiz2sa.bin` - Saturn binary format (CD image)
-- `BuildDrop/IP.BIN` - CD metadata and system information
+- `cd/data/IP.BIN` - CD metadata and system information
 - `BuildDrop/noiz2sa.cue` - CUE sheet for CD emulators
 
 ### Create ISO Image
@@ -58,9 +86,9 @@ See [doc/CD_GENERATION_GUIDE.md](doc/CD_GENERATION_GUIDE.md) for complete detail
 
 ### Documentation
 
-- [BUILD_GUIDE.md](BUILD_GUIDE.md) - Complete build instructions and configuration options
-- [HW_DEBUG_GUIDE.md](HW_DEBUG_GUIDE.md) - Hardware debug mode for real Saturn testing with development cartridges
-- [BUILD_SYSTEM_SUMMARY.md](BUILD_SYSTEM_SUMMARY.md) - SaturnRingLib and build system integration summary
+- [doc/BUILD_GUIDE.md](doc/BUILD_GUIDE.md) - Complete build instructions and configuration options
+- [doc/HW_DEBUG_GUIDE.md](doc/HW_DEBUG_GUIDE.md) - Hardware debug mode for real Saturn testing with development cartridges
+- [doc/BUILD_SYSTEM_SUMMARY.md](doc/BUILD_SYSTEM_SUMMARY.md) - SaturnRingLib and build system integration summary
 - [doc/BINARY_PARSER_README.md](doc/BINARY_PARSER_README.md) - BulletML binary parser integration guide
 - [doc/BINARY_FORMAT.md](doc/BINARY_FORMAT.md) - BulletML binary format specification
 
@@ -77,9 +105,14 @@ cmake --build build_hw_debug
 ./tools/run_on_saturn.bat
 ```
 
-See [HW_DEBUG_GUIDE.md](HW_DEBUG_GUIDE.md) for complete instructions, including optional ESP-SaturnPSU_Control device integration for automated hardware control via REST API.
+See [doc/HW_DEBUG_GUIDE.md](doc/HW_DEBUG_GUIDE.md) for complete instructions, including optional ESP-SaturnPSU_Control device integration for automated hardware control via REST API.
 
+- [Jump to Upstream / Legacy Readme](#sym:Upstream)
+
+<a id="sym:Upstream"></a>
 ## Upstream / Legacy Readme
+
+Upstream (original author site): http://www.asahi-net.or.jp/~cs8k-cyu/
 
 The original README content from the classic PC release is preserved below for historical reference.
 
