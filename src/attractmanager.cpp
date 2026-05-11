@@ -23,6 +23,7 @@
 #include "brgmng_mtd.h"
 #include "soundmanager.h"
 #include "degutil.h"
+#include "hiscore_persistence.h"
 
 int score;
 static int nextExtend, neAdd;
@@ -70,6 +71,11 @@ void loadPreference()
   SRL::Cd::File prefFile(PREF_FILE);
 
   initHiScore();
+
+  if (loadHiScorePersistence(&hiScore) == HiScoreLoadStatus::Loaded)
+  {
+    return;
+  }
 
   // Preferences are read-only on Saturn (from CD image).
   if (!prefFile.Exists() || !prefFile.Open())
@@ -123,6 +129,11 @@ void loadPreference()
 // Save preference.
 void savePreference()
 {
+  if (saveHiScorePersistence(&hiScore) == HiScoreSaveStatus::Saved)
+  {
+    return;
+  }
+
   // CD media is read-only on Saturn; keep in-memory highscores only.
 }
 

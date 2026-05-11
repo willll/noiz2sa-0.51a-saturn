@@ -386,6 +386,7 @@ set(SOURCES_NOIZ2SA
   src/gamepad.cpp
   src/rand.cpp
   src/attractmanager.cpp
+    src/hiscore_persistence.cpp
   src/loading_screen.cpp
   src/soundmanager.cpp
   src/background.cpp
@@ -536,6 +537,7 @@ target_include_directories(
     # SaturnRingLib headers (MUST come first to override system headers)
     ${SRL_INSTALL_ROOT}/saturnringlib
     ${CMAKE_BINARY_DIR}/generated
+    ${CMAKE_SOURCE_DIR}/src/backup/INC
     ${CMAKE_SOURCE_DIR}/src/ponesound/INC
     ${CMAKE_SOURCE_DIR}/src/decompression/INC
     ${CMAKE_SOURCE_DIR}/src/smpc/INC

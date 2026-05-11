@@ -4,6 +4,8 @@
  * Copyright 2002 Kenta Cho. All rights reserved.
  */
 
+#pragma once
+
 /**
  * Attraction manager header file.
  *
