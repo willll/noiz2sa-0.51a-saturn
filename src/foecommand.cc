@@ -80,6 +80,10 @@ FoeCommand* createFoeCommand(BulletMLParserBLB* parser, Foe* f) {
 }
 
 FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
+  if (hasBulletMlAllocFailureLatched()) {
+    delete state;
+    return nullptr;
+  }
   return hwnew FoeCommand(state, f);
 }
 
