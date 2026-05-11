@@ -484,8 +484,8 @@ static bool refreshPanelLayer()
       dirtyRect.h = lpanel->dirtyY2 - lpanel->dirtyY1;
       uploadPanelBitmapRegion(lpbuf, dirtyRect, 0);
       uploaded = true;
+      SDL_ClearDirtyRect(lpanel);
     }
-    SDL_ClearDirtyRect(lpanel);
   }
 
   if (rpanel->dirty)
@@ -500,8 +500,8 @@ static bool refreshPanelLayer()
       dirtyRect.h = rpanel->dirtyY2 - rpanel->dirtyY1;
       uploadPanelBitmapRegion(rpbuf, dirtyRect, PANEL_LAYER_RIGHT_X);
       uploaded = true;
+      SDL_ClearDirtyRect(rpanel);
     }
-    SDL_ClearDirtyRect(rpanel);
   }
 
   return uploaded;
