@@ -279,7 +279,7 @@ while IFS= read -r line; do
         if echo "$line" | grep -q "\[BARRAGE\] Type"; then
             echo "[MONITOR] Pattern loading detected"
         fi
-        if echo "$line" | grep -qE "Reached stage|Game Ready|Initialization Complete|Entering main loop|Main game loop starting|IN_GAME \(stage .*\) ready"; then
+        if echo "$line" | grep -qE "Reached stage|Game Ready|Initialization Complete|Entering main loop|Main game loop starting|IN_GAME \(stage .*\) ready|\[HW_DEBUG\] Entering initGame\(\)|\[HW_DEBUG\] initGame\(\) returned"; then
             echo "[MONITOR] ✓ Game initialization complete — starting alloc-stress window (${GAMEPLAY_MONITOR_SECONDS}s)"
             init_complete=1
             init_time=$NOW

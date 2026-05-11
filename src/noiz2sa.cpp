@@ -242,6 +242,13 @@ void initGame(int stg)
 
 void initGameover()
 {
+#if HW_DEBUG
+  if (status == IN_GAME)
+  {
+    SRL::Logger::LogWarning("[HW_DEBUG] Suppressed transition IN_GAME -> GAMEOVER in initGameover()");
+    return;
+  }
+#endif
   SRL::Logger::LogInfo("[STATE] Entering GAMEOVER");
 
   status = GAMEOVER;
@@ -252,6 +259,13 @@ void initGameover()
 
 void initStageClear()
 {
+#if HW_DEBUG
+  if (status == IN_GAME)
+  {
+    SRL::Logger::LogWarning("[HW_DEBUG] Suppressed transition IN_GAME -> STAGE_CLEAR in initStageClear()");
+    return;
+  }
+#endif
   SRL::Logger::LogInfo("[STATE] Entering STAGE_CLEAR");
 
   status = STAGE_CLEAR;
@@ -1031,7 +1045,9 @@ int main()
     SRL::Logger::LogWarning("[HW_DEBUG] Requested stage %d is not endless; forcing stage %d", HW_DEBUG_ENDLESS_STAGE, hwDebugStage);
   }
   SRL::Logger::LogInfo("[HW_DEBUG] Skipping title/menu and booting directly into endless INSANE stage %d", hwDebugStage);
+  SRL::Logger::LogInfo("[HW_DEBUG] Entering initGame() for stage %d", hwDebugStage);
   initGame(hwDebugStage);
+  SRL::Logger::LogInfo("[HW_DEBUG] initGame() returned for stage %d", hwDebugStage);
 #else
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initTitle();
