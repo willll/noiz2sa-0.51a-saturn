@@ -116,8 +116,17 @@ ctest -R sh2_collision_campaign -V
 # SH2 background animation campaign (emulator-backed)
 ctest -R sh2_background_animation_campaign -V
 
+# SH2 factory campaign (emulator-backed)
+ctest -R sh2_factory_campaign -V
+
 # Native BulletML parity test
 ctest -R bulletml_parity_test -V
+
+# Native BulletML latch recovery test
+ctest -R bulletml_latch_recovery_test -V
+
+# Native hi-score persistence test
+ctest -R hiscore_persistence_test -V
 
 # Recursive XML parser test (python)
 ctest -R bulletml_all_xml_recursive_test -V
@@ -134,6 +143,9 @@ bash Tests/test_background_campaign.sh --emulator mednafen --strict
 
 # BulletML SH2 campaign
 bash Tests/test_bulletml_campaign.sh --emulator mednafen --strict
+
+# Factory SH2 campaign
+bash Tests/test_factory_campaign.sh --emulator mednafen --strict
 ```
 
 Supported emulator argument values for campaign scripts:
@@ -141,6 +153,12 @@ Supported emulator argument values for campaign scripts:
 - `mednafen` (default)
 - `kronos`
 - `USBGamers`
+
+Notes:
+
+- `ctest -V` does not currently register a dedicated SH2 BulletML campaign entry. Use `Tests/test_bulletml_campaign.sh` directly.
+- The SH2 BulletML campaign is currently built with `BULLETML_SKIP_CD_TESTS` (CD-file-dependent manifest parity test is skipped in campaign runs).
+- For real hardware (`USBGamers`), the most reliable sequence is power-cycle, then `usbreset "FT245R USB FIFO"`, then a short settle delay before campaign upload.
 
 Additional test implementation details and historical status are documented in:
 
