@@ -248,9 +248,58 @@ static Foe *getNextFoe()
     if (foe[foeIdx].spc == NOT_EXIST)
       break;
   }
-  if (i >= FOE_MAX)
-    return nullptr;
-  return &(foe[foeIdx]);
+  if (i < FOE_MAX)
+    return &(foe[foeIdx]);
+
+  // Pool full: recycle least-valuable active slot.
+  // Priority (most expendable first): BULLET, ACTIVE_BULLET, BOSS_ACTIVE_BULLET.
+  static const int kRecyclePriority[3] = {BULLET, ACTIVE_BULLET, BOSS_ACTIVE_BULLET};
+  for (int p = 0; p < 3; p++)
+  {
+    for (int j = 0; j < FOE_MAX; j++)
+    {
+      if (foe[j].spc == kRecyclePriority[p])
+      {
+        removeFoeForced(&foe[j]);
+        return &foe[j];
+      }
+    }
+  }
+
+  // Option 1 behavior: recycle FOE entities too when pressure is extreme.
+  // Prefer non-boss foes first; if only bosses remain, recycle oldest boss.
+  int victim = -1;
+  int oldestCnt = -1;
+  for (int j = 0; j < FOE_MAX; j++)
+  {
+    if (foe[j].spc == FOE && foe[j].type != BOSS_TYPE && foe[j].cnt > oldestCnt)
+    {
+      oldestCnt = foe[j].cnt;
+      victim = j;
+    }
+  }
+  if (victim >= 0)
+  {
+    removeFoeForced(&foe[victim]);
+    return &foe[victim];
+  }
+
+  oldestCnt = -1;
+  for (int j = 0; j < FOE_MAX; j++)
+  {
+    if (foe[j].spc == FOE && foe[j].cnt > oldestCnt)
+    {
+      oldestCnt = foe[j].cnt;
+      victim = j;
+    }
+  }
+  if (victim >= 0)
+  {
+    removeFoeForced(&foe[victim]);
+    return &foe[victim];
+  }
+
+  return nullptr;
 }
 
 Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,

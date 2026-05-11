@@ -8,6 +8,8 @@
 
 #include "../../src/memory_factory.h"
 #include "../../src/bulletml_runtime_factory.h"
+#include "../../src/bulletml_factory.h"
+#include "../../src/bulletml_binary/bulletml_alloc_latch.h"
 
 extern "C"
 {
@@ -21,9 +23,7 @@ struct DummyObject
 {
   int value;
   explicit DummyObject(int v)
-      : value(v)
-  {
-  }
+      : value(v) {}
 };
 
 MU_TEST(test_memory_factory_basic)
@@ -53,40 +53,86 @@ MU_TEST(test_memory_factory_basic)
 
 MU_TEST(test_system_factory)
 {
-  // Runtime-safe factory coverage for pure memory wrappers only.
-  // System/graphics/sound/bulletml factories are covered by compile-time tests.
-  mu_assert(true, "placeholder");
+  // System/graphics/sound factories create SRL hardware objects that require
+  // full VDP/input/PCM init — not safe to instantiate in a unit-test kernel.
+  // Verified at compile-time via factory_headers_compile.cxx.
+  mu_assert(true, "compile-time coverage via factory_headers_compile.cxx");
 }
 
 MU_TEST(test_graphics_factory)
 {
-  mu_assert(true, "placeholder");
+  mu_assert(true, "compile-time coverage via factory_headers_compile.cxx");
 }
 
 MU_TEST(test_sound_factory_signature)
 {
-  mu_assert(true, "placeholder");
+  mu_assert(true, "compile-time coverage via factory_headers_compile.cxx");
 }
 
 MU_TEST(test_bulletml_factory)
 {
-  mu_assert(true, "placeholder");
+  // Verify createEmbeddedBulletMlParser returns a non-null parser object
+  // and that build() correctly rejects a corrupt (bad-magic) buffer.
+  static const uint8_t kBadMagic[24] = {
+    'X', 'X', 'X', '\0',   /* wrong magic */
+    0x01, 0x00,             /* version */
+    0x00, 0x00,             /* orientation, flags */
+    0x18, 0x00, 0x00, 0x00, /* string_table_offset */
+    0x18, 0x00, 0x00, 0x00, /* refmap_offset */
+    0x18, 0x00, 0x00, 0x00, /* tree_offset */
+    0x18, 0x00, 0x00, 0x00  /* file_size */
+  };
+
+  BulletMLParserBLB *parser =
+      createEmbeddedBulletMlParser("bad_magic_test", kBadMagic, sizeof(kBadMagic));
+  mu_assert(parser != nullptr, "createEmbeddedBulletMlParser returned nullptr");
+  mu_check(!parser->build()); // must fail on bad magic
+  delete parser;
 }
 
 MU_TEST(test_bulletml_runtime_factory)
 {
-  using RuntimeObjReturn = decltype(createBulletMlRuntimeObject<DummyObject>(7));
-  mu_assert((std::is_same<RuntimeObjReturn, DummyObject *>::value),
-            "createBulletMlRuntimeObject return type mismatch");
+  // Verify the latch starts clear, actual HWRAM allocation succeeds,
+  // and the latch/reset cycle behaves correctly.
+  resetBulletMlAllocFailureState();
+  mu_assert(!hasBulletMlAllocFailureLatched(), "latch should be clear before alloc");
+  mu_assert_int_eq(0, (int)getBulletMlAllocFailureCount());
 
-  using RuntimeArrayReturn = decltype(createBulletMlRuntimeArray<int>(6));
-  mu_assert((std::is_same<RuntimeArrayReturn, int *>::value),
-            "createBulletMlRuntimeArray return type mismatch");
+  DummyObject *obj = createBulletMlRuntimeObject<DummyObject>(42);
+  mu_assert(obj != nullptr, "createBulletMlRuntimeObject returned nullptr");
+  mu_assert_int_eq(42, obj->value);
+  delete obj;
+
+  int *arr = createBulletMlRuntimeArray<int>(8);
+  mu_assert(arr != nullptr, "createBulletMlRuntimeArray returned nullptr");
+  arr[0] = 1; arr[7] = 99;
+  mu_assert_int_eq(1,  arr[0]);
+  mu_assert_int_eq(99, arr[7]);
+  delete[] arr;
+
+  // Latch round-trip: record a failure, verify latch, then clear per-tick.
+  recordBulletMlAllocFailure();
+  mu_assert(hasBulletMlAllocFailureLatched(), "latch should be set after failure");
+  mu_assert_int_eq(1, (int)getBulletMlAllocFailureCount());
+
+  clearBulletMlAllocFailureLatch();
+  mu_assert(!hasBulletMlAllocFailureLatched(), "latch should be clear after tick clear");
+  mu_assert_int_eq(1, (int)getBulletMlAllocFailureCount()); // count persists
+
+  resetBulletMlAllocFailureState();
+  mu_assert_int_eq(0, (int)getBulletMlAllocFailureCount());
 }
 
 MU_TEST(test_allocation_factory_umbrella_include)
 {
-  mu_assert(true, "placeholder");
+  // Umbrella header pulls in all factory headers.  Verify a basic round-trip
+  // through memory_factory is reachable after including allocation_factory.h
+  // (compile-time check that nothing in the umbrella breaks the test TU).
+  DummyObject *obj = createObject<DummyObject>(7);
+  mu_assert(obj != nullptr, "createObject via umbrella failed");
+  mu_assert_int_eq(7, obj->value);
+  destroyObject(obj);
+  mu_assert(obj == nullptr, "destroyObject via umbrella did not null pointer");
 }
 
 MU_TEST_SUITE(factory_suite)

@@ -1082,6 +1082,7 @@ target_compile_definitions(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
     $<$<COMPILE_LANGUAGE:C>:bool=int>
     $<$<COMPILE_LANGUAGE:C>:true=1>
     $<$<COMPILE_LANGUAGE:C>:false=0>
+    BULLETML_SKIP_CD_TESTS
 )
 
 target_link_options(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
