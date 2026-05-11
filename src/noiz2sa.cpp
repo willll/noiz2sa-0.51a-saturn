@@ -317,6 +317,13 @@ static inline void setDiagPhase(uint8_t)
 static void move()
 {
   uint32_t phaseStart;
+
+  // BulletML allocations can fail transiently under pressure. Keep failure counts
+  // for diagnostics, but clear the one-way latch each tick so spawning can recover.
+  if (hasBulletMlAllocFailureLatched())
+  {
+    clearBulletMlAllocFailureLatch();
+  }
   
   switch (status)
   {

@@ -27,6 +27,10 @@ inline void resetBulletMlAllocFailureState() {
     getBulletMlAllocFailureLatch() = false;
 }
 
+inline void clearBulletMlAllocFailureLatch() {
+    getBulletMlAllocFailureLatch() = false;
+}
+
 inline void logBulletMlAllocFailure(const char* tag, uint32_t count = 0) {
     uint32_t& failCount = getBulletMlAllocFailureCount();
     bool& latched = getBulletMlAllocFailureLatch();
