@@ -189,14 +189,12 @@ void destroyShip()
   {
     return;
   }
+#if HW_DEBUG
+  return;
+#endif
   addShipFrag(&(ship.pos));
   playChunk(4);
   resetBonusScore();
-#if HW_DEBUG
-  SRL::Logger::LogWarning("[HW_DEBUG] Suppressing GAMEOVER transition from destroyShip() to keep soak in IN_GAME");
-  ship.invCnt = 0;
-  clearFoesZako();
-#else
   if (decrementShip())
   {
     SRL::Logger::LogWarning("[STATE] destroyShip() triggered GAMEOVER transition");
@@ -207,7 +205,6 @@ void destroyShip()
     ship.invCnt = 0;
     clearFoesZako();
   }
-#endif
 }
 
 int getPlayerDeg(int x, int y)

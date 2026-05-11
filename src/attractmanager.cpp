@@ -72,10 +72,16 @@ void loadPreference()
 
   initHiScore();
 
+#if HW_DEBUG
+  // In HW_DEBUG soak mode, avoid backup-device I/O during boot because
+  // intermittent backup bus issues can stall startup at "Loading preferences".
+  return;
+#else
   if (loadHiScorePersistence(&hiScore) == HiScoreLoadStatus::Loaded)
   {
     return;
   }
+#endif
 
   // Preferences are read-only on Saturn (from CD image).
   if (!prefFile.Exists() || !prefFile.Open())
@@ -129,12 +135,16 @@ void loadPreference()
 // Save preference.
 void savePreference()
 {
+#if HW_DEBUG
+  return;
+#else
   if (saveHiScorePersistence(&hiScore) == HiScoreSaveStatus::Saved)
   {
     return;
   }
 
   // CD media is read-only on Saturn; keep in-memory highscores only.
+#endif
 }
 
 void initGameState(int stg)
