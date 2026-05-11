@@ -92,6 +92,58 @@ See [doc/CD_GENERATION_GUIDE.md](doc/CD_GENERATION_GUIDE.md) for complete detail
 - [doc/BINARY_PARSER_README.md](doc/BINARY_PARSER_README.md) - BulletML binary parser integration guide
 - [doc/BINARY_FORMAT.md](doc/BINARY_FORMAT.md) - BulletML binary format specification
 
+## Testing
+
+This project includes both host-native and Saturn SH2/emulator-backed tests.
+
+### Run All Registered CTest Suites
+
+```bash
+cmake -B build
+cmake --build build
+cd build
+ctest -V
+```
+
+### Run Specific CTest Suites
+
+```bash
+# SH2 collision campaign (emulator-backed)
+ctest -R sh2_collision_campaign -V
+
+# SH2 background animation campaign (emulator-backed)
+ctest -R sh2_background_animation_campaign -V
+
+# Native BulletML parity test
+ctest -R bulletml_parity_test -V
+
+# Recursive XML parser test (python)
+ctest -R bulletml_all_xml_recursive_test -V
+```
+
+### Run Campaign Scripts Directly
+
+```bash
+# Collision campaign
+bash Tests/test_campaign.sh --emulator mednafen --strict
+
+# Background campaign
+bash Tests/test_background_campaign.sh --emulator mednafen --strict
+
+# BulletML SH2 campaign
+bash Tests/test_bulletml_campaign.sh --emulator mednafen --strict
+```
+
+Supported emulator argument values for campaign scripts:
+
+- `mednafen` (default)
+- `kronos`
+- `USBGamers`
+
+Additional test implementation details and historical status are documented in:
+
+- [Tests/BULLETML_PARITY_TEST_README.md](Tests/BULLETML_PARITY_TEST_README.md)
+
 ## Hardware Testing
 
 For testing on real Sega Saturn hardware with development cartridges (USBGamers) and optional remote power control:
