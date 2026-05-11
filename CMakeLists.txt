@@ -1147,6 +1147,10 @@ set(BULLETML_TEST_NAME "bulletml_parity_ut")
 set(BULLETML_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_parity_tests.cpp")
 set(BULLETML_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_TEST_NAME}")
 
+set(BULLETML_LATCH_TEST_NAME "bulletml_latch_recovery_ut")
+set(BULLETML_LATCH_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_latch_recovery_tests.cpp")
+set(BULLETML_LATCH_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_LATCH_TEST_NAME}")
+
 set(HISCORE_TEST_NAME "hiscore_persistence_ut")
 set(HISCORE_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/hiscore/hiscore_persistence_unit_tests.cpp")
 set(HISCORE_TEST_SUPPORT_SOURCE "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.cpp")
@@ -1164,6 +1168,22 @@ add_custom_command(
 
 add_custom_target(bulletml_parity_ut_build ALL
     DEPENDS "${BULLETML_TEST_EXECUTABLE}"
+)
+
+add_custom_command(
+    OUTPUT "${BULLETML_LATCH_TEST_EXECUTABLE}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/Tests"
+    COMMAND g++ -std=c++17 -Wall -Wextra
+            -I${CMAKE_SOURCE_DIR}/src
+            -o "${BULLETML_LATCH_TEST_EXECUTABLE}"
+            "${BULLETML_LATCH_TEST_SOURCE}"
+    DEPENDS "${BULLETML_LATCH_TEST_SOURCE}" "${CMAKE_SOURCE_DIR}/src/bulletml_binary/bulletml_alloc_latch.h"
+    COMMENT "Building BulletML latch recovery test with native compiler"
+    VERBATIM
+)
+
+add_custom_target(bulletml_latch_recovery_ut_build ALL
+    DEPENDS "${BULLETML_LATCH_TEST_EXECUTABLE}"
 )
 
 add_custom_command(
@@ -1200,6 +1220,12 @@ add_test(
     COMMAND "${BULLETML_TEST_EXECUTABLE}"
 )
 set_tests_properties(bulletml_parity_test PROPERTIES TIMEOUT 60)
+
+add_test(
+    NAME bulletml_latch_recovery_test
+    COMMAND "${BULLETML_LATCH_TEST_EXECUTABLE}"
+)
+set_tests_properties(bulletml_latch_recovery_test PROPERTIES TIMEOUT 60)
 
 add_test(
     NAME hiscore_persistence_test

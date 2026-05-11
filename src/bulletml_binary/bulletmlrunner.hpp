@@ -5,37 +5,11 @@
 #include <srl.hpp>
 
 #include "bulletmlparser_blb.hpp"
+#include "bulletml_alloc_latch.h"
 #include <srl_log.hpp>
 
-inline uint32_t gBulletMlAllocFailures = 0;
-inline bool gBulletMlAllocFailureLatched = false;
-
-inline uint32_t& getBulletMlAllocFailureCount() {
-    return gBulletMlAllocFailures;
-}
-
-inline bool& getBulletMlAllocFailureLatch() {
-    return gBulletMlAllocFailureLatched;
-}
-
-inline bool hasBulletMlAllocFailureLatched() {
-    return getBulletMlAllocFailureLatch();
-}
-
-inline void resetBulletMlAllocFailureState() {
-    getBulletMlAllocFailureCount() = 0;
-    getBulletMlAllocFailureLatch() = false;
-}
-
-inline void clearBulletMlAllocFailureLatch() {
-    getBulletMlAllocFailureLatch() = false;
-}
-
 inline void logBulletMlAllocFailure(const char* tag, uint32_t count = 0) {
-    uint32_t& failCount = getBulletMlAllocFailureCount();
-    bool& latched = getBulletMlAllocFailureLatch();
-    failCount++;
-    latched = true;
+    const uint32_t failCount = recordBulletMlAllocFailure();
     if (failCount <= 8 || (failCount % 64) == 0) {
         if (count > 0) {
             SRL::Logger::LogWarning("[BML-ALLOC] failed tag=%s count=%lu total_fail=%lu",
