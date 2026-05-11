@@ -520,6 +520,18 @@ void moveFoes()
                                  (tick & 1) != 0);
       if (!skipBulletML)
       {
+        if (hasBulletMlAllocFailureLatched())
+        {
+          // Keep simulation alive after BulletML OOM by skipping command execution.
+          // Active bullet command carriers are removed to prevent lingering stale state.
+          if (fe->spc == ACTIVE_BULLET || fe->spc == BOSS_ACTIVE_BULLET)
+          {
+            removeFoeForced(fe);
+            continue;
+          }
+        }
+        else
+        {
 #if HW_DEBUG
         if (probeFoe && processed <= 20)
         {
@@ -533,6 +545,7 @@ void moveFoes()
           SRL::Logger::LogInfo("[FOE] cmd-done p=%d", processed);
         }
 #endif
+        }
       }
       if (fe->spc == NOT_EXIST)
       {
