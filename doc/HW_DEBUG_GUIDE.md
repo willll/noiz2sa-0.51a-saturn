@@ -117,6 +117,14 @@ For automated end-to-end testing on real hardware with power control, use the pr
 ./tools/test_hardware_full.sh <PSU_IP_ADDRESS>
 ```
 
+For the PSU controller currently used in this workspace, the IP is:
+
+```text
+http://192.168.1.106/
+```
+
+See [REAL_HARDWARE_TESTING.md](REAL_HARDWARE_TESTING.md) for the REST API details and the full power-cycle workflow.
+
 ### What the Test Script Does
 
 The `test_hardware_full.sh` script orchestrates a complete hardware test cycle:
