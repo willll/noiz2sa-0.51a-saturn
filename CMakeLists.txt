@@ -1137,6 +1137,172 @@ if(EXISTS "${ISO2RAW_EXECUTABLE}")
     )
 endif()
 
+set(FACTORY_SH2_TEST_CD_NAME "noiz2sa_factory_ut")
+set(FACTORY_SH2_TESTS_DIR "${CMAKE_SOURCE_DIR}/Tests")
+set(FACTORY_SH2_TEST_BUILD_DROP "${FACTORY_SH2_TESTS_DIR}/BuildDrop")
+set(FACTORY_SH2_TEST_ASSETS_DIR "${FACTORY_SH2_TESTS_DIR}/cd_factory/data")
+set(FACTORY_SH2_TEST_ELF "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.elf")
+set(FACTORY_SH2_TEST_ISO "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.iso")
+set(FACTORY_SH2_TEST_BIN "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.bin")
+set(FACTORY_SH2_TEST_CUE "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.cue")
+set(FACTORY_SH2_TEST_MAP "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.map")
+
+file(MAKE_DIRECTORY "${FACTORY_SH2_TEST_BUILD_DROP}")
+file(MAKE_DIRECTORY "${FACTORY_SH2_TEST_ASSETS_DIR}")
+file(WRITE "${FACTORY_SH2_TEST_ASSETS_DIR}/ABS.TXT" "NOT Abstracted by SEGA\n")
+file(WRITE "${FACTORY_SH2_TEST_ASSETS_DIR}/BIB.TXT" "NOT Bibliographiced by SEGA\n")
+file(WRITE "${FACTORY_SH2_TEST_ASSETS_DIR}/CPY.TXT" "")
+
+set(FACTORY_SH2_TEST_SOURCES
+    ${CMAKE_SOURCE_DIR}/Tests/src/factory_main.cxx
+)
+
+set(FACTORY_HEADERS_SH2_TEST_SOURCES
+    ${CMAKE_SOURCE_DIR}/Tests/src/factory_headers_compile.cxx
+)
+
+add_executable(${FACTORY_SH2_TEST_CD_NAME}.elf
+    "${SGL_PRELOADER_SOURCE}"
+    ${FACTORY_SH2_TEST_SOURCES}
+    ${SOURCES_SGL_SYSTEM}
+)
+
+set_target_properties(${FACTORY_SH2_TEST_CD_NAME}.elf PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${FACTORY_SH2_TEST_BUILD_DROP}"
+)
+
+target_include_directories(
+    ${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC
+    ${SRL_INSTALL_ROOT}/saturnringlib
+    ${CMAKE_SOURCE_DIR}/src/bulletml_binary
+    ${CMAKE_SOURCE_DIR}/src/SDL
+    ${SRL_INSTALL_ROOT}/modules/sgl/INC
+    ${SRL_INSTALL_ROOT}/modules/dummy
+    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+    ${SRL_INSTALL_ROOT}/modules/tlsf
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/Tests/src
+)
+
+target_compile_options(${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
+    $<$<COMPILE_LANGUAGE:C>:${c_flags}>
+)
+
+target_compile_definitions(${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:bool=int>
+    $<$<COMPILE_LANGUAGE:C>:true=1>
+    $<$<COMPILE_LANGUAGE:C>:false=0>
+)
+
+target_link_options(${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC
+    "SHELL:-m2"
+    "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+    "SHELL:-Xlinker -Map -Xlinker ${FACTORY_SH2_TEST_MAP}"
+    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+)
+
+if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+    target_link_options(${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+endif()
+
+srl_link_target(${FACTORY_SH2_TEST_CD_NAME}.elf)
+
+add_custom_command(TARGET ${FACTORY_SH2_TEST_CD_NAME}.elf POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${FACTORY_SH2_TEST_CD_NAME}.elf>" "${FACTORY_SH2_TEST_ASSETS_DIR}/0.bin"
+    COMMENT "Converting factory test ELF to binary: ${FACTORY_SH2_TEST_ASSETS_DIR}/0.bin"
+    VERBATIM
+)
+
+if(XORRISOFS_EXECUTABLE)
+    add_custom_target(${FACTORY_SH2_TEST_CD_NAME}_iso
+        DEPENDS ${FACTORY_SH2_TEST_CD_NAME}.elf
+        COMMAND ${XORRISOFS_EXECUTABLE}
+            --norock -quiet
+            -sysid "SEGA SATURN"
+            -volid "${FACTORY_SH2_TEST_CD_NAME}"
+            -volset "${FACTORY_SH2_TEST_CD_NAME}"
+            -publisher "SEGA ENTERPRISES, LTD."
+            -preparer "SEGA ENTERPRISES, LTD."
+            -appid "${FACTORY_SH2_TEST_CD_NAME}"
+            -abstract "NOT Abstracted by SEGA"
+            -copyright ""
+            -biblio ""
+            -generic-boot "${IPFILE}"
+            -full-iso9660-filenames
+            -o "${FACTORY_SH2_TEST_ISO}"
+            "${FACTORY_SH2_TEST_ASSETS_DIR}"
+        COMMENT "Building factory test ISO: ${FACTORY_SH2_TEST_ISO}"
+        VERBATIM
+    )
+endif()
+
+if(EXISTS "${ISO2RAW_EXECUTABLE}")
+    add_custom_target(${FACTORY_SH2_TEST_CD_NAME}_bin_cue
+        DEPENDS ${FACTORY_SH2_TEST_CD_NAME}_iso
+        COMMAND "${ISO2RAW_EXECUTABLE}" "${FACTORY_SH2_TEST_ISO}"
+        COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${FACTORY_SH2_TEST_CUE}" "${FACTORY_SH2_TEST_CD_NAME}.bin"
+        COMMENT "Creating factory test BIN/CUE"
+        VERBATIM
+    )
+endif()
+
+set(FACTORY_HEADERS_SH2_TEST_CD_NAME "noiz2sa_factory_headers_ut")
+set(FACTORY_HEADERS_SH2_TEST_MAP "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_HEADERS_SH2_TEST_CD_NAME}.map")
+
+add_executable(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf
+    "${SGL_PRELOADER_SOURCE}"
+    ${FACTORY_HEADERS_SH2_TEST_SOURCES}
+    ${SOURCES_SGL_SYSTEM}
+)
+
+set_target_properties(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${FACTORY_SH2_TEST_BUILD_DROP}"
+)
+
+target_include_directories(
+    ${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC
+    ${SRL_INSTALL_ROOT}/saturnringlib
+    ${CMAKE_SOURCE_DIR}/src/bulletml_binary
+    ${CMAKE_SOURCE_DIR}/src/SDL
+    ${SRL_INSTALL_ROOT}/modules/sgl/INC
+    ${SRL_INSTALL_ROOT}/modules/dummy
+    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+    ${SRL_INSTALL_ROOT}/modules/tlsf
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/Tests/src
+)
+
+target_compile_options(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
+    $<$<COMPILE_LANGUAGE:C>:${c_flags}>
+)
+
+target_compile_definitions(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:bool=int>
+    $<$<COMPILE_LANGUAGE:C>:true=1>
+    $<$<COMPILE_LANGUAGE:C>:false=0>
+)
+
+target_link_options(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC
+    "SHELL:-m2"
+    "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+    "SHELL:-Xlinker -Map -Xlinker ${FACTORY_HEADERS_SH2_TEST_MAP}"
+    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+)
+
+if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+    target_link_options(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+endif()
+
+srl_link_target(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf)
+
+add_custom_target(${FACTORY_HEADERS_SH2_TEST_CD_NAME}_build ALL
+    DEPENDS ${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf
+)
+
 enable_testing()
 
 # ============================================================================
@@ -1214,6 +1380,12 @@ add_test(
     COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_background_campaign.sh" --emulator mednafen --strict
 )
 set_tests_properties(sh2_background_animation_campaign PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME sh2_factory_campaign
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_factory_campaign.sh" --emulator mednafen --strict
+)
+set_tests_properties(sh2_factory_campaign PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME bulletml_parity_test
