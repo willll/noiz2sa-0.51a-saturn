@@ -58,3 +58,4 @@ build_hw_debug/*
 logs/*
 src/bulletml_binary/Makefile
 cd/data/IP.BIN
+Tests/cd_factory/data/*.TXT
