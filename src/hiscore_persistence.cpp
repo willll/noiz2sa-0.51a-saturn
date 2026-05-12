@@ -22,11 +22,16 @@ static bool isDeviceMounted(const BupDevice device)
   return Device::BupState[device].isMounted;
 }
 
-static Device *getBackupDevice()
+static Device *getBackupDevice(bool allowInitialize)
 {
   if (gBackupInitFailed)
   {
     return nullptr;
+  }
+
+  if (!allowInitialize)
+  {
+    return gBackupDevice;
   }
 
   if (gBackupDevice == nullptr)
@@ -91,7 +96,7 @@ HiScoreLoadStatus loadHiScorePersistence(HiScore *outHiScore)
     return HiScoreLoadStatus::InvalidData;
   }
 
-  Device *device = getBackupDevice();
+  Device *device = getBackupDevice(false);
   if (device == nullptr)
   {
     return HiScoreLoadStatus::BackendUnavailable;
@@ -140,7 +145,7 @@ HiScoreSaveStatus saveHiScorePersistence(const HiScore *hiScore)
     return HiScoreSaveStatus::IoError;
   }
 
-  Device *device = getBackupDevice();
+  Device *device = getBackupDevice(true);
   if (device == nullptr)
   {
     return HiScoreSaveStatus::BackendUnavailable;
