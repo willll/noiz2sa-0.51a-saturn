@@ -104,7 +104,8 @@ void moveShip()
       break;
     }
   }
-  if (btn & PAD_BUTTON1)
+  const bool wantsShot = (btn & PAD_BUTTON1) || NOIZ2SA_ENABLE_AUTO_SHOT;
+  if (wantsShot)
   {
     if (ship.shotCnt < 0 && status == IN_GAME)
     {
