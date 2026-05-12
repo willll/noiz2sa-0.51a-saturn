@@ -35,7 +35,7 @@ ensure_emulator_log_output() {
   echo "[campaign] Configuring build for emulator-visible logs (SRL_LOG_OUTPUT=EMULATOR)"
   cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" \
     -DSRL_LOG_OUTPUT=EMULATOR \
-    -DNOIZ2SA_ENABLE_REAL_HW_LOGS=OFF
+    -DSRL_LOG_OUTPUT=NONE
 }
 
 while [[ $# -gt 0 ]]; do

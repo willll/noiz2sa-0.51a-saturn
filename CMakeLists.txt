@@ -93,14 +93,14 @@ set(SRL_MAX_TEXTURES "75" CACHE STRING "Maximum textures")
 
 # Debug configuration
 option(DEBUG "Enable debug mode" OFF)
-set(SRL_LOG_LEVEL "TRACE" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
+set(SRL_LOG_LEVEL "INFO" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
 set(SRL_LOG_OUTPUT "NONE" CACHE STRING "Log output method (EMULATOR, DEV_CART, NONE)")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 
 # Real-hardware logging is opt-in for non-HW_DEBUG builds so emulator runs keep
 # their console logs unless you explicitly want DevCart output.
-option(NOIZ2SA_ENABLE_REAL_HW_LOGS "Send logs to DEV_CART on non-HW_DEBUG builds" OFF)
+option(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE "Enable Saturn backup-device hi-score persistence" ON)
 
 # Performance/Debug logging option
 option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
@@ -134,6 +134,7 @@ option(NOIZ2SA_DEBUG_AUTOSTART_SMOKE "Debug-only: auto-start gameplay from title
 option(NOIZ2SA_PERF_MODE "Enable performance mode (disables non-essential draws for benchmarking)" OFF)
 option(NOIZ2SA_BLEND_SKIP "Skip alpha compositing in blendScreen (copy only) — measures FPS headroom without alpha cost" OFF)
 option(NOIZ2SA_DISABLE_BULLET_SLOWDOWN "Disable bullet slowdown when foe count is high" ON)
+option(NOIZ2SA_ENABLE_INVINCIBLE "Make player invincible (debug/testing)" OFF)
 set(NOIZ2SA_SPAWN_BUDGET_PER_TICK "2" CACHE STRING "Maximum new enemies spawned per tick")
 set(NOIZ2SA_FOE_UPDATE_BUDGET "160" CACHE STRING "Maximum foe updates processed per tick")
 option(HW_DEBUG "Hardware debug mode: run without CD-backed files or audio assets" OFF)
@@ -154,14 +155,10 @@ if(HW_DEBUG)
     include("${CMAKE_SOURCE_DIR}/cmake/generate_hw_debug_bulletml.cmake")
 endif()
 
-if(NOIZ2SA_ENABLE_REAL_HW_LOGS AND NOT HW_DEBUG)
-    set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
-endif()
-
-if(NOIZ2SA_ENABLE_REAL_HW_LOGS OR SRL_LOG_OUTPUT STREQUAL "DEV_CART")
-    add_compile_definitions(NOIZ2SA_ENABLE_REAL_HW_LOGS=1)
+if(SRL_LOG_OUTPUT STREQUAL "DEV_CART")
+    add_compile_definitions(NOIZ2SA_LOG_TO_DEV_CART=1)
 else()
-    add_compile_definitions(NOIZ2SA_ENABLE_REAL_HW_LOGS=0)
+    add_compile_definitions(NOIZ2SA_LOG_TO_DEV_CART=0)
 endif()
 
 # Background color after loading
@@ -304,6 +301,12 @@ else()
     add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=0)
 endif()
 
+if(NOIZ2SA_ENABLE_INVINCIBLE)
+    add_compile_definitions(NOIZ2SA_ENABLE_INVINCIBLE=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_INVINCIBLE=0)
+endif()
+
 if(HW_DEBUG)
     add_compile_definitions(HW_DEBUG=1)
 else()
@@ -386,8 +389,6 @@ set(SOURCES_NOIZ2SA
   src/gamepad.cpp
   src/rand.cpp
   src/attractmanager.cpp
-    src/hiscore_persistence.cpp
-        src/hiscore_persistence_format.cpp
   src/loading_screen.cpp
   src/soundmanager.cpp
   src/background.cpp
@@ -395,6 +396,13 @@ set(SOURCES_NOIZ2SA
   src/foecommand.cc
   src/barragemanager.cc
 )
+
+if(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE)
+        list(APPEND SOURCES_NOIZ2SA
+                src/hiscore_persistence.cpp
+                src/hiscore_persistence_format.cpp
+        )
+endif()
 
 # SGL Preloader - MUST be linked first (before all other object files)
 # Following shared.mk: PRELOADERSOURCES = $(SGLDIR)/SRC/preloader.cxx
@@ -538,7 +546,6 @@ target_include_directories(
     # SaturnRingLib headers (MUST come first to override system headers)
     ${SRL_INSTALL_ROOT}/saturnringlib
     ${CMAKE_BINARY_DIR}/generated
-    ${CMAKE_SOURCE_DIR}/src/backup/INC
     ${CMAKE_SOURCE_DIR}/src/ponesound/INC
     ${CMAKE_SOURCE_DIR}/src/decompression/INC
     ${CMAKE_SOURCE_DIR}/src/smpc/INC
@@ -553,6 +560,12 @@ target_include_directories(
     src/bulletml_binary
     )
 
+if(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE)
+    target_include_directories(${CD_NAME}.elf PUBLIC
+        ${CMAKE_SOURCE_DIR}/src/backup/INC
+    )
+endif()
+
 target_compile_definitions(${CD_NAME}.elf PUBLIC
     ${BULLETML_INCLUDE_DIRS}
     )
@@ -565,6 +578,12 @@ target_compile_definitions(${CD_NAME}.elf PUBLIC
     $<$<COMPILE_LANGUAGE:C>:true=1>
     $<$<COMPILE_LANGUAGE:C>:false=0>
 )
+
+if(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE)
+    target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_ENABLE_BACKUP_PERSISTENCE=1)
+else()
+    target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_ENABLE_BACKUP_PERSISTENCE=0)
+endif()
 
 if(NOIZ2SA_DEBUG_AUTOSTART_SMOKE)
     target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_DEBUG_AUTOSTART_SMOKE=1)

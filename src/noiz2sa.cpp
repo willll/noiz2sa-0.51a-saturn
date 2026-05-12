@@ -151,14 +151,6 @@ void initTitleStage(int stg)
 
 void initTitle()
 {
-  static bool sTitleWasInitialized = false;
-
-  if (sTitleWasInitialized)
-  {
-    savePreference();
-  }
-  sTitleWasInitialized = true;
-
   SRL::Logger::LogInfo("[STATE] Entering TITLE screen");
 
   // Start each title/game flow with BulletML fail-safe cleared.
@@ -316,7 +308,48 @@ static uint32_t gMovePhaseFrameCount = 0;
 static DrawPhaseTimings gDrawPhaseTimings{};
 static uint32_t gDrawPhaseFrameCount = 0;
 
-#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+#if HW_DEBUG || NOIZ2SA_ENABLE_PERF_LOGS
+static inline uint32_t profileMicrosNow()
+{
+  return SDL_GetProfileMicros();
+}
+#else
+// Keep profiling callsites in code for debug readability, but compile them to zero
+// cost on default builds where sustained frame rate is critical.
+static inline uint32_t profileMicrosNow()
+{
+  return 0u;
+}
+#endif
+
+#undef SDL_GetProfileMicros
+#define SDL_GetProfileMicros() profileMicrosNow()
+
+static inline void synchronizeFrame()
+{
+#if defined(NOIZ2SA_ENABLE_GUN_SYNC) && NOIZ2SA_ENABLE_GUN_SYNC
+  SRL::Core::Synchronize();
+#else
+  // Avoid SRL::Input::Gun::Synchronize() per-frame slGetStatus() polling.
+  // noiz2sa does not use light-gun input.
+  slSynch();
+  SRL::Input::Management::RefreshPeripherals();
+#endif
+}
+
+static inline bool shouldThrottleSpawnsForLoad(int gameStatus, int liveProjectiles, uint32_t hwFree)
+{
+  if (gameStatus == TITLE)
+  {
+    // Title attract mode does not need full-density spawning.
+    return (liveProjectiles >= 96) || (hwFree > 0u && hwFree < 48000u);
+  }
+
+  // In gameplay states, start shedding new spawns before allocator pressure builds.
+  return (liveProjectiles >= 220) || (hwFree > 0u && hwFree < 24000u);
+}
+
+#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
 static volatile uint8_t gDiagPhaseTag = 0u;
 static inline void setDiagPhase(uint8_t tag)
 {
@@ -331,6 +364,13 @@ static inline void setDiagPhase(uint8_t)
 static void move()
 {
   uint32_t phaseStart;
+  const int liveProjectiles = getLiveProjectileCount();
+  const uint32_t hwFree = (uint32_t)SRL::Memory::HighWorkRam::GetFreeSpace();
+  const bool throttleSpawns = shouldThrottleSpawnsForLoad(status, liveProjectiles, hwFree);
+  const int titleSpawnMask = (liveProjectiles >= 220) ? 31 : (throttleSpawns ? 15 : 3);
+  const bool allowAddBulletsThisTick = (status == TITLE)
+      ? ((tick & titleSpawnMask) == 0)
+      : (!throttleSpawns || ((tick & 1) == 0));
 
   // BulletML allocations can fail transiently under pressure. Keep failure counts
   // for diagnostics, but clear the one-way latch each tick so spawning can recover.
@@ -342,6 +382,20 @@ static void move()
   switch (status)
   {
   case TITLE:
+    // Keep title sim responsive under sustained attract-mode runtime.
+    setFoeBudgetLimit(NOIZ2SA_FOE_UPDATE_BUDGET / 3);
+    if (liveProjectiles >= 240 && (tick & 31) == 0)
+    {
+      // Attract mode can saturate with lingering projectiles; periodically reset
+      // combat objects to recover frame time and keep the title interactive.
+      clearFoes();
+    }
+    if (hwFree > 0u && hwFree < 12000u)
+    {
+      // Hard recovery path for title attract mode when allocator pressure spikes.
+      clearFoes();
+    }
+
     setDiagPhase(11u);
     phaseStart = SDL_GetProfileMicros();
     moveTitleMenu();
@@ -354,7 +408,10 @@ static void move()
     
     setDiagPhase(13u);
     phaseStart = SDL_GetProfileMicros();
-    addBullets();
+    if (allowAddBulletsThisTick)
+    {
+      addBullets();
+    }
     gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
     
     setDiagPhase(14u);
@@ -389,7 +446,10 @@ static void move()
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-addBullets");
     #endif
-    addBullets();
+    if (allowAddBulletsThisTick)
+    {
+      addBullets();
+    }
     gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] post-addBullets");
@@ -1070,7 +1130,7 @@ int main()
 
   while (!done)
   {
-#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
     static uint32_t sPhaseTraceCounter = 0u;
 #endif
 #if HW_DEBUG
@@ -1280,7 +1340,7 @@ int main()
 
     // Process game logic for calculated frames
     uint32_t phaseStartUs = SDL_GetProfileMicros();
-  #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+  #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
     setDiagPhase(1u); // move/update phase
   #endif
 #if HW_DEBUG
@@ -1333,7 +1393,7 @@ int main()
     ScreenVdpPerfStats frameVdpStats{};
     if (renderThisLoop)
     {
-    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(2u); // render phase
     #endif
 #if HW_DEBUG
@@ -1415,9 +1475,9 @@ int main()
     // Fall back to non-blocking refresh only when ticks are stalled to avoid hard lockups.
     if (!gUseFixedFramePacing && nowTick > 0)
     {
-    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(3u); // pre-sync wait
-    #if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
+    #if NOIZ2SA_LOG_TO_DEV_CART && !HW_DEBUG
       if ((sPhaseTraceCounter % 120u) == 0u)
       {
         SRL::Logger::LogInfo("[PHASE] pre-sync tick=%lu status=%d phase=%u",
@@ -1433,11 +1493,11 @@ int main()
         SRL::Logger::LogInfo("[PHASE] pre-sync loop=%lu", (unsigned long)sPhaseProbeLoops);
       }
 #endif
-      SRL::Core::Synchronize();
+      synchronizeFrame();
       gSyncCount++;
-    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(4u); // post-sync
-    #if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
+    #if NOIZ2SA_LOG_TO_DEV_CART && !HW_DEBUG
       if ((sPhaseTraceCounter % 120u) == 0u)
       {
         SRL::Logger::LogInfo("[PHASE] post-sync tick=%lu status=%d phase=%u",
@@ -1457,7 +1517,7 @@ int main()
     }
     else
     {
-#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
   setDiagPhase(5u); // fixed-frame input refresh path
 #endif
       SRL::Input::Management::RefreshPeripherals();
@@ -1467,12 +1527,12 @@ int main()
   #endif
     uint32_t timeSyncUs = SDL_GetProfileMicros() - phaseStartUs;
 
-#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
     {
       static uint32_t sLastHeartbeatMs = 0;
       const uint32_t hbNowMs = SDL_GetTicks();
-#if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
-  const uint32_t heartbeatIntervalMs = 100u;
+#if NOIZ2SA_LOG_TO_DEV_CART && !HW_DEBUG
+  const uint32_t heartbeatIntervalMs = 250u;
 #else
   const uint32_t heartbeatIntervalMs = 1000u;
 #endif

@@ -189,6 +189,9 @@ void destroyShip()
   {
     return;
   }
+#if NOIZ2SA_ENABLE_INVINCIBLE
+  return;
+#endif
 #if HW_DEBUG
   return;
 #endif
