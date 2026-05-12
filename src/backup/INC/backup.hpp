@@ -173,7 +173,8 @@ namespace SRL::Backup {
             // (which is in a different order from BUP)
             // I don't want to do that.  The user can just set the language.
             WriteTable.language = file->Language;
-                                    // get date (check implementation in jo engine)
+                        
+            // get date (check implementation in jo engine)
             // jo engine complicates this for no reason
             DateTime time = DateTime::Now();
             // doesn't currently work, need to figure out how to get SetDate to take SRL::Types::DateTime   
@@ -191,7 +192,8 @@ namespace SRL::Backup {
             
             WriteTable.datasize = file->Datasize; 
             // WriteTable.blocksize = file->Datasize * 64;  // not in sample so leave it out?
-                        // is this only needed for the FDD?
+            
+            // is this only needed for the FDD?
             // SelectPartition(device, 0);
             
             // because to Sega, true is false and false is true.
@@ -226,13 +228,32 @@ namespace SRL::Backup {
         
         static bool Init()
         {
-            if (Initialized) return true; // causes it to crash
-                        
-            LibrarySpace = static_cast<uint32_t*>(SRL::Memory::HighWorkRam::Malloc(LIB_SPACE_SIZE));
-            if (!LibrarySpace) return false;
-            
-            WorkSpace = static_cast<uint32_t*>(SRL::Memory::LowWorkRam::Malloc(WORK_SPACE_SIZE));
-            if (!WorkSpace) return false;
+            if (Initialized)
+                return true;
+
+            const bool hadLibrarySpace = (LibrarySpace != nullptr);
+
+            if (!LibrarySpace)
+            {
+                LibrarySpace = static_cast<uint32_t*>(SRL::Memory::HighWorkRam::Malloc(LIB_SPACE_SIZE));
+            }
+            if (!LibrarySpace)
+                return false;
+
+            if (!WorkSpace)
+            {
+                WorkSpace = static_cast<uint32_t*>(SRL::Memory::LowWorkRam::Malloc(WORK_SPACE_SIZE));
+            }
+            if (!WorkSpace)
+            {
+                // Roll back only the allocation created in this call.
+                if (!hadLibrarySpace && LibrarySpace)
+                {
+                    SRL::Memory::Free(LibrarySpace);
+                    LibrarySpace = nullptr;
+                }
+                return false;
+            }
 
             SRL::SMPC::DisableReset();
 
@@ -243,11 +264,11 @@ namespace SRL::Backup {
             for (auto& device : BupState)
                 device.isMounted = false;
 
-            Initialized = true; // causes it to crash            
-            return (Initialized); // causes it to crash
-            // return true; // works
+            Initialized = true;
+            return true;
         }        
-                static bool Mount(BupDevice device)
+        
+        static bool Mount(BupDevice device)
         {
             if (Initialized)
             {
@@ -283,10 +304,12 @@ namespace SRL::Backup {
         
         BupFile File;
         
-                // zzz
+        
+        // zzz
         // work around - set filename to 13 chars.
         // next attempt:  use original Sega BUP library
-                // constructor
+        
+        // constructor
         Device
         (
             unsigned char* const name,
@@ -303,7 +326,8 @@ namespace SRL::Backup {
                 // Mount(ExternalDeviceBackup);
             }
             
-                        // Init BUP file
+            
+            // Init BUP file
             // SRL::Debug::Print(1,22,"len=%d", strlen((char*)name));
             memcpy(File.Name, name, strlen((char*)name) + 1);
             memcpy(File.Comment, comment, strlen((char*)comment) + 1);
@@ -339,7 +363,8 @@ namespace SRL::Backup {
             return func(device, (uint8_t*)filename, data);
         }
         
-                // void?
+        
+        // void?
         int32_t Delete(BupDevice device, unsigned char *filename)
         {
             
@@ -347,7 +372,8 @@ namespace SRL::Backup {
             return func(device, (uint8_t*)filename);
         }
         
-                bool Format(BupDevice device)
+        
+        bool Format(BupDevice device)
         {
             if (Initialized)
             {
@@ -375,7 +401,8 @@ namespace SRL::Backup {
             {
                 return false;
             }
-        }
+        }
+
         static bool ReturnStatus(BupDevice device)
         {
             if (Initialized)
@@ -390,7 +417,8 @@ namespace SRL::Backup {
             {
                 return false;
             }
-        }        
+        }        
+
         // Gets Directory information from BUP device (maybe for FDD use?)
         // returns Directory information
         static int32_t DirInfo(BupDevice device, uint8_t *filename)
@@ -414,11 +442,28 @@ namespace SRL::Backup {
         {
             for (auto& device : BupState)
                 device.isMounted = false;
-                
-            SRL::Memory::Free(LibrarySpace);                
-            SRL::Memory::Free(WorkSpace);
-            
+
+            // Keep the allocated buffers so future Device instances can reuse
+            // memory without extra HWRAM/LWRAM allocation churn.
             Initialized = false;
+        }
+
+        static void ReleaseBuffers(void)
+        {
+            if (LibrarySpace)
+            {
+                SRL::Memory::Free(LibrarySpace);
+                LibrarySpace = nullptr;
+            }
+            if (WorkSpace)
+            {
+                SRL::Memory::Free(WorkSpace);
+                WorkSpace = nullptr;
+            }
+
+            Initialized = false;
+            for (auto& device : BupState)
+                device.isMounted = false;
         }
         
         // need "delete" for object

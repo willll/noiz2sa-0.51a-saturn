@@ -20,6 +20,8 @@
 #include "degutil.h"
 #include "ship.h"
 
+#include <new>
+
 #define COMMAND_SCREEN_SPD_RATE (insanespeed ? 800 : (800 / 2))
 #define COMMAND_SCREEN_VEL_RATE (insanespeed ? 800 : (800 / 2))
 
@@ -62,6 +64,28 @@ static Fxp legacyDirectionIndexToFxpDegrees(int direction)
   return Fxp::BuildRaw(static_cast<int32_t>(raw));
 }
 
+namespace
+{
+struct FoeCommandFreeNode
+{
+  FoeCommandFreeNode* next;
+};
+
+static FoeCommandFreeNode* sFoeCommandFreeList = nullptr;
+}
+
+template <typename... Args>
+static FoeCommand* createFoeCommandFromPool(Args&&... args)
+{
+  if (sFoeCommandFreeList)
+  {
+    FoeCommandFreeNode* node = sFoeCommandFreeList;
+    sFoeCommandFreeList = node->next;
+    return new (node) FoeCommand(std::forward<Args>(args)...);
+  }
+  return createBulletMlRuntimeObject<FoeCommand>(std::forward<Args>(args)...);
+}
+
 
 
 FoeCommand::FoeCommand(BulletMLParserBLB *parser, Foe *f)
@@ -77,7 +101,7 @@ FoeCommand::FoeCommand(BulletMLState *state, Foe *f)
 FoeCommand::~FoeCommand() {}
 
 FoeCommand* createFoeCommand(BulletMLParserBLB* parser, Foe* f) {
-  return createBulletMlRuntimeObject<FoeCommand>(parser, f);
+  return createFoeCommandFromPool(parser, f);
 }
 
 FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
@@ -85,7 +109,33 @@ FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
     delete state;
     return nullptr;
   }
-  return createBulletMlRuntimeObject<FoeCommand>(state, f);
+  return createFoeCommandFromPool(state, f);
+}
+
+void destroyFoeCommand(FoeCommand*& cmd)
+{
+  if (!cmd)
+  {
+    return;
+  }
+
+  cmd->~FoeCommand();
+
+  FoeCommandFreeNode* node = reinterpret_cast<FoeCommandFreeNode*>(cmd);
+  node->next = sFoeCommandFreeList;
+  sFoeCommandFreeList = node;
+
+  cmd = nullptr;
+}
+
+void releaseFoeCommandPool()
+{
+  while (sFoeCommandFreeList)
+  {
+    FoeCommandFreeNode* node = sFoeCommandFreeList;
+    sFoeCommandFreeList = node->next;
+    SRL::Memory::Free(node);
+  }
 }
 
 Fxp FoeCommand::getBulletDirection() {

@@ -188,8 +188,7 @@ static void removeFoeForced(Foe *fe)
   removeFoeForcedNoDeleteCmd(fe);
   if (fe->cmd)
   {
-    delete fe->cmd;
-    fe->cmd = nullptr;
+    destroyFoeCommand(fe->cmd);
   }
 }
 
@@ -198,6 +197,10 @@ void removeFoe(Foe *fe)
   if (fe->type == BOSS_TYPE)
     return;
   removeFoeForcedNoDeleteCmd(fe);
+  if (fe->cmd)
+  {
+    destroyFoeCommand(fe->cmd);
+  }
 }
 
 void initFoes()
@@ -231,8 +234,9 @@ void closeFoes()
   {
     Foe *fe = &(foe[foeActiveIndices[i]]);
     if (fe->cmd)
-      delete fe->cmd;
+      destroyFoeCommand(fe->cmd);
   }
+  releaseFoeCommandPool();
 }
 
 static int foeIdx = FOE_MAX;
@@ -553,12 +557,11 @@ void moveFoes()
       {
         if (hasBulletMlAllocFailureLatched())
         {
-          delete fe->cmd;
-          fe->cmd = nullptr;
+          destroyFoeCommand(fe->cmd);
         }
         else if (fe->cmd->isEnd())
         {
-          delete fe->cmd;
+          destroyFoeCommand(fe->cmd);
           fe->cmd = createFoeCommand(fe->parser, fe);
           if (!fe->cmd)
           {
@@ -585,8 +588,7 @@ void moveFoes()
           }
           if (fe->spc == FOE)
           {
-            delete fe->cmd;
-            fe->cmd = nullptr;
+            destroyFoeCommand(fe->cmd);
           }
         }
         else
@@ -610,8 +612,7 @@ void moveFoes()
       {
         if (fe->cmd)
         {
-          delete fe->cmd;
-          fe->cmd = nullptr;
+          destroyFoeCommand(fe->cmd);
         }
         continue;
       }

@@ -46,6 +46,8 @@ class FoeCommand : public BulletMLRunner {
 
 FoeCommand* createFoeCommand(BulletMLParserBLB* parser, struct foe* f);
 FoeCommand* createFoeCommand(BulletMLState* state, struct foe* f);
+void destroyFoeCommand(FoeCommand*& cmd);
+void releaseFoeCommandPool();
 
 #endif
 
