@@ -146,6 +146,7 @@ if(HW_DEBUG)
     set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
     set(NOIZ2SA_ENABLE_SOUND OFF CACHE BOOL "Enable in-game sound (PCM SFX + CDDA BGM)" FORCE)
     set(NOIZ2SA_ENABLE_PCM_SFX OFF CACHE BOOL "Enable PCM SFX loading through Ponesound backend" FORCE)
+    set(NOIZ2SA_ENABLE_INVINCIBLE ON CACHE BOOL "Make player invincible (debug/testing)" FORCE)
 
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
     file(GLOB HW_DEBUG_ZAKO_BLB_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/noiz2sa_share/zako_blb/*.blb")
