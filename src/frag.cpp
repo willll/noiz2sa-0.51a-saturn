@@ -22,6 +22,7 @@
 
 Frag frag[FRAG_MAX];
 
+/** @brief Initialises the fragment pool. */
 void initFrags()
 {
   int i;
@@ -33,6 +34,7 @@ void initFrags()
 
 static int fragIdx = FRAG_MAX;
 
+/** @brief Adds a fragment with the requested style and size. */
 static void addFrag(Vector *pos, Vector *vel, int spc, int size)
 {
   int i;
@@ -69,6 +71,7 @@ static void addFrag(Vector *pos, Vector *vel, int spc, int size)
   frag[i].spc = spc;
 }
 
+/** @brief Frees the oldest fragments until the requested capacity is available. */
 static void ensureFragCapacity(int required)
 {
   int freeSlots = 0;
@@ -104,6 +107,7 @@ static void ensureFragCapacity(int required)
   }
 }
 
+/** @brief Spawns fragments for a shot impact. */
 void addShotFrag(Vector *p)
 {
   Vector pos, vel;
@@ -114,6 +118,7 @@ void addShotFrag(Vector *p)
   addFrag(&pos, &vel, 0, 0);
 }
 
+/** @brief Spawns fragments for an enemy explosion. */
 void addEnemyFrag(Vector *p, int mx, int my, int type)
 {
   Vector pos, vel;
@@ -138,6 +143,7 @@ void addEnemyFrag(Vector *p, int mx, int my, int type)
   }
 }
 
+/** @brief Spawns fragments for the player's ship explosion. */
 void addShipFrag(Vector *p)
 {
   Vector pos, vel;
@@ -163,6 +169,7 @@ void addShipFrag(Vector *p)
   }
 }
 
+/** @brief Spawns fragments for a stage-clear effect. */
 void addClearFrag(Vector *p, Vector *v)
 {
   Vector pos, vel;
@@ -173,6 +180,7 @@ void addClearFrag(Vector *p, Vector *v)
   addFrag(&pos, &vel, 2, 0);
 }
 
+/** @brief Advances all active fragments. */
 void moveFrags()
 {
   int i;
@@ -194,6 +202,7 @@ static int fragColor[3][2][2] = {
     {{16 * 1 - 10, 16 * 1 - 5}, {16 * 1 - 5, 16 * 1 - 10}},
 };
 
+/** @brief Draws all active fragments. */
 void drawFrags()
 {
   int x, y, c;

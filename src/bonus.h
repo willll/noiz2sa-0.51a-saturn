@@ -21,8 +21,13 @@ typedef struct {
 
 extern int bonusScore;
 
+/** @brief Resets the bonus score counter. */
 void resetBonusScore();
+/** @brief Initialises bonus entities. */
 void initBonuses();
+/** @brief Advances all active bonuses. */
 void moveBonuses();
+/** @brief Draws all active bonuses. */
 void drawBonuses();
+/** @brief Spawns a bonus entity at the given position and velocity. */
 void addBonus(Vector *pos, Vector *vel);

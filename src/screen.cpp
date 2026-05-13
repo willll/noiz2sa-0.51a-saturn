@@ -95,6 +95,7 @@ static const char *spriteFile[SPRITE_NUM] = {
     "TITLEA.TGA",
 };
 
+/** @brief Uploads sprite pixels to an RGB555 texture and returns the texture index. */
 static int32_t loadSpriteTextureRGB555(SRL::Bitmap::BitmapInfo &info, const uint8_t *srcPixels)
 {
   if (srcPixels == nullptr || info.Width == 0 || info.Height == 0)
@@ -157,6 +158,7 @@ static int32_t loadSpriteTextureRGB555(SRL::Bitmap::BitmapInfo &info, const uint
   return textureIndex;
 }
 
+/** @brief Queues a line draw command for later hardware submission. */
 static void queueHardwareLineCommand(int x1, int y1, int x2, int y2, Canvas::Pixel lineColor)
 {
   if (pendingLineCommandCount >= MAX_PENDING_LINE_COMMANDS)
@@ -172,6 +174,7 @@ static void queueHardwareLineCommand(int x1, int y1, int x2, int y2, Canvas::Pix
   pendingLineCommandCount++;
 }
 
+/** @brief Flushes queued line commands to the hardware renderer. */
 static void flushHardwareLineCommands()
 {
   const int16_t lineSort = 500;
@@ -196,6 +199,7 @@ static void flushHardwareLineCommands()
 
 
 
+/** @brief Draws a polygon with both windings so it remains visible from either side. */
 static inline void drawHardwarePolygonDoubleSided(SRL::Math::Types::Vector2D points[4],
                                                   const bool fill,
                                                   const SRL::Types::HighColor &polyColor,
@@ -211,6 +215,7 @@ static inline void drawHardwarePolygonDoubleSided(SRL::Math::Types::Vector2D poi
   SRL::Scene2D::DrawPolygon(reversePoints, fill, polyColor, sort);
 }
 
+/** @brief Draws a thick line using layered quads for hardware rendering. */
 static bool drawHardwareThickLine(int x1, int y1, int x2, int y2, int width,
                                   Canvas::Pixel fillColor, Canvas::Pixel borderColor,
                                   int offsetX, int offsetY, int16_t sort)
@@ -259,6 +264,7 @@ static bool drawHardwareThickLine(int x1, int y1, int x2, int y2, int width,
   return true;
 }
 
+/** @brief Uploads one dirty panel region to the panel layer. */
 static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect, int dstX)
 {
   if (panelLayerVram == nullptr || src == nullptr)
@@ -338,6 +344,7 @@ static void uploadPanelBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &di
   gScreenVdpPerfStats.panelUploadBytes += copyBytes;
 }
 
+/** @brief Uploads one dirty playfield region to the playfield layer. */
 static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect &dirtyRect)
 {
 
@@ -435,6 +442,7 @@ static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect
   gScreenVdpPerfStats.playfieldUploadBytes += copyBytes;
 }
 
+/** @brief Refreshes the panel layers if they are marked dirty. */
 static bool refreshPanelLayer()
 {
   if (panelLayerVram == nullptr)
@@ -507,6 +515,7 @@ static bool refreshPanelLayer()
   return uploaded;
 }
 
+/** @brief Initialises the panel layer for the selected palette bank. */
 static void initPanelLayer(const int16_t paletteBank)
 {
   SRL::Bitmap::BitmapInfo panelInfo(PANEL_LAYER_WIDTH, PANEL_LAYER_HEIGHT);
@@ -535,10 +544,9 @@ static void initPanelLayer(const int16_t paletteBank)
   SRL::VDP2::NBG1::ScrollEnable();
 }
 
-// SDL_Joystick *stick = nullptr;
-// SDL_GameController *gamepad = nullptr;
 Digital *gamepad = nullptr;
 
+/** @brief Loads title sprites into VDP1 textures and cached software sprites. */
 static void loadSprites()
 {
   SRL::Logger::LogDebug("[SPRITE] Beginning sprite loading sequence");
@@ -546,11 +554,6 @@ static void loadSprites()
   int i;
   char name[256];
   SRL::Bitmap::TGA *tga = nullptr;
-  // SRL_Surface *img = nullptr;
-
-  // FIX ME !
-  // color[0].Red = 100 >> 3; color[0].Green = 0; color[0].Blue = 0;
-  // SDL_SetColors(video, color, 0, 1);
 
   // Navigate to IMAGES directory on CD first
   SRL::Logger::LogDebug("[SPRITE] Changing to IMAGES directory on CD");
@@ -580,7 +583,6 @@ static void loadSprites()
 
     // Get bitmap info to check if loaded successfully
     SRL::Bitmap::BitmapInfo info = tga->GetInfo();
-    //SRL::Logger::LogTrace("[SPRITE] TGA info: %dx%d pixels", info.Width, info.Height);
 
     if (info.Width == 0 || tga->GetData() == nullptr)
     {
@@ -599,10 +601,6 @@ static void loadSprites()
       SRL::Logger::LogFatal("Texture count =%d", SRL::VDP1::GetTextureCount());
       SRL::Logger::LogFatal("Available memory =%u", SRL::VDP1::GetAvailableMemory());
       SRL::System::Exit(1);
-    }
-    else
-    {
-      //SRL::Logger::LogTrace("[SPRITE] TGA loaded into VDP1 with texture index: %d", textureIndex);
     }
 
     // Cache a GP32-compatible 20x20 software sprite before releasing TGA data.
@@ -624,24 +622,11 @@ static void loadSprites()
       memset(titleSprite[i], 0, sizeof(titleSprite[i]));
     }
 
-    //SRL::Logger::LogTrace("[SPRITE] TGA object created for: %s", spriteFile[i]);
-
     sprite[i] = SRL_Surface(textureIndex, info.Width, info.Height);
     SRL::Logger::LogTrace("[SPRITE] SDL surface created for sprite %d", i);
 
     destroyObject(tga);
 
-    // SDL_ConvertSurface(img,
-    // 		   video->format,
-    // 		   SDL_HWSURFACE | SDL_SRCCOLORKEY);
-
-    // if ( sprite[i] == nullptr ) {
-    //   SRL::Logger::LogFatal("Failed to convert sprite to video format: %s", spriteFile[i]);
-    //   SRL::System::Exit(1);
-    // }
-
-    SRL::Logger::LogTrace("[SPRITE] Sprite %d converted to video format (colorkey=0)", i);
-    // SDL_SetColorKey(sprite[i], SDL_SRCCOLORKEY | SDL_RLEACCEL, 0);
     SRL::Logger::LogDebug("[SPRITE] Sprite %d loaded successfully", i);
   }
 
@@ -711,6 +696,7 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
     SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, previousEndCode == 1 ? 1 : 0);
 }
 
+/** @brief Builds the smoke overlay buffer used for screen transitions. */
 static void makeSmokeBuf()
 {
   int x, y, mx, my;
@@ -746,6 +732,7 @@ static void makeSmokeBuf()
   }
 }
 
+/** @brief Initialises SDL-backed screen resources and sprite assets. */
 void initSDL()
 {
   // Initialize SDL timing wrappers so SDL_GetTicks()/profiling APIs advance in-game.
@@ -865,6 +852,7 @@ void initSDL()
 #endif
 }
 
+/** @brief Blends the playfield and panel layers into the final frame. */
 void blendScreen()
 {
 #if NOIZ2SA_PERF_MODE
@@ -965,16 +953,19 @@ void blendScreen()
   SDL_SetSurfaceDirty(layer);
 }
 
+/** @brief Marks the entire playfield as dirty. */
 void markPlayfieldDirty()
 {
   SDL_SetSurfaceDirty(layer);
 }
 
+/** @brief Marks a playfield rectangle as dirty. */
 void markPlayfieldDirtyRect(int x, int y, int width, int height)
 {
   SDL_MarkDirtyRect(layer, x, y, width, height);
 }
 
+/** @brief Presents the current frame to the display. */
 void flipScreen()
 {
   static uint32_t flipCounter = 0;
@@ -1013,6 +1004,7 @@ void flipScreen()
 
 }
 
+/** @brief Copies the latest screen VDP performance statistics. */
 void consumeScreenVdpPerfStats(ScreenVdpPerfStats *outStats)
 {
   if (outStats == nullptr)
@@ -1029,30 +1021,35 @@ void consumeScreenVdpPerfStats(ScreenVdpPerfStats *outStats)
   SDL_ResetBlitStats();
 }
 
+/** @brief Clears the main playfield buffer. */
 void clearScreen()
 {
   memset(buf, 0, LAYER_WIDTH * LAYER_HEIGHT);
   SDL_SetSurfaceDirty(layer);
 }
 
+/** @brief Clears the left panel buffer. */
 void clearLPanel()
 {
   memset(lpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
   SDL_SetSurfaceDirty(lpanel);
 }
 
+/** @brief Clears the right panel buffer. */
 void clearRPanel()
 {
   memset(rpbuf, 0, PANEL_WIDTH * PANEL_HEIGHT);
   SDL_SetSurfaceDirty(rpanel);
 }
 
+/** @brief Draws the smoke transition effect. */
 void smokeScreen()
 {
   // The previous CPU decay pass was immediately cleared before drawing each frame.
   // Keep smoke disabled here and rely on hardware compositing plus palette fades instead.
 }
 
+/** @brief Draws a line into the supplied pixel buffer. */
 void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Canvas::Pixel *buf)
 {
   int lx, ly, ax, ay, x, y, ptr, i, j;
@@ -1195,6 +1192,7 @@ void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Ca
   }
 }
 
+/** @brief Draws a thick line into the supplied pixel buffer. */
 void drawThickLine(int x1, int y1, int x2, int y2,
                    Canvas::Pixel color1, Canvas::Pixel color2, int width)
 {
@@ -1353,6 +1351,7 @@ void drawThickLine(int x1, int y1, int x2, int y2,
   }
 }
 
+/** @brief Draws a box into the supplied pixel buffer. */
 void drawBox(int x, int y, int width, int height,
              Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
@@ -1384,6 +1383,7 @@ void drawBox(int x, int y, int width, int height,
   SDL_SetSurfaceDirty(layer);
 }
 
+/** @brief Draws a panel box into the supplied pixel buffer. */
 void drawBoxPanel(int x, int y, int width, int height,
                   Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
@@ -1423,6 +1423,7 @@ void drawBoxPanel(int x, int y, int width, int height,
 }
 
 // Draw the numbers.
+/** @brief Draws an integer at the specified location. */
 int drawNum(int n, int x, int y, int s, int c1, int c2)
 {
   for (;;)
@@ -1437,6 +1438,7 @@ int drawNum(int n, int x, int y, int s, int c1, int c2)
   return y;
 }
 
+/** @brief Draws an integer aligned to the right. */
 int drawNumRight(int n, int x, int y, int s, int c1, int c2)
 {
   int d, nd, drawn = 0;
@@ -1459,6 +1461,7 @@ int drawNumRight(int n, int x, int y, int s, int c1, int c2)
   return y;
 }
 
+/** @brief Draws an integer centred on the target point. */
 int drawNumCenter(int n, int x, int y, int s, int c1, int c2)
 {
   for (;;)
@@ -1472,6 +1475,7 @@ int drawNumCenter(int n, int x, int y, int s, int c1, int c2)
   return y;
 }
 
+/** @brief Returns the current pad state bitmask. */
 int getPadState()
 {
 #if HW_DEBUG
@@ -1497,6 +1501,7 @@ int getPadState()
 
 int buttonReversed = 0;
 
+/** @brief Returns the current button state bitmask. */
 int getButtonState()
 {
 #if HW_DEBUG

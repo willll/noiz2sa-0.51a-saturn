@@ -43,6 +43,7 @@ static const char *BARRAGE_DIR_NAME[] = {
   "ZAKO", "MIDDLE", "BOSS"
 };
 
+/** @brief Loads BulletML files for a barrage category from disc or embedded data. */
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 #if HW_DEBUG
   int i = 0;
@@ -208,6 +209,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
 static unsigned int rnd;
 
+/** @brief Initialises the barrage manager and loads all barrage sets. */
 void initBarragemanager() {
   SRL::Logger::LogDebug("[BARRAGE] Initializing barrage manager");
   
@@ -224,6 +226,7 @@ void initBarragemanager() {
   SRL::Logger::LogDebug("[BARRAGE] Barrage manager initialization complete");
 }
 
+/** @brief Releases barrage manager resources. */
 void closeBarragemanager() {
   SRL::Logger::LogDebug("[BARRAGE] Closing barrage manager");
   
@@ -241,6 +244,7 @@ int endless, insane;
 static int sceneCnt;
 static Fxp level, levelInc;
 
+/** @brief Initialises the active barrage sequence for a stage. */
 void initBarrages(int seed, Fxp startLevel, Fxp li) {
   int n1, n2, rn;
 
@@ -294,6 +298,7 @@ void initBarrages(int seed, Fxp startLevel, Fxp li) {
 /**
  * Roll the barrage queue after the new barrage pattern is set.
  */
+/** @brief Shuffles the active barrage pattern queue. */
 static void rollBarragePattern(Barrage *br[], int brNum) {
   Barrage *tbr;
   int n = (Fxp::Convert(brNum) / (Fxp::Convert((int)(nextRandInt(&rnd) % 32)) / 32 + 1) + 0.5f).As<int>();

@@ -9,11 +9,13 @@
 
 SRL::CRAM::Palette* Palette::palette = nullptr;
 
+/** @brief Creates a palette with the requested number of entries. */
 Palette::Palette(size_t count)
     : SRL::Bitmap::Palette(count)
 {
 }
 
+/** @brief Stores a colour at the specified index. */
 void Palette::SetColor(uint16_t index, HighColor&& color)
 {
     if (index < Count)
@@ -26,6 +28,7 @@ void Palette::SetColor(uint16_t index, HighColor&& color)
     }
 }
 
+/** @brief Returns the colour stored at the specified index. */
 HighColor Palette::GetColor(uint16_t index) const
 {
     if (index < Count)
@@ -37,6 +40,7 @@ HighColor Palette::GetColor(uint16_t index) const
     return HighColor(0, 0, 0);
 }
 
+/** @brief Initialises the palette contents with a gradient and white terminator. */
 void Palette::Init()
 {
     if (Count == 0)
@@ -52,6 +56,7 @@ void Palette::Init()
     SetColor(Count - 1, HighColor::FromRGB555(255, 255, 255));
 }
 
+/** @brief Applies a brightness adjustment to every palette entry. */
 void Palette::ApplyBrightness(uint8_t brightness)
 {
     if (Count == 0)
@@ -79,6 +84,7 @@ void Palette::ApplyBrightness(uint8_t brightness)
     }
 }
 
+/** @brief Loads or initialises a palette from a bitmap. */
 int16_t Palette::LoadPalette(SRL::Bitmap::BitmapInfo* bitmap)
 {
     if (bitmap == nullptr || bitmap->Palette == nullptr)
@@ -90,6 +96,7 @@ int16_t Palette::LoadPalette(SRL::Bitmap::BitmapInfo* bitmap)
     return initPalette();
 }
 
+/** @brief Initialises the shared global palette resource. */
 int32_t Palette::initPalette()
 {
     if (palette)

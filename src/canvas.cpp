@@ -9,6 +9,7 @@
 using namespace SRL::Logger;
 using namespace SRL::Types;
 
+/** @brief Creates a canvas backed by a mutable pixel buffer. */
 Canvas::Canvas(uint16_t width, uint16_t height, Palette& palette)
     : width_(width),
       height_(height),
@@ -17,22 +18,26 @@ Canvas::Canvas(uint16_t width, uint16_t height, Palette& palette)
 {
 }
 
+/** @brief Releases the canvas backing storage. */
 Canvas::~Canvas()
 {
         destroyArray(imageData_);
         destroyObject(bitmap_);
 }
 
+/** @brief Returns the raw pixel buffer. */
 uint8_t* Canvas::GetData()
 {
     return imageData_;
 }
 
+/** @brief Returns bitmap metadata for the canvas. */
 SRL::Bitmap::BitmapInfo Canvas::GetInfo() const
 {
     return *bitmap_;
 }
 
+/** @brief Writes a pixel to the backing buffer if the coordinates are in range. */
 void Canvas::SetPixel(uint16_t x, uint16_t y, Pixel color)
 {
     if (x < width_ && y < height_)
@@ -41,6 +46,7 @@ void Canvas::SetPixel(uint16_t x, uint16_t y, Pixel color)
     }
 }
 
+/** @brief Rotates the palette for the specified texture. */
 void Canvas::RotatePalette(int32_t canvasTextureId)
 {
     SRL::CRAM::Palette palette(bitmap_->ColorMode, SRL::VDP1::Metadata[canvasTextureId].PaletteId);
@@ -55,6 +61,7 @@ void Canvas::RotatePalette(int32_t canvasTextureId)
     std::rotate(data, data + 1, data + size);
 }
 
+/** @brief Loads a bitmap palette into CRAM and returns the palette bank id. */
 int16_t Canvas::LoadPalette(SRL::Bitmap::BitmapInfo* bitmap)
 {
     int32_t id = SRL::CRAM::GetFreeBank(bitmap->ColorMode);

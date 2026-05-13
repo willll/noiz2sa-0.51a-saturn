@@ -43,12 +43,59 @@ typedef struct foe Foe;
 
 extern int foeCnt, enNum[];
 
+/**
+ * @brief Allocates and initialises a foe or bullet entity.
+ * @param x       Initial X position.
+ * @param y       Initial Y position.
+ * @param rank    BulletML rank value for the entity.
+ * @param d       Initial direction index.
+ * @param spd     Initial speed.
+ * @param typek   Entity type identifier.
+ * @param shield  Hit points or shield value.
+ * @param parser  BulletML parser used to drive the foe behaviour.
+ * @return Pointer to the created foe instance, or nullptr on failure.
+ */
 Foe* addFoe(int x, int y, Fxp rank, int d, int spd, int typek, int shield, 
       BulletMLParserBLB *parser);
+
+/**
+ * @brief Creates a boss-active bullet entity.
+ * @param x      Initial X position.
+ * @param y      Initial Y position.
+ * @param rank   BulletML rank value for the entity.
+ * @param d      Initial direction index.
+ * @param spd    Initial speed.
+ * @param state  BulletML parser/state driving the bullet.
+ * @return Pointer to the created foe instance, or nullptr on failure.
+ */
 Foe* addFoeBossActiveBullet(int x, int y, Fxp rank, 
           int d, int spd, BulletMLParserBLB *state);
+
+/**
+ * @brief Creates an active bullet using the current BulletML state.
+ * @param pos    Spawn position.
+ * @param rank   BulletML rank value for the entity.
+ * @param d      Initial direction index.
+ * @param spd    Initial speed.
+ * @param color  Bullet color index.
+ * @param state  Current BulletML state.
+ */
 void addFoeActiveBullet(Vector *pos, Fxp rank, 
 			int d, int spd, int color, BulletMLState *state);
+
+/**
+ * @brief Creates a normal enemy bullet.
+ * @param pos    Spawn position.
+ * @param rank   BulletML rank value for the entity.
+ * @param d      Initial direction index.
+ * @param spd    Initial speed.
+ * @param color  Bullet color index.
+ */
 void addFoeNormalBullet(Vector *pos, Fxp rank, int d, int spd, int color);
+
+/**
+ * @brief Removes a foe entity from the active list.
+ * @param fe Foe instance to remove.
+ */
 void removeFoe(Foe *fe);
 #endif

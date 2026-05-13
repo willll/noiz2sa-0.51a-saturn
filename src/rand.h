@@ -9,4 +9,5 @@
  *
  * @version $Revision: 1.1.1.1 $
  */
+/** @brief Advances the pseudo-random sequence and returns the next value. */
 unsigned int nextRandInt(unsigned int *v);

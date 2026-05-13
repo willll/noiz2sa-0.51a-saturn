@@ -25,12 +25,14 @@
 Bonus bonus[BONUS_MAX];
 int bonusScore;
 
+/** @brief Resets the bonus score counter. */
 void resetBonusScore()
 {
   bonusScore = 10;
   showScore();
 }
 
+/** @brief Awards the current bonus and increments the next threshold. */
 static void getBonus()
 {
   addScore(bonusScore);
@@ -38,6 +40,7 @@ static void getBonus()
     bonusScore += 10;
 }
 
+/** @brief Applies the miss penalty to the bonus score counter. */
 static void missBonus()
 {
   bonusScore /= 20;
@@ -47,6 +50,7 @@ static void missBonus()
   showScore();
 }
 
+/** @brief Initialises the bonus entity pool. */
 void initBonuses()
 {
   int i;
@@ -59,6 +63,7 @@ void initBonuses()
 
 static int bonusIdx = BONUS_MAX;
 
+/** @brief Spawns a bonus item. */
 void addBonus(Vector *pos, Vector *vel)
 {
   int i;
@@ -82,6 +87,7 @@ void addBonus(Vector *pos, Vector *vel)
 #define BONUS_INHALE_WIDTH (24000 / SCREEN_DIVISOR)
 #define BONUS_ACQUIRE_WIDTH (8000 / SCREEN_DIVISOR)
 
+/** @brief Advances active bonuses and handles acquisition/miss logic. */
 void moveBonuses()
 {
   int i, d;
@@ -148,6 +154,7 @@ void moveBonuses()
 #define BONUS_COLOR_2 16 * 4 - 7
 #define BONUS_DRAW_WIDTH (8 / SCREEN_DIVISOR)
 
+/** @brief Draws all active bonuses. */
 void drawBonuses()
 {
   int x, y, ox, oy, d;

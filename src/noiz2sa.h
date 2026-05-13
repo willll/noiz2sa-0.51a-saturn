@@ -46,12 +46,43 @@ extern int tick;
 #define STAGE_CLEAR 3
 #define PAUSE 4
 
+/**
+ * @brief Cleans up the current scene before exiting or switching modes.
+ */
 void quitLast();
+
+/**
+ * @brief Initialises the title flow for a specific stage.
+ * @param stg Stage index to display on the title screen.
+ */
 void initTitleStage(int stg);
+
+/**
+ * @brief Initialises the title screen state.
+ */
 void initTitle();
+
+/**
+ * @brief Initialises a new game session for the specified stage.
+ * @param stg Starting stage index.
+ */
 void initGame(int stg);
+
+/**
+ * @brief Initialises the game-over scene.
+ */
 void initGameover();
+
+/**
+ * @brief Initialises the stage-clear scene.
+ */
 void initStageClear();
+
+/**
+ * @brief Updates the loading screen message and percentage.
+ * @param step   Current loading step text.
+ * @param percent Progress percentage in the range 0-100.
+ */
 void updateLoadingProgress(const char *step, int percent);
 
 #endif // NOIZ2SA_H_

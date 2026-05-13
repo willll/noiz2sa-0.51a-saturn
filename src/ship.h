@@ -20,8 +20,30 @@ typedef struct {
 
 extern Ship ship;
 
+/**
+ * @brief Initialises the player ship state.
+ */
 void initShip();
+
+/**
+ * @brief Advances the ship position and handles player movement input.
+ */
 void moveShip();
+
+/**
+ * @brief Renders the ship and associated visual effects.
+ */
 void drawShip();
+
+/**
+ * @brief Destroys the ship and clears any related state.
+ */
 void destroyShip();
+
+/**
+ * @brief Returns the player's direction index toward the given point.
+ * @param x Target X coordinate.
+ * @param y Target Y coordinate.
+ * @return Direction index in the legacy 0-1023 range.
+ */
 int getPlayerDeg(int x, int y);

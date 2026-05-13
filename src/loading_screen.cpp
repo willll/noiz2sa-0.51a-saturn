@@ -101,6 +101,7 @@ static int firstDigitIndex(const char *text)
     return -1;
 }
 
+/** @brief Returns true when two loading messages share the same progress family. */
 static bool sameProgressFamily(const char *lhs, const char *rhs)
 {
     if (lhs == nullptr || rhs == nullptr)
@@ -129,6 +130,7 @@ static bool sameProgressFamily(const char *lhs, const char *rhs)
 // LoadingScreen — construction
 // ---------------------------------------------------------------------------
 
+/** @brief Constructs the loading screen with default layout values. */
 LoadingScreen::LoadingScreen()
 {
     // Loading backdrop: deep blue.
@@ -159,6 +161,7 @@ LoadingScreen::LoadingScreen()
     }
 }
 
+/** @brief Constructs the loading screen with a custom layout. */
 LoadingScreen::LoadingScreen(const LoadingLayout &layout)
     : _layout(layout)
 {
@@ -169,6 +172,7 @@ LoadingScreen::LoadingScreen(const LoadingLayout &layout)
     }
 }
 
+/** @brief Adds a loading step to the on-screen history. */
 void LoadingScreen::PushHistory(const char *step)
 {
     if (step == nullptr || step[0] == '\0')
@@ -205,6 +209,7 @@ void LoadingScreen::PushHistory(const char *step)
 // LoadingScreen::Update
 // ---------------------------------------------------------------------------
 
+/** @brief Updates the loading screen with a new step and percentage. */
 void LoadingScreen::Update(const char *step, int percent)
 {
     ensureRuntimeDefaults(_layout);
@@ -222,6 +227,7 @@ void LoadingScreen::Update(const char *step, int percent)
 // LoadingScreen::Clear
 // ---------------------------------------------------------------------------
 
+/** @brief Clears the loading screen overlay. */
 void LoadingScreen::Clear()
 {
     ensureRuntimeDefaults(_layout);
@@ -238,6 +244,7 @@ void LoadingScreen::Clear()
 // LoadingScreen::Render  (private)
 // ---------------------------------------------------------------------------
 
+/** @brief Renders the loading screen text and progress bar. */
 void LoadingScreen::Render(const char *step, int percent)
 {
     ensureRuntimeDefaults(_layout);

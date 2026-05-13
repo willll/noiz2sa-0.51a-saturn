@@ -2,6 +2,7 @@
 
 #include "noiz2sa.h"
 
+/** @brief Encodes a HiScore structure into the backup binary layout. */
 void encodeHiScoreBackupData(HiScoreBackupData *outData, const HiScore *hiScore)
 {
   if (outData == nullptr || hiScore == nullptr)
@@ -26,6 +27,7 @@ void encodeHiScoreBackupData(HiScoreBackupData *outData, const HiScore *hiScore)
   outData->stage = (int32_t)hiScore->stage;
 }
 
+/** @brief Decodes the backup binary layout into a HiScore structure. */
 bool decodeHiScoreBackupData(const HiScoreBackupData *data, HiScore *outHiScore)
 {
   if (data == nullptr || outHiScore == nullptr)

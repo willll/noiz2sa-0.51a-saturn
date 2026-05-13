@@ -16,6 +16,7 @@ using namespace SRL::Input;
 
 static int g_joystick_initialized = 0;
 
+/** @brief Initialises the gamepad wrapper and verifies connectivity. */
 bool initGamepad() {
     gamepad = createDigitalGamepad(0);
     if(gamepad == nullptr) {
@@ -34,11 +35,13 @@ bool initGamepad() {
     }
 }
 
+/** @brief Releases the active gamepad handle. */
 void closeGamepad() {
     destroyObject(gamepad);
 }
 
 // Initialize game controller subsystem
+/** @brief Initialises the SDL joystick subsystem if it has not already been started. */
 int SDL_GameControllerInit(void) {
     if (g_joystick_initialized) {
         return 0;
@@ -54,6 +57,7 @@ int SDL_GameControllerInit(void) {
 
 
 // Get button state using SRL Digital input
+/** @brief Returns the state of an SDL-style controller button using SRL input. */
 Uint8 SDL_GameControllerGetButton(SRL::Input::Digital *gamecontroller, SDL_GameControllerButton button) {
     if (!gamecontroller || !gamecontroller->IsConnected()) {
         return 0;

@@ -22,9 +22,10 @@
 
 #include <new>
 
-#define COMMAND_SCREEN_SPD_RATE (insanespeed ? 800 : (800 / 2))
-#define COMMAND_SCREEN_VEL_RATE (insanespeed ? 800 : (800 / 2))
+#define COMMAND_SCREEN_SPD_RATE (800 / 2)
+#define COMMAND_SCREEN_VEL_RATE (800 / 2)
 
+/** @brief Converts fixed-point values to legacy signed integers with rounding. */
 static int fxpToLegacyInt(Fxp value)
 {
   int result = value.As<int>();
@@ -35,6 +36,7 @@ static int fxpToLegacyInt(Fxp value)
   return result;
 }
 
+/** @brief Converts a fixed-point value to a legacy integer scaled by the given factor. */
 static int fxpToLegacyScaledInt(Fxp value, int scale)
 {
   const int64_t scaledRaw = static_cast<int64_t>(value.RawValue()) * scale;
@@ -45,12 +47,14 @@ static int fxpToLegacyScaledInt(Fxp value, int scale)
   return -static_cast<int>(((-scaledRaw) + 0x8000) >> 16);
 }
 
+/** @brief Converts a fixed-point direction into the legacy signed direction index space. */
 static int fxpDirectionToLegacySigned(Fxp direction)
 {
   const int64_t scaledRaw = static_cast<int64_t>(direction.RawValue()) * DIV / 360;
   return static_cast<int>(scaledRaw / 65536);
 }
 
+/** @brief Converts a fixed-point direction into a wrapped legacy direction index. */
 static int fxpDirectionToLegacyWrapped(Fxp direction)
 {
   int d = fxpDirectionToLegacySigned(direction);
@@ -58,6 +62,7 @@ static int fxpDirectionToLegacyWrapped(Fxp direction)
   return d;
 }
 
+/** @brief Converts a legacy direction index back into fixed-point degrees. */
 static Fxp legacyDirectionIndexToFxpDegrees(int direction)
 {
   const int64_t raw = static_cast<int64_t>(direction) * 360 * 65536 / DIV;
@@ -75,6 +80,7 @@ static FoeCommandFreeNode* sFoeCommandFreeList = nullptr;
 }
 
 template <typename... Args>
+/** @brief Allocates a FoeCommand from the recycled pool or high work RAM. */
 static FoeCommand* createFoeCommandFromPool(Args&&... args)
 {
   if (sFoeCommandFreeList)
@@ -88,22 +94,27 @@ static FoeCommand* createFoeCommandFromPool(Args&&... args)
 
 
 
+/** @brief Constructs a command runner bound to a BulletML parser. */
 FoeCommand::FoeCommand(BulletMLParserBLB *parser, Foe *f)
   : BulletMLRunner(parser) {
   foe = f;
 }
 
+/** @brief Constructs a command runner bound to an existing BulletML state. */
 FoeCommand::FoeCommand(BulletMLState *state, Foe *f)
   : BulletMLRunner(state) {
   foe = f;
 }
 
+/** @brief Destroys the command runner. */
 FoeCommand::~FoeCommand() {}
 
+/** @brief Creates a FoeCommand for a parser-backed foe. */
 FoeCommand* createFoeCommand(BulletMLParserBLB* parser, Foe* f) {
   return createFoeCommandFromPool(parser, f);
 }
 
+/** @brief Creates a FoeCommand for an existing BulletML state. */
 FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
   if (hasBulletMlAllocFailureLatched()) {
     delete state;
@@ -112,6 +123,7 @@ FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
   return createFoeCommandFromPool(state, f);
 }
 
+/** @brief Returns a FoeCommand to the recycle pool and clears the pointer. */
 void destroyFoeCommand(FoeCommand*& cmd)
 {
   if (!cmd)
@@ -128,6 +140,7 @@ void destroyFoeCommand(FoeCommand*& cmd)
   cmd = nullptr;
 }
 
+/** @brief Frees all pooled FoeCommand storage. */
 void releaseFoeCommandPool()
 {
   while (sFoeCommandFreeList)

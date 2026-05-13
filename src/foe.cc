@@ -77,11 +77,13 @@ int getLiveProjectileCount()
   return sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets;
 }
 
+/** @brief Returns the array index for a foe pointer. */
 static inline int getFoeIndex(const Foe *fe)
 {
   return (int)(fe - foe);
 }
 
+/** @brief Marks a foe slot as active in the sparse active list. */
 static inline void markFoeSlotActive(const Foe *fe)
 {
   const int idx = getFoeIndex(fe);
@@ -94,6 +96,7 @@ static inline void markFoeSlotActive(const Foe *fe)
   foeActiveIndices[foeActiveCount++] = idx;
 }
 
+/** @brief Removes a foe slot from the sparse active list. */
 static void removeFoeSlotActive(const Foe *fe)
 {
   const int idx = getFoeIndex(fe);
@@ -111,6 +114,7 @@ static void removeFoeSlotActive(const Foe *fe)
   foeActiveCount = lastPos;
 }
 
+/** @brief Tests whether a bullet segment intersects the ship hit area. */
 static bool bulletHitsShip(const Foe *fe)
 {
   // Use closest-point distance to the swept segment [ppos, pos].
@@ -156,6 +160,7 @@ static bool bulletHitsShip(const Foe *fe)
   return distSq <= (long long)SHIP_HIT_WIDTH;
 }
 
+/** @brief Removes a foe slot without destroying its command object. */
 static void removeFoeForcedNoDeleteCmd(Foe *fe)
 {
   if (fe->spc == ACTIVE_BULLET)
@@ -183,6 +188,7 @@ static void removeFoeForcedNoDeleteCmd(Foe *fe)
   removeFoeSlotActive(fe);
 }
 
+/** @brief Removes a foe slot and destroys its command object if present. */
 static void removeFoeForced(Foe *fe)
 {
   removeFoeForcedNoDeleteCmd(fe);
@@ -192,6 +198,7 @@ static void removeFoeForced(Foe *fe)
   }
 }
 
+/** @brief Removes a foe unless it is a boss entity. */
 void removeFoe(Foe *fe)
 {
   if (fe->type == BOSS_TYPE)
@@ -203,6 +210,7 @@ void removeFoe(Foe *fe)
   }
 }
 
+/** @brief Initialises all foe pools and counters. */
 void initFoes()
 {
   int i;
@@ -227,6 +235,7 @@ void initFoes()
   sLiveBossActiveBullets = 0;
 }
 
+/** @brief Releases foe command resources. */
 void closeFoes()
 {
   int i;
@@ -241,6 +250,7 @@ void closeFoes()
 
 static int foeIdx = FOE_MAX;
 
+/** @brief Finds the next available foe slot, recycling if needed. */
 static Foe *getNextFoe()
 {
   int i;
@@ -439,6 +449,7 @@ void addFoeNormalBullet(Vector *pos, Fxp rank, int d, int spd, int color)
 
 #define BULLET_WIPE_WIDTH 7200
 
+/** @brief Removes bullets in a rectangular wipe around the supplied position. */
 static void wipeBullets(Vector *pos, int width)
 {
   int i;
@@ -472,7 +483,6 @@ static int foeScanSize[] = {
 static int enemyScore[] = {500, 1000, 5000, 50000};
 
 int processSpeedDownBulletsNum = DEFAULT_SPEED_DOWN_BULLETS_NUM;
-int insanespeed = 0;
 int nowait = 0;
 static int sFoeUpdateCursor = 0;
 
@@ -858,6 +868,7 @@ static int bulletColor[BULLET_COLOR_NUM][2] = {
 
 #define BULLET_WIDTH (6 / SCREEN_DIVISOR)
 
+/** @brief Draws a 3x3 debug box for foe and bullet markers. */
 static void drawBox3x3(int x, int y,
                        Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *target)
 {

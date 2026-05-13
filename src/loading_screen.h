@@ -60,20 +60,23 @@ public:
     static constexpr int kMaxHistoryLines = 4;
     static constexpr int kMaxStepText = 47;
 
-    // Constructs with sensible defaults matching the original hard-coded values.
+    /** @brief Constructs with sensible defaults matching the original hard-coded values. */
     LoadingScreen();
 
-    // Constructs with a fully custom layout.
+    /** @brief Constructs with a fully custom layout. */
     explicit LoadingScreen(const LoadingLayout &layout);
 
-    // Display the loading screen with current progress.
-    // Clamps percent to [0, 100]. Substitutes "Loading" when step is nullptr.
+    /**
+     * @brief Displays the loading screen with current progress.
+     * @param step Current loading step text, or nullptr for the default label.
+     * @param percent Progress percentage, clamped to [0, 100].
+     */
     void Update(const char *step, int percent);
 
-    // Clear the loading overlay and restore the post-load background colour.
+    /** @brief Clears the loading overlay and restores the post-load background colour. */
     void Clear();
 
-    // Read-only access to the active layout (useful for debugging or tests).
+    /** @brief Returns read-only access to the active layout. */
     const LoadingLayout &GetLayout() const { return _layout; }
 
 private:

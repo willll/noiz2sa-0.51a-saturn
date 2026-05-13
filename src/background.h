@@ -18,9 +18,15 @@ typedef struct {
 
 #define BOARD_MAX 256
 
+/** @brief Initialises the background system. */
 void initBackground();
+/** @brief Selects the stage background for the given stage. */
 void setStageBackground(int stage);
+/** @brief Advances the background animation and scrolling. */
 void moveBackground();
+/** @brief Draws the background layer. */
 void drawBackground();
+/** @brief Returns a debug bitmap hash for the background. */
 unsigned int getBackgroundDebugBitmapHash();
+/** @brief Returns the number of debug boards currently allocated. */
 int getBackgroundDebugBoardCount();

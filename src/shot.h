@@ -18,8 +18,6 @@ typedef struct {
 
 #define SHOT_MAX 16
 
-//#define SHOT_SPEED (insanespeed ? 4096 : (4096 / SCREEN_DIVISOR))
-
 #define SHOT_SPEED (4096 / SCREEN_DIVISOR)
 
 #define SHOT_WIDTH (8 / SCREEN_DIVISOR)
@@ -27,7 +25,23 @@ typedef struct {
 
 extern Shot shot[];
 
+/**
+ * @brief Initialises the shot pool.
+ */
 void initShots();
+
+/**
+ * @brief Advances all active shots.
+ */
 void moveShots();
+
+/**
+ * @brief Draws all active shots.
+ */
 void drawShots();
+
+/**
+ * @brief Spawns a shot at the supplied position.
+ * @param pos Spawn position.
+ */
 void addShot(Vector *pos);

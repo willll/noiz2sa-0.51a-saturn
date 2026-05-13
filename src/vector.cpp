@@ -39,12 +39,14 @@ static int intSqrtU64(unsigned long long value)
   return (int)res;
 }
 
+/** @brief Computes the inner product of two vectors. */
 long long vctInnerProduct(Vector *v1, Vector *v2) {
   const long long x = (long long)v1->x * (long long)v2->x;
   const long long y = (long long)v1->y * (long long)v2->y;
   return x + y;
 }
 
+/** @brief Computes the projection of v1 onto v2. */
 Vector vctGetElement(Vector *v1, Vector *v2) {
   Vector ans;
 
@@ -65,26 +67,31 @@ Vector vctGetElement(Vector *v1, Vector *v2) {
   return ans;
 }
 
+/** @brief Adds v2 to v1 in place. */
 void vctAdd(Vector *v1, Vector *v2) {
   v1->x += v2->x;
   v1->y += v2->y;
 }
 
+/** @brief Subtracts v2 from v1 in place. */
 void vctSub(Vector *v1, Vector *v2) {
   v1->x -= v2->x;
   v1->y -= v2->y;
 }
 
+/** @brief Multiplies v1 by a scalar in place. */
 void vctMul(Vector *v1, int a) {
   v1->x *= a;
   v1->y *= a;
 }
 
+/** @brief Divides v1 by a scalar in place. */
 void vctDiv(Vector *v1, int a) {
   v1->x /= a;
   v1->y /= a;
 }
 
+/** @brief Tests whether a point lies on the same side of a line segment. */
 int vctCheckSide(Vector *checkPos, Vector *pos1, Vector *pos2) {
   int xo = pos2->x - pos1->x, yo = pos2->y - pos1->y;
   if ( xo == 0 ) {
@@ -101,12 +108,14 @@ int vctCheckSide(Vector *checkPos, Vector *pos1, Vector *pos2) {
   }
 }
 
+/** @brief Returns the magnitude of a vector. */
 int vctSize(Vector *v) {
   const long long xx = (long long)v->x * (long long)v->x;
   const long long yy = (long long)v->y * (long long)v->y;
   return intSqrtU64((unsigned long long)(xx + yy));
 }
 
+/** @brief Returns the distance between two vectors. */
 int vctDist(Vector *v1, Vector *v2) {
   int ax = absN(v1->x - v2->x), ay = absN(v1->y - v2->y);
   if ( ax > ay ) {

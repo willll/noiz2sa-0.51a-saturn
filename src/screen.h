@@ -70,27 +70,48 @@ struct ScreenVdpPerfStats
 	uint32_t vdp1BlitDrawUs;
 };
 
+/** @brief Initialises SDL and the rendering subsystem. */
 void initSDL();
+/** @brief Shuts down SDL and releases rendering resources. */
 void closeSDL();
+/** @brief Blends the playfield and panel surfaces. */
 void blendScreen();
+/** @brief Marks the entire playfield as dirty for redraw. */
 void markPlayfieldDirty();
+/** @brief Marks a rectangular playfield region as dirty. */
 void markPlayfieldDirtyRect(int x, int y, int width, int height);
+/** @brief Presents the current frame to the display. */
 void flipScreen();
+/** @brief Clears the main screen buffer. */
 void clearScreen();
+/** @brief Clears the left panel buffer. */
 void clearLPanel();
+/** @brief Clears the right panel buffer. */
 void clearRPanel();
+/** @brief Draws the screen smoke transition effect. */
 void smokeScreen();
+/** @brief Copies the current VDP performance stats into the output structure. */
 void consumeScreenVdpPerfStats(ScreenVdpPerfStats *outStats);
+/** @brief Draws a thick line with two colours. */
 void drawThickLine(int x1, int y1, int x2, int y2, Canvas::Pixel color1, Canvas::Pixel color2, int width);
+/** @brief Draws a line into the given pixel buffer. */
 void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Canvas::Pixel *buf);
+/** @brief Draws a filled box into the given pixel buffer. */
 void drawBox(int x, int y, int width, int height,
 	     Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf);
+/** @brief Draws a filled panel box into the given pixel buffer. */
 void drawBoxPanel(int x, int y, int width, int height,
 		  Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf);
+/** @brief Draws an integer as a sprite number sequence. */
 int drawNum(int n, int x ,int y, int s, int c1, int c2);
+/** @brief Draws an integer aligned to the right. */
 int drawNumRight(int n, int x ,int y, int s, int c1, int c2);
+/** @brief Draws an integer centered at the target position. */
 int drawNumCenter(int n, int x ,int y, int s, int c1, int c2);
+/** @brief Draws a sprite from the sprite table. */
 void drawSprite(const uint8_t n, const int16_t x, const int16_t y);
 
+/** @brief Returns the current pad state bitmask. */
 int getPadState();
+/** @brief Returns the current button state bitmask. */
 int getButtonState();

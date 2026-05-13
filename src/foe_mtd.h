@@ -19,17 +19,25 @@
 #define HARD_SPEED_DOWN_BULLETS_NUM 120
 
 extern int processSpeedDownBulletsNum;
-extern int insanespeed;
 extern int nowait;
 
+/** @brief Initialises foe state and allocators. */
 void initFoes();
+/** @brief Releases all foe state. */
 void closeFoes();
+/** @brief Advances all active foes and bullets. */
 void moveFoes();
+/** @brief Clears every foe and bullet from the field. */
 void clearFoes();
+/** @brief Clears only zako enemies. */
 void clearFoesZako();
+/** @brief Draws bullet wake effects. */
 void drawBulletsWake();
+/** @brief Draws all active foes. */
 void drawFoes();
+/** @brief Draws all active bullets. */
 void drawBullets();
+/** @brief Draws the debug overlay for foe bullets. */
 void drawBulletDebugOverlay();
 
 struct FoePressureStats {
@@ -39,11 +47,14 @@ struct FoePressureStats {
   uint32_t culledBullets; // bullets skipped (entirely off-screen)
   uint32_t foeBudget;     // effective foe update budget used this tick
 };
+/** @brief Copies the latest foe pressure statistics into the output structure. */
 void consumeFoePressureStats(FoePressureStats *outStats);
 
 // Set the maximum number of foe slots updated per moveFoes() tick.
 // Pass 0 to remove the cap (process all active foes every frame).
+/** @brief Sets the maximum number of foe slots updated per frame. */
 void setFoeBudgetLimit(int limit);
 
 // Returns the total number of live projectiles (active + normal + boss active bullets).
+/** @brief Returns the total number of live projectiles. */
 int getLiveProjectileCount();

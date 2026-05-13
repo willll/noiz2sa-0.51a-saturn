@@ -124,6 +124,12 @@ namespace SRL::Backup {
         using BupGetDate = void (*)(uint32_t device, BupDate *table);
         using BupSetDate = int32_t (*)(BupDate *table);
 
+        /**
+         * @brief Resolves a BUP library function pointer from the in-RAM work area.
+         * @tparam T     Function pointer type matching the target BUP routine.
+         * @param offset Byte offset within the work area for the desired function entry.
+         * @return Callable function pointer of type T.
+         */
         template<typename T>
         static auto GetBupFunction(uint32_t offset)
         {
@@ -134,34 +140,56 @@ namespace SRL::Backup {
             );
         }
 
-        // Load BUP driver from BIOS to HWRAM and setup BupDeviceConfig
+        /**
+         * @brief Loads the BUP driver from BIOS into HWRAM and initialises device configuration.
+         * @param lib    Pointer to the library space buffer (LIB_SPACE_SIZE bytes in HWRAM).
+         * @param work   Pointer to the work area buffer (WORK_SPACE_SIZE bytes in LWRAM).
+         * @param config Array of three BupDeviceConfig entries, one per supported device.
+         */
         static void DriverInit(uint32_t* lib, uint32_t* work, BupDeviceConfig* config) {
             reinterpret_cast<BupInit>(BupLibAdress)(lib, work, config);
         }
 
-        // Select partition on BUP device
-        // returns BupStatusTable
+        /**
+         * @brief Selects a partition on the given backup device.
+         * @param device    The backup device to target.
+         * @param partition Zero-based partition index to select.
+         * @return BupStatus code indicating success or failure.
+         */
         static int32_t SelectPartition(BupDevice device, uint16_t partition) {
             auto func = GetBupFunction<BupSelPart>(4);
             return func(device, partition);
         }
 
-        // Format BUP device
-        // Returns BupStatus
+        /**
+         * @brief Formats the given backup device, erasing all stored data.
+         * @param device The backup device to format.
+         * @return BupStatus code indicating success or failure.
+         */
         static int32_t FormatDevice(BupDevice device) {
             auto func = GetBupFunction<BupFormat>(8);
             return func(device);
         }
 
-        // Return device status
+        /**
+         * @brief Queries the status and capacity information of a backup device.
+         * @param device  The backup device to query.
+         * @param outstat Output parameter filled with total/free size and block counts.
+         * @return BupStatus code indicating device health.
+         */
         static int32_t Status(BupDevice device, BupStatusTable* outstat)
         {
             auto func = GetBupFunction<BupStat>(12);
             return func(device, 1, outstat);
         }
         
-        // Write file to BUP device
-        // returns BupStatusTable
+        /**
+         * @brief Writes a file to the backup device.
+         * @param device    Target backup device.
+         * @param file      Pointer to the BupFile describing the file name, comment, data, and size.
+         * @param overwrite If true, an existing file with the same name is overwritten.
+         * @return BupStatus code indicating success or failure.
+         */
         static int32_t Write(BupDevice device, BupFile *file, bool overwrite)
         {
             BupWriteTable WriteTable = {};
@@ -208,24 +236,33 @@ namespace SRL::Backup {
             );
         }
         
-        // Expands the date and time data in the BupDate table
-        // Get backup device last edit date
-        // returns nothing
+        /**
+         * @brief Retrieves the last-edit date/time from the backup device clock.
+         * @param device The backup device to read the date from.
+         * @param table  Output BupDate struct populated with year, month, day, hour, minute, weekday.
+         */
         static void GetDate(BupDevice device, BupDate *table)
         {
             auto func = GetBupFunction<BupGetDate>(36);
             func(device, table);
         }
 
-        // Compresses the date and time data into the BupDate table
-        // Prepares date for writetable
-        // returns nothing
+        /**
+         * @brief Compresses a BupDate struct into a packed timestamp for the write table.
+         * @param table Pointer to a BupDate to compress.
+         * @return Packed timestamp value suitable for BupWriteTable::date.
+         */
         static uint8_t SetDate(BupDate *table)
         {
             auto func = GetBupFunction<BupSetDate>(40);
             return func(table);
         }
         
+        /**
+         * @brief Allocates BUP library/work buffers and initialises the BUP driver.
+         *        Idempotent — safe to call multiple times; returns immediately if already initialised.
+         * @return true on successful initialisation, false if memory allocation failed.
+         */
         static bool Init()
         {
             if (Initialized)
@@ -268,6 +305,12 @@ namespace SRL::Backup {
             return true;
         }        
         
+        /**
+         * @brief Mounts a backup device and caches its status/capacity table.
+         *        If the device is unformatted the mount fails without auto-formatting.
+         * @param device The backup device to mount.
+         * @return true if the device was mounted successfully, false otherwise.
+         */
         static bool Mount(BupDevice device)
         {
             if (Initialized)
@@ -309,7 +352,14 @@ namespace SRL::Backup {
         // work around - set filename to 13 chars.
         // next attempt:  use original Sega BUP library
         
-        // constructor
+        /**
+         * @brief Constructs a Device, initialises the BUP driver, mounts available devices,
+         *        and configures the embedded BupFile descriptor.
+         * @param name     Null-terminated file name (max MAX_FILENAME_LENGTH-1 characters).
+         * @param comment  Null-terminated comment string (max MAX_COMMENT_LENGTH-1 characters).
+         * @param datasize Expected data payload size in bytes.
+         * @param language Language code for the comment string (default: English).
+         */
         Device
         (
             unsigned char* const name,
@@ -336,7 +386,13 @@ namespace SRL::Backup {
             File.Language = language;
         }
         
-        // bool Save(BupDevice device, BupFile* file, bool overwrite = true)
+        /**
+         * @brief Saves a data buffer to the backup device under this instance's file name.
+         * @param device    Target backup device.
+         * @param data      Pointer to the raw data to persist.
+         * @param overwrite If true (default), an existing file with the same name is replaced.
+         * @return BupStatus code, or 1 if the device is not mounted.
+         */
         int32_t Save(BupDevice device, void* data, bool overwrite = true)
         {
             if (!BupState[device].isMounted)
@@ -348,14 +404,25 @@ namespace SRL::Backup {
             return ret;
         }
         
-        // void?
+        /**
+         * @brief Checks whether a file with the given name exists on the backup device.
+         * @param device   The backup device to search.
+         * @param filename Null-terminated file name to look up.
+         * @return BupStatus::Found if the file exists, BupStatus::NotFound otherwise.
+         */
         int32_t FileExists(BupDevice device, unsigned char *filename)
         {
             auto func = GetBupFunction<BupExists>(20);
             return func(device, (uint8_t*)filename, reinterpret_cast<volatile uint8_t*>(1));
         }
 
-        // void?
+        /**
+         * @brief Reads a file from the backup device into a caller-supplied buffer.
+         * @param device   The backup device to read from.
+         * @param filename Null-terminated name of the file to read.
+         * @param data     Caller-allocated buffer large enough to hold the file payload.
+         * @return BupStatus code indicating success or failure.
+         */
         int32_t Read(BupDevice device, unsigned char *filename, uint8_t *data)
         {
             auto func = GetBupFunction<BupRead>(20);
@@ -364,7 +431,12 @@ namespace SRL::Backup {
         }
         
         
-        // void?
+        /**
+         * @brief Deletes a file from the backup device.
+         * @param device   The backup device to delete from.
+         * @param filename Null-terminated name of the file to delete.
+         * @return BupStatus code indicating success or failure.
+         */
         int32_t Delete(BupDevice device, unsigned char *filename)
         {
             
@@ -373,6 +445,11 @@ namespace SRL::Backup {
         }
         
         
+        /**
+         * @brief Formats the given backup device if it is currently unformatted.
+         * @param device The backup device to format.
+         * @return true if the device was successfully formatted and mounted, false otherwise.
+         */
         bool Format(BupDevice device)
         {
             if (Initialized)
@@ -403,6 +480,11 @@ namespace SRL::Backup {
             }
         }
 
+        /**
+         * @brief Refreshes and returns the mount status of the given backup device.
+         * @param device The backup device to check.
+         * @return true if the device is successfully mounted, false otherwise.
+         */
         static bool ReturnStatus(BupDevice device)
         {
             if (Initialized)
@@ -419,8 +501,12 @@ namespace SRL::Backup {
             }
         }        
 
-        // Gets Directory information from BUP device (maybe for FDD use?)
-        // returns Directory information
+        /**
+         * @brief Retrieves directory entry information for a file on the backup device.
+         * @param device   The backup device to query.
+         * @param filename Null-terminated file name to look up, or nullptr for all entries.
+         * @return BupStatus code with directory information populated in the internal write table.
+         */
         static int32_t DirInfo(BupDevice device, uint8_t *filename)
         {
             BupWriteTable WriteTable = {};
@@ -430,14 +516,23 @@ namespace SRL::Backup {
             return func(device, filename, tbsize, &WriteTable);
         }
 
-        // Verifies data written to the BUP device (checksum)
-        // returns BupStatusTable
+        /**
+         * @brief Verifies the integrity of a file on the backup device by checksum comparison.
+         * @param device   The backup device to verify against.
+         * @param filename Null-terminated name of the file to verify.
+         * @param data     Buffer containing the expected data to compare.
+         * @return BupStatus code; Success if data matches, Broken if checksum fails.
+         */
         static int32_t Verify(BupDevice device, uint8_t *filename, uint8_t *data)
         {
             auto func = GetBupFunction<BupVerify>(32);
             return func(device, filename, data);
         }
 
+        /**
+         * @brief Marks all devices as unmounted and resets the initialisation flag.
+         *        Allocated library/work buffers are retained for reuse by future Device instances.
+         */
         static void Unmount(void)
         {
             for (auto& device : BupState)
@@ -448,6 +543,10 @@ namespace SRL::Backup {
             Initialized = false;
         }
 
+        /**
+         * @brief Frees the BUP library and work area buffers and fully resets driver state.
+         *        After this call the driver must be re-initialised before any backup operation.
+         */
         static void ReleaseBuffers(void)
         {
             if (LibrarySpace)

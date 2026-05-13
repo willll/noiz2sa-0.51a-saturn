@@ -29,12 +29,10 @@
 Ship ship;
 
 #define SHIP_SPEED (1280 / SCREEN_DIVISOR)
-// #define SHIP_SPEED (insanespeed ? 1280 : (1280 / SCREEN_DIVISOR))
 #define SHIP_SLOW_SPEED (640 / SCREEN_DIVISOR)
-// #define SHIP_SLOW_SPEED (insanespeed ? 640 : (640 / SCREEN_DIVISOR))
 #define SHIP_SLOW_DOWN (64 / SCREEN_DIVISOR)
-// #define SHIP_SLOW_DOWN (insanespeed ? 64 : (64 / SCREEN_DIVISOR))
 
+/** @brief Initialises the player ship state. */
 void initShip()
 {
   ship.pos.x = (SCAN_WIDTH / 2) << 8;
@@ -61,6 +59,7 @@ static int shipMv[8][2] = {
     {-181, -181},
 };
 
+/** @brief Advances the ship position and handles movement/shooting input. */
 void moveShip()
 {
   int pad = getPadState();
@@ -159,6 +158,7 @@ void moveShip()
 #define SHIP_DRUM_WIDTH (15 / SCREEN_DIVISOR)
 #define SHIP_DRUM_SIZE (4 / SCREEN_DIVISOR)
 
+/** @brief Draws the player ship. */
 void drawShip()
 {
   int x, y, d;
@@ -184,6 +184,7 @@ void drawShip()
   }
 }
 
+/** @brief Destroys the ship and triggers the appropriate transition. */
 void destroyShip()
 {
   if (status != IN_GAME)
@@ -211,6 +212,7 @@ void destroyShip()
   }
 }
 
+/** @brief Returns the player's direction index toward a target point. */
 int getPlayerDeg(int x, int y)
 {
   return getDeg(ship.pos.x - x, ship.pos.y - y);

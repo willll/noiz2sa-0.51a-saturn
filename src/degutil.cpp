@@ -19,6 +19,7 @@ using SaturnMath::Types::Fxp;
 static int tantbl[TAN_TABLE_SIZE+2];
 int sctbl[SC_TABLE_SIZE+SC_TABLE_SIZE/4];
 
+/** @brief Initialises the degree and sine lookup tables. */
 void initDegutil() {
   int i, d = 0;
   const Fxp tanScale = Fxp::Convert(TAN_TABLE_SIZE);
@@ -43,6 +44,7 @@ void initDegutil() {
   }
 }
 
+/** @brief Returns a legacy direction index for the given vector. */
 int getDeg(int x, int y) {
   int tx, ty;
   int f, od, tn;
@@ -97,6 +99,7 @@ int getDeg(int x, int y) {
   return((od+tantbl[tn]*f)&(DIV-1));
 }
 
+/** @brief Returns an integer distance between two coordinates. */
 int getDistance(int x, int y) {
   if ( x < 0 ) x = -x;
   if ( y < 0 ) y = -y;

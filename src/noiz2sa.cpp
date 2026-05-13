@@ -52,6 +52,7 @@ void updateLoadingProgress(const char *step, int percent)
 RandomGenerator *g_random = nullptr;
 
 // Initialize and load preference.
+/** @brief Performs one-time startup initialisation. */
 static void initFirst()
 {
   const char* steps[] = {
@@ -93,6 +94,7 @@ static void initFirst()
 }
 
 // Quit and save preference.
+/** @brief Runs shutdown cleanup and exits the program. */
 void quitLast()
 {
   SRL::Logger::LogInfo("[QUIT] Shutdown sequence starting");
@@ -143,12 +145,14 @@ static StageParams stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1] = {
     {0, -1.0f, 0.0f},
 };
 
+/** @brief Initialises title-stage data for the supplied stage index. */
 void initTitleStage(int stg)
 {
   initFoes();
   initBarrages(stagePrm[stg].seed, stagePrm[stg].startLevel, stagePrm[stg].levelInc);
 }
 
+/** @brief Initialises the title scene. */
 void initTitle()
 {
   SRL::Logger::LogInfo("[STATE] Entering TITLE screen");
@@ -180,6 +184,7 @@ void initTitle()
   SRL::Logger::LogInfo("[STATE] TITLE screen ready");
 }
 
+/** @brief Initialises a gameplay session for the supplied stage. */
 void initGame(int stg)
 {
   SRL::Logger::LogInfo("[STATE] Entering IN_GAME (stage %d)", stg);
@@ -232,6 +237,7 @@ void initGame(int stg)
   SRL::Logger::LogInfo("[STATE] IN_GAME (stage %d) ready - Starting gameplay", stg);
 }
 
+/** @brief Initialises the game-over scene. */
 void initGameover()
 {
 #if HW_DEBUG
@@ -249,6 +255,7 @@ void initGameover()
   SRL::Logger::LogInfo("[STATE] GAMEOVER screen ready - Game Over!");
 }
 
+/** @brief Initialises the stage-clear scene. */
 void initStageClear()
 {
 #if HW_DEBUG
@@ -1125,8 +1132,6 @@ int main()
   gFpsWindowInitialized = true;
   gSyncCount = 0;
   gLastRenderSyncCount = 0;
-
-  //playMusic(7);
 
   while (!done)
   {

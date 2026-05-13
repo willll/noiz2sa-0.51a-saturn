@@ -62,6 +62,7 @@ static bool ponesoundDriverInitialized = false;
 static bool chunkInvalidWarned[CHUNK_NUM];
 static bool chunkReloadAttempted[CHUNK_NUM];
 
+/** @brief Loads a PCM chunk into Ponesound, retrying until the driver is ready. */
 static int16_t loadPonesoundChunkWithRetry(const uint8_t* data, int32_t size)
 {
   int16_t id = -1;
@@ -82,6 +83,7 @@ static int16_t loadPonesoundChunkWithRetry(const uint8_t* data, int32_t size)
   return id;
 }
 
+/** @brief Loads a PCM chunk from disc and registers it with Ponesound. */
 static int16_t loadPonesoundChunkFromCd(int idx)
 {
   char name[32];
@@ -114,6 +116,7 @@ static int16_t loadPonesoundChunkFromCd(int idx)
 }
 #endif
 
+/** @brief Shuts down the audio backend and releases sound resources. */
 void closeSound() {
   SRL::Logger::LogDebug("[SOUND] closeSound() called");
   if (!useAudio) {
@@ -148,6 +151,7 @@ void closeSound() {
   SRL::Logger::LogDebug("[SOUND] closeSound: Audio closed");
 }
 
+/** @brief Loads BGM and SFX assets from disc. */
 void loadSounds() {
   SRL::Logger::LogDebug("[SOUND] loadSounds() called");
 
@@ -298,6 +302,7 @@ void loadSounds() {
 #endif
 }
 
+/** @brief Initialises the sound backend selection and runtime state. */
 void initSound() {
 #if NOIZ2SA_ENABLE_SOUND == 0
   SRL::Logger::LogDebug("[SOUND] initSound() called (NOIZ2SA_ENABLE_SOUND=0)");
@@ -340,6 +345,7 @@ void initSound() {
 #endif
 }
 
+/** @brief Starts playback of the requested music track. */
 void playMusic(int idx) {
   if (!useAudio) {
     return;
@@ -361,6 +367,7 @@ void playMusic(int idx) {
 #endif
 }
 
+/** @brief Fades out the currently playing music track. */
 void fadeMusic() {
   if (!useAudio) {
     return;
@@ -375,6 +382,7 @@ void fadeMusic() {
 #endif
 }
 
+/** @brief Stops the currently playing music track immediately. */
 void stopMusic() {
   if (!useAudio) {
     return;
@@ -389,6 +397,7 @@ void stopMusic() {
 #endif
 }
 
+/** @brief Plays a sound effect chunk. */
 void playChunk(int idx) {
   if (!useAudio) {
     return;
@@ -453,6 +462,7 @@ void playChunk(int idx) {
 #endif
 }
 
+/** @brief Advances sound driver state once per frame. */
 void soundTick() {
 #if NOIZ2SA_ENABLE_SOUND == 1
 #  if SRL_USE_SGL_SOUND_DRIVER == 0
