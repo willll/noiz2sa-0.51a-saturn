@@ -96,7 +96,8 @@ HiScoreLoadStatus loadHiScorePersistence(HiScore *outHiScore)
     return HiScoreLoadStatus::InvalidData;
   }
 
-  Device *device = getBackupDevice(false);
+  // Load can be the first persistence operation at boot, so allow lazy init.
+  Device *device = getBackupDevice(true);
   if (device == nullptr)
   {
     return HiScoreLoadStatus::BackendUnavailable;
