@@ -826,6 +826,20 @@ static void drawFpsCounter()
   SRL::Debug::Print(1, 2, "FPS: %d.%02d", (int)fpsWhole, (int)fpsFrac);
 }
 
+static void drawMemStats()
+{
+#if NOIZ2SA_SHOW_FREE_HWRAM
+  const uint32_t hwFree = (uint32_t)SRL::Memory::HighWorkRam::GetFreeSpace();
+  SRL::Debug::PrintClearLine(3);
+  SRL::Debug::Print(1, 3, "HWRAM: %u", (unsigned)hwFree);
+#endif
+#if NOIZ2SA_SHOW_FREE_LWRAM
+  const uint32_t lwFree = (uint32_t)SRL::Memory::LowWorkRam::GetFreeSpace();
+  SRL::Debug::PrintClearLine(4);
+  SRL::Debug::Print(1, 4, "LWRAM: %u", (unsigned)lwFree);
+#endif
+}
+
 static void logFpsToSerialIfDue()
 {
 #if HW_DEBUG
@@ -1466,7 +1480,12 @@ int main()
         }
       }
 
+#if NOIZ2SA_SHOW_FPS
       drawFpsCounter();
+#endif
+#if NOIZ2SA_SHOW_FREE_HWRAM || NOIZ2SA_SHOW_FREE_LWRAM
+      drawMemStats();
+#endif
       logFpsToSerialIfDue();
     }
 

@@ -102,8 +102,33 @@ set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 # their console logs unless you explicitly want DevCart output.
 option(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE "Enable Saturn backup-device hi-score persistence" ON)
 
+# FPS display option
+option(NOIZ2SA_SHOW_FPS "Display FPS counter on screen" ON)
+
+# Memory debug display options
+option(NOIZ2SA_SHOW_FREE_HWRAM "Display free High Work RAM on screen" OFF)
+option(NOIZ2SA_SHOW_FREE_LWRAM "Display free Low Work RAM on screen" OFF)
+
 # Performance/Debug logging option
 option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
+if(NOIZ2SA_SHOW_FPS)
+    add_compile_definitions(NOIZ2SA_SHOW_FPS=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_FPS=0)
+endif()
+
+if(NOIZ2SA_SHOW_FREE_HWRAM)
+    add_compile_definitions(NOIZ2SA_SHOW_FREE_HWRAM=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_FREE_HWRAM=0)
+endif()
+
+if(NOIZ2SA_SHOW_FREE_LWRAM)
+    add_compile_definitions(NOIZ2SA_SHOW_FREE_LWRAM=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_FREE_LWRAM=0)
+endif()
+
 if(NOIZ2SA_ENABLE_PERF_LOGS)
     add_compile_definitions(NOIZ2SA_ENABLE_PERF_LOGS=1)
 else()
