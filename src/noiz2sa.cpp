@@ -80,7 +80,11 @@ static void initFirst()
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
+  SRL::Logger::LogInfo("[INIT-BARRIER] before-initBarragemanager hwfree=%lu",
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
   initBarragemanager();
+  SRL::Logger::LogInfo("[INIT-BARRIER] after-initBarragemanager hwfree=%lu",
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
   SRL::Logger::LogDebug("[INIT] Barrage manager initialized");
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
@@ -356,6 +360,76 @@ static inline bool shouldThrottleSpawnsForLoad(int gameStatus, int liveProjectil
   return (liveProjectiles >= 220) || (hwFree > 0u && hwFree < 24000u);
 }
 
+static inline bool shouldClearBulletMlAllocFailureLatch(uint32_t hwFree, int liveProjectiles)
+{
+  static uint32_t sLastAllocFailCount = 0u;
+  static int sRetryTick = 0;
+  static int sLatchedSinceTick = -1;
+  static int sLastLatchLogTick = -1000;
+
+  const uint32_t failCount = (uint32_t)getBulletMlAllocFailureCount();
+  if (failCount != sLastAllocFailCount)
+  {
+    // Back off retries after each new alloc failure to avoid immediate re-fail loops.
+    sLastAllocFailCount = failCount;
+    sRetryTick = tick + ((status == TITLE) ? 30 : 90);
+  }
+
+  if (!hasBulletMlAllocFailureLatched())
+  {
+    sLatchedSinceTick = -1;
+    sLastLatchLogTick = -1000;
+    return false;
+  }
+
+  if (sLatchedSinceTick < 0)
+  {
+    sLatchedSinceTick = tick;
+  }
+
+  if (tick < sRetryTick)
+  {
+    return false;
+  }
+
+  uint32_t minFreeBeforeRetry = (status == TITLE) ? 28000u : 36000u;
+  // If latch persists for a while in gameplay, allow a lower-memory retry.
+  if (status != TITLE && (tick - sLatchedSinceTick) >= 240)
+  {
+    minFreeBeforeRetry = 24000u;
+  }
+
+  // When latch has persisted for a long time and bullets are fully starved,
+  // allow a low-memory recovery attempt to avoid a permanent no-shoot state.
+  if (status != TITLE && (tick - sLatchedSinceTick) >= 720 && liveProjectiles <= 8)
+  {
+    minFreeBeforeRetry = 4096u;
+  }
+
+#if HW_DEBUG
+  if ((tick - sLastLatchLogTick) >= 60)
+  {
+    const int retryInTicks = (sRetryTick > tick) ? (sRetryTick - tick) : 0;
+    SRL::Logger::LogInfo(
+        "[ALLOC-LATCH] age=%d hwfree=%u live=%d retry_in=%d min_retry=%u fails=%u",
+        (tick - sLatchedSinceTick),
+        (unsigned)hwFree,
+        liveProjectiles,
+        retryInTicks,
+        (unsigned)minFreeBeforeRetry,
+        (unsigned)failCount);
+    sLastLatchLogTick = tick;
+  }
+#endif
+
+  if (hwFree > 0u && hwFree < minFreeBeforeRetry)
+  {
+    return false;
+  }
+
+  return true;
+}
+
 #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
 static volatile uint8_t gDiagPhaseTag = 0u;
 static inline void setDiagPhase(uint8_t tag)
@@ -379,9 +453,9 @@ static void move()
       ? ((tick & titleSpawnMask) == 0)
       : (!throttleSpawns || ((tick & 1) == 0));
 
-  // BulletML allocations can fail transiently under pressure. Keep failure counts
-  // for diagnostics, but clear the one-way latch each tick so spawning can recover.
-  if (hasBulletMlAllocFailureLatched())
+  // BulletML allocations can fail transiently under pressure. Retry with a short
+  // cooldown and minimum free-memory guard to avoid allocation thrash.
+  if (shouldClearBulletMlAllocFailureLatch(hwFree, liveProjectiles))
   {
     clearBulletMlAllocFailureLatch();
   }

@@ -561,6 +561,16 @@ void moveFoes()
       continue;
     }
 
+    if (fe->spc == FOE && !fe->cmd && fe->parser && !hasBulletMlAllocFailureLatched())
+    {
+      fe->cmd = createFoeCommand(fe->parser, fe);
+      if (!fe->cmd)
+      {
+        removeFoeForced(fe);
+        continue;
+      }
+    }
+
     if (fe->cmd)
     {
       if (fe->type == BOSS_TYPE)
@@ -579,6 +589,16 @@ void moveFoes()
             continue;
           }
           // fe->cmd->reset();
+        }
+      }
+      else if (fe->spc == FOE && !hasBulletMlAllocFailureLatched() && fe->cmd->isEnd())
+      {
+        destroyFoeCommand(fe->cmd);
+        fe->cmd = createFoeCommand(fe->parser, fe);
+        if (!fe->cmd)
+        {
+          removeFoeForced(fe);
+          continue;
         }
       }
       // Iter J: Skip BulletML step for ACTIVE_BULLET and BOSS_ACTIVE_BULLET on odd ticks.
