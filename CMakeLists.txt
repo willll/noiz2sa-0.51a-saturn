@@ -100,14 +100,14 @@ set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 
 # Real-hardware logging is opt-in for non-HW_DEBUG builds so emulator runs keep
 # their console logs unless you explicitly want DevCart output.
-option(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE "Enable Saturn backup-device hi-score persistence" ON)
+option(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE "Enable Saturn backup-device hi-score persistence" OFF)
 
 # FPS display option
 option(NOIZ2SA_SHOW_FPS "Display FPS counter on screen" ON)
 
 # Memory debug display options
-option(NOIZ2SA_SHOW_FREE_HWRAM "Display free High Work RAM on screen" OFF)
-option(NOIZ2SA_SHOW_FREE_LWRAM "Display free Low Work RAM on screen" OFF)
+option(NOIZ2SA_SHOW_FREE_HWRAM "Display free High Work RAM on screen" ON)
+option(NOIZ2SA_SHOW_FREE_LWRAM "Display free Low Work RAM on screen" ON)
 
 # Performance/Debug logging option
 option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
