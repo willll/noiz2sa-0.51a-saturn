@@ -25,6 +25,7 @@
 #include <srl_log.hpp>
 #include <srl_system.hpp>
 #include <srl_cd.hpp>
+#include <srl_memory.hpp>
 #include <srl_string.hpp>
 
 #if HW_DEBUG
@@ -50,6 +51,10 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   const HWDebugBulletML::EmbeddedPattern* patterns = nullptr;
   uint32_t patternCount = 0;
 
+  SRL::Logger::LogInfo("[INIT-BARRAGE] begin type=%s hwfree=%lu",
+                       dirPath,
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+
   if (strcmp(dirPath, "ZAKO") == 0)
   {
     patterns = HWDebugBulletML::kZakoPatterns;
@@ -74,6 +79,11 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
   for (uint32_t patternIndex = 0; patternIndex < patternCount && i < BARRAGE_PATTERN_MAX; ++patternIndex)
   {
+    SRL::Logger::LogInfo("[INIT-BARRAGE] parse-begin type=%s idx=%lu/%lu hwfree=%lu",
+                         dirPath,
+                         (unsigned long)(patternIndex + 1u),
+                         (unsigned long)patternCount,
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
     brg[i].bulletml = createEmbeddedBulletMlParser(patterns[patternIndex].name, patterns[patternIndex].data, patterns[patternIndex].size);
     if (!brg[i].bulletml->build())
     {
@@ -81,8 +91,19 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
       destroyObject(brg[i].bulletml);
       SRL::System::Exit(1);
     }
+    SRL::Logger::LogInfo("[INIT-BARRAGE] parse-end type=%s idx=%lu/%lu name=%s hwfree=%lu",
+                         dirPath,
+                         (unsigned long)(patternIndex + 1u),
+                         (unsigned long)patternCount,
+                         patterns[patternIndex].name,
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
     i++;
   }
+
+  SRL::Logger::LogInfo("[INIT-BARRAGE] done type=%s loaded=%d hwfree=%lu",
+                       dirPath,
+                       i,
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
 
   return i;
 #else
@@ -214,8 +235,17 @@ void initBarragemanager() {
   SRL::Logger::LogDebug("[BARRAGE] Initializing barrage manager");
   
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
+    SRL::Logger::LogInfo("[INIT-BARRAGE] type-begin idx=%d name=%s hwfree=%lu",
+                         i,
+                         BARRAGE_DIR_NAME[i],
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
     SRL::Logger::LogDebug("[BARRAGE] Loading barrage type %d: %s", i, BARRAGE_DIR_NAME[i]);
     barragePatternNum[i] = readBulletMLFiles(BARRAGE_DIR_NAME[i], barragePattern[i]);
+    SRL::Logger::LogInfo("[INIT-BARRAGE] type-end idx=%d name=%s loaded=%d hwfree=%lu",
+                         i,
+                         BARRAGE_DIR_NAME[i],
+                         barragePatternNum[i],
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
     SRL::Logger::LogInfo("[BARRAGE] Type %d: Loaded %d patterns", i, barragePatternNum[i]);
     SRL::Logger::LogInfo("--------");
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
