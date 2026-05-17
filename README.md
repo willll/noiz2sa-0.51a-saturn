@@ -138,6 +138,9 @@ ctest -R bulletml_all_xml_recursive_test -V
 # Collision campaign
 bash Tests/test_campaign.sh --emulator mednafen --strict
 
+# Collision campaign on USBGamers with PSU-assisted power-cycle preflight
+bash Tests/test_campaign.sh --emulator USBGamers --psu-ip saturnpsu.local --strict
+
 # Background campaign
 bash Tests/test_background_campaign.sh --emulator mednafen --strict
 
@@ -159,7 +162,17 @@ Notes:
 - Emulator-backed campaign scripts reconfigure CMake with `SRL_LOG_OUTPUT=EMULATOR` before building so runtime traces and UT completion markers are visible in the emulator log.
 - `ctest -V` does not currently register a dedicated SH2 BulletML campaign entry. Use `Tests/test_bulletml_campaign.sh` directly.
 - The SH2 BulletML campaign is currently built with `BULLETML_SKIP_CD_TESTS` (CD-file-dependent manifest parity test is skipped in campaign runs).
-- For real hardware (`USBGamers`), the most reliable sequence is power-cycle, then `usbreset "FT245R USB FIFO"`, then a short settle delay before campaign upload.
+- For real hardware (`USBGamers`), the campaign scripts now run a required preflight before upload. Use `--psu-ip` to include automatic PSU power-cycle:
+
+```bash
+# Manual power-cycle preflight
+bash Tests/test_campaign.sh --emulator USBGamers --strict
+
+# PSU-assisted preflight (recommended for hardware automation)
+bash Tests/test_campaign.sh --emulator USBGamers --psu-ip saturnpsu.local --strict
+```
+
+- If preflight reports `device not found`, campaign run is aborted before upload. Repeat power-cycle + `usbreset` and retry.
 
 Additional test implementation details and historical status are documented in:
 
