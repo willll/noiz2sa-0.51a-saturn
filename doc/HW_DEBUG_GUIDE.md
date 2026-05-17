@@ -91,6 +91,42 @@ This script:
 3. Transfers the binary to the cartridge via USB
 4. Boots the game on Saturn
 
+### USBGamers Recovery Preflight (Required Before Campaign Runs)
+
+Before running any `--emulator USBGamers` campaign, execute this sequence:
+
+```bash
+# 1) Power-cycle Saturn (manual toggle or PSU API)
+
+# 2) Reset FT245R endpoint on host
+usbreset "FT245R USB FIFO"
+
+# 3) Short settle delay
+sleep 2
+
+# 4) Verify cartridge link is present
+ftx -c
+```
+
+If `ftx -c` returns `device not found`, the hardware link is not ready; repeat the sequence before retrying uploads.
+
+All SH2 campaign wrappers in `Tests/` (`test_campaign.sh`, `test_background_campaign.sh`, `test_bulletml_campaign.sh`, `test_factory_campaign.sh`) enforce this preflight automatically when `--emulator USBGamers` is selected.
+
+To include PSU automation in campaign runs, pass `--psu-ip`:
+
+```bash
+bash Tests/test_campaign.sh --emulator USBGamers --psu-ip saturnpsu.local --strict
+```
+
+Campaign preflight behavior with `--psu-ip`:
+1. `POST /api/v1/off`
+2. wait 2 seconds
+3. `POST /api/v1/on`
+4. wait 10 seconds
+5. `usbreset "FT245R USB FIFO"`
+6. wait `${USB_SETTLE_SECONDS:-2}` seconds
+7. `ftx -c` probe; abort if probe fails
+
 **Expected Output**:
 ```
 BuildDrop/noiz2sa.elf found
@@ -120,7 +156,7 @@ For automated end-to-end testing on real hardware with power control, use the pr
 For the PSU controller currently used in this workspace, the IP is:
 
 ```text
-http://192.168.1.106/
+http://saturnpsu.local/
 ```
 
 See [REAL_HARDWARE_TESTING.md](REAL_HARDWARE_TESTING.md) for the REST API details and the full power-cycle workflow.
@@ -143,8 +179,8 @@ The `test_hardware_full.sh` script orchestrates a complete hardware test cycle:
 cmake -B build_hw_debug -DHW_DEBUG=ON
 cmake --build build_hw_debug
 
-# Run full hardware test (requires ESP-SaturnPSU_Control at 192.168.1.106)
-./tools/test_hardware_full.sh 192.168.1.106
+# Run full hardware test (requires ESP-SaturnPSU_Control at saturnpsu.local)
+./tools/test_hardware_full.sh saturnpsu.local
 ```
 
 The script will:
@@ -159,7 +195,7 @@ The script will:
 The script expects the ESP-SaturnPSU_Control device to be reachable at the provided IP:
 
 ```bash
-curl -sS http://192.168.1.106/api/v1/status  # Should return {"relay_status":"...", "latch":...}
+curl -sS http://saturnpsu.local/api/v1/status  # Should return {"relay_status":"...", "latch":...}
 ```
 
 If the device is unreachable, ensure:
@@ -299,6 +335,12 @@ If you want to manually monitor during gameplay:
 
 ```bash
 # Terminal 1: Upload
+# Optional but recommended before upload
+usbreset "FT245R USB FIFO"
+sleep 2
+ftx -c
+
+# Then upload
 ./tools/run_on_saturn.bat
 
 # Terminal 2: Monitor (in parallel)
@@ -323,28 +365,28 @@ The device provides:
 
 ### REST API Endpoints
 
-Assuming the device is at IP `192.168.1.100` (or your actual device IP, e.g., `192.168.1.106`):
+Assuming the device is at `saturnpsu.local`:
 
 #### Power Control
 
 ```bash
 # Turn ON
-curl -X POST http://192.168.1.106/api/v1/on
+curl -X POST http://saturnpsu.local/api/v1/on
 # Response: {"relay_status":"ON"}
 
 # Turn OFF
-curl -X POST http://192.168.1.106/api/v1/off
+curl -X POST http://saturnpsu.local/api/v1/off
 # Response: {"relay_status":"OFF"}
 
 # Toggle
-curl -X POST http://192.168.1.106/api/v1/toggle
+curl -X POST http://saturnpsu.local/api/v1/toggle
 # Response: {"relay_status":"ON"} or {"relay_status":"OFF"}
 ```
 
 #### Check Status
 
 ```bash
-curl http://192.168.1.106/api/v1/status
+curl http://saturnpsu.local/api/v1/status
 # Response: {"relay_status":"ON", "latch":0}
 ```
 
@@ -352,12 +394,12 @@ curl http://192.168.1.106/api/v1/status
 
 ```bash
 # Set 10-second latch (prevents toggles for 10s)
-curl -X POST http://192.168.1.106/api/v1/latch -H "Content-Type: application/json" \
+curl -X POST http://saturnpsu.local/api/v1/latch -H "Content-Type: application/json" \
   -d '{"latch":10}'
 # Response: {"latch":10}
 
 # Get current latch period
-curl http://192.168.1.106/api/v1/latch
+curl http://saturnpsu.local/api/v1/latch
 # Response: {"latch":10}
 ```
 
@@ -365,7 +407,7 @@ curl http://192.168.1.106/api/v1/latch
 
 ```bash
 # Clear latch and set relay OFF
-curl -X POST http://192.168.1.106/api/v1/reset
+curl -X POST http://saturnpsu.local/api/v1/reset
 # Response: {"reset":true}
 ```
 
@@ -375,7 +417,7 @@ A typical automated test flow:
 
 ```bash
 #!/bin/bash
-DEVICE_IP="192.168.1.106"  # Your ESP-SaturnPSU_Control IP
+DEVICE_IP="saturnpsu.local"  # Your ESP-SaturnPSU_Control IP
 
 # Power ON Saturn
 curl -X POST http://${DEVICE_IP}/api/v1/on
@@ -395,7 +437,7 @@ sleep 1
 Or simply use the provided test script:
 
 ```bash
-./tools/test_hardware_full.sh 192.168.1.106  # Orchestrates entire cycle
+./tools/test_hardware_full.sh saturnpsu.local  # Orchestrates entire cycle
 ```
 
 ### Latch Behavior
@@ -408,7 +450,7 @@ The device supports a **latch period** to prevent rapid toggling (useful for rel
 
 Example: Set 5-second latch to protect relay:
 ```bash
-curl -X POST http://192.168.1.106/api/v1/latch -H "Content-Type: application/json" \
+curl -X POST http://saturnpsu.local/api/v1/latch -H "Content-Type: application/json" \
   -d '{"latch":5}'
 ```
 
