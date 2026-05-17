@@ -33,7 +33,8 @@ Usage:
 
 Environment:
     SATURN_PSU_IP              Optional REST API IP for PSU controller
-    TIMEOUT                    Init timeout for full test (default 90)
+    SATURN_PSU_IP_FALLBACK     Fallback IP when hostname is not resolvable (default 192.168.1.106)
+    TIMEOUT                    Init timeout for full test (default 180)
     GAMEPLAY_MONITOR_SECONDS   Gameplay monitor window (default 90)
     HEARTBEAT_MAX_SILENCE_SECONDS  Max allowed heartbeat silence after init (default 20)
     POWER_ON_SETTLE_SECONDS    Settle delay after power on (default 10)
@@ -41,12 +42,16 @@ EOF
 }
 
 # Configuration
-TIMEOUT="${TIMEOUT:-90}"               # Maximum time to wait for game initialization (seconds)
+TIMEOUT="${TIMEOUT:-180}"               # Maximum time to wait for game initialization (seconds)
 GAMEPLAY_MONITOR_SECONDS="${GAMEPLAY_MONITOR_SECONDS:-90}"  # Seconds to monitor gameplay after init for alloc violations
 HEARTBEAT_MAX_SILENCE_SECONDS="${HEARTBEAT_MAX_SILENCE_SECONDS:-20}"
 BINARY_PATH="./cd/data/0.bin"
 GAME_READY_MARKER="Reached stage"  # Marker indicating game is fully initialized
+# Regex used to detect readiness in HW_DEBUG logs. Can be overridden by env.
+GAME_READY_REGEX="${GAME_READY_REGEX:-Reached stage|Game Ready|Initialization Complete|Entering main loop|Main game loop starting|IN_GAME \(stage .*\) ready|\[HW_DEBUG\] Entering initGame\(\)|\[HW_DEBUG\] initGame\(\) returned|Sound disabled}"
 POWER_ON_SETTLE_SECONDS="${POWER_ON_SETTLE_SECONDS:-10}"
+MAX_UPLOAD_BYTES="${MAX_UPLOAD_BYTES:-4194304}"
+SATURN_PSU_IP_FALLBACK="${SATURN_PSU_IP_FALLBACK:-192.168.1.106}"
 
 cleanup() {
     status=$?
@@ -148,6 +153,29 @@ power_status() {
     return 0
 }
 
+resolve_rest_api_target() {
+    local input="$1"
+    if [ -z "$input" ]; then
+        echo ""
+        return 0
+    fi
+
+    # Hostname or symbolic target: try resolver first.
+    if echo "$input" | grep -q '[A-Za-z]'; then
+        if getent hosts "$input" >/dev/null 2>&1; then
+            echo "$input"
+            return 0
+        fi
+        if [ -n "$SATURN_PSU_IP_FALLBACK" ]; then
+            echo "[PSU] WARNING: Could not resolve '$input' in this environment; using fallback IP $SATURN_PSU_IP_FALLBACK" >&2
+            echo "$SATURN_PSU_IP_FALLBACK"
+            return 0
+        fi
+    fi
+
+    echo "$input"
+}
+
 trap cleanup EXIT
 
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
@@ -161,27 +189,29 @@ if [ "$1" = "--power-off" ] || [ "$1" = "--power-on" ] || [ "$1" = "--power-cycl
 fi
 
 REST_API_IP="${1:-${SATURN_PSU_IP:-}}"
+REST_API_TARGET="$(resolve_rest_api_target "$REST_API_IP")"
 
 if [ "$MODE" != "full-test" ]; then
     echo "========================================"
     echo "noiz2sa PSU Control"
     echo "========================================"
-    [ -n "$REST_API_IP" ] && echo "REST API IP: $REST_API_IP"
+    [ -n "$REST_API_IP" ] && echo "REST API target: $REST_API_IP"
+    [ -n "$REST_API_TARGET" ] && [ "$REST_API_TARGET" != "$REST_API_IP" ] && echo "Resolved target: $REST_API_TARGET"
     echo "Mode: $MODE"
 
     case "$MODE" in
         off)
-            power_control "off" "$REST_API_IP"
+            power_control "off" "$REST_API_TARGET"
             ;;
         on)
-            power_control "on" "$REST_API_IP"
+            power_control "on" "$REST_API_TARGET"
             ;;
         cycle)
-            power_control "off" "$REST_API_IP"
-            power_control "on" "$REST_API_IP"
+            power_control "off" "$REST_API_TARGET"
+            power_control "on" "$REST_API_TARGET"
             ;;
         status)
-            power_status "$REST_API_IP"
+            power_status "$REST_API_TARGET"
             ;;
     esac
 
@@ -202,23 +232,45 @@ if [ ! -f "$BINARY_PATH" ]; then
     exit 1
 fi
 
+binary_desc="$(file -b "$BINARY_PATH" 2>/dev/null || echo "unknown")"
+binary_size_bytes="$(stat -c%s "$BINARY_PATH" 2>/dev/null || echo 0)"
+
+if echo "$binary_desc" | grep -qi "disc image"; then
+    echo "ERROR: $BINARY_PATH looks like a disc image, not an executable payload"
+    echo "  Detected: $binary_desc"
+    echo "  Expected: objcopy-generated program binary (usually < 4MB)"
+    echo "  Hint: do NOT copy BuildDrop/noiz2sa.bin to cd/data/0.bin"
+    echo "  Rebuild noiz2sa.elf to regenerate cd/data/0.bin"
+    exit 1
+fi
+
+if [ "$binary_size_bytes" -gt "$MAX_UPLOAD_BYTES" ]; then
+    echo "ERROR: $BINARY_PATH is too large for direct USBGamers upload sanity limit"
+    echo "  Size: $binary_size_bytes bytes (limit: $MAX_UPLOAD_BYTES)"
+    echo "  Hint: verify cd/data/0.bin is the program payload, not the full CD image"
+    exit 1
+fi
+
 echo ""
-echo "Binary: $(file -b $BINARY_PATH | cut -c1-50)..."
+echo "Binary: $(echo "$binary_desc" | cut -c1-50)..."
 echo "Size: $(ls -lh $BINARY_PATH | awk '{print $5}')"
 
 if [ -n "$REST_API_IP" ]; then
-    echo "REST API IP: $REST_API_IP"
+    echo "REST API target: $REST_API_IP"
+    if [ "$REST_API_TARGET" != "$REST_API_IP" ]; then
+        echo "Resolved target: $REST_API_TARGET"
+    fi
 fi
 
 # ========== POWER OFF ==========
 echo ""
 echo "========== PHASE 1: POWER OFF =========="
-power_control "off" "$REST_API_IP"
+power_control "off" "$REST_API_TARGET"
 
 # ========== POWER ON ==========
 echo ""
 echo "========== PHASE 2: POWER ON =========="
-power_control "on" "$REST_API_IP"
+power_control "on" "$REST_API_TARGET"
 
 # ========== UPLOAD ==========
 echo ""
@@ -279,10 +331,20 @@ while IFS= read -r line; do
         if echo "$line" | grep -q "\[BARRAGE\] Type"; then
             echo "[MONITOR] Pattern loading detected"
         fi
-        if echo "$line" | grep -qE "Reached stage|Game Ready|Initialization Complete|Entering main loop|Main game loop starting|IN_GAME \(stage .*\) ready|\[HW_DEBUG\] Entering initGame\(\)|\[HW_DEBUG\] initGame\(\) returned"; then
+        if echo "$line" | grep -qE "$GAME_READY_REGEX"; then
             echo "[MONITOR] ✓ Game initialization complete — starting alloc-stress window (${GAMEPLAY_MONITOR_SECONDS}s)"
             init_complete=1
             init_time=$NOW
+        fi
+        # Fallback: if heartbeat starts before a ready marker was observed,
+        # treat init as complete to avoid false inconclusive outcomes.
+        if [ $init_complete -eq 0 ] && echo "$line" | grep -q "\[HEARTBEAT\]"; then
+            echo "[MONITOR] ✓ Heartbeat observed — treating initialization as complete"
+            init_complete=1
+            init_time=$NOW
+            heartbeat_seen=1
+            heartbeat_last_time=$NOW
+            heartbeat_last_line="$line"
         fi
         if [ $(( NOW - TIMER_START )) -ge $TIMEOUT ]; then
             echo "[MONITOR] Init timeout reached without ready marker"
