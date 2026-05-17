@@ -156,6 +156,7 @@ Supported emulator argument values for campaign scripts:
 
 Notes:
 
+- Emulator-backed campaign scripts reconfigure CMake with `SRL_LOG_OUTPUT=EMULATOR` before building so runtime traces and UT completion markers are visible in the emulator log.
 - `ctest -V` does not currently register a dedicated SH2 BulletML campaign entry. Use `Tests/test_bulletml_campaign.sh` directly.
 - The SH2 BulletML campaign is currently built with `BULLETML_SKIP_CD_TESTS` (CD-file-dependent manifest parity test is skipped in campaign runs).
 - For real hardware (`USBGamers`), the most reliable sequence is power-cycle, then `usbreset "FT245R USB FIFO"`, then a short settle delay before campaign upload.
