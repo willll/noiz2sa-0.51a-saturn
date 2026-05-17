@@ -77,3 +77,23 @@ void drawShots() {
   }
 }
 
+/** @brief Returns the number of active shots. */
+int getActiveShotCount()
+{
+  int active = 0;
+  for (int i = 0; i < SHOT_MAX; i++)
+  {
+    if (shot[i].cnt != NOT_EXIST)
+    {
+      active++;
+    }
+  }
+  return active;
+}
+
+/** @brief Returns the total shot pool capacity. */
+int getShotPoolCapacity()
+{
+  return SHOT_MAX;
+}
+

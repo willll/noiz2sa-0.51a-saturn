@@ -45,3 +45,8 @@ void drawShots();
  * @param pos Spawn position.
  */
 void addShot(Vector *pos);
+
+/** @brief Returns the number of active shots. */
+int getActiveShotCount();
+/** @brief Returns the total shot pool capacity. */
+int getShotPoolCapacity();
