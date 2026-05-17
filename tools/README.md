@@ -8,6 +8,35 @@ This directory contains utility tools for the Noiz2sa Saturn port.
 - `run_kronos.sh`: Launches Kronos with `QT_QPA_PLATFORM="xcb"` and `BuildDrop/noiz2sa.cue`
 - `run_on_saturn.bat`: Polyglot script to launch on Saturn hardware via USBGamers (requires SRL_INSTALL_ROOT)
 
+## Emulator Campaign Logging
+
+When running the SH2 campaign scripts on an emulator, keep `SRL_LOG_OUTPUT=EMULATOR` enabled so the test harness can see runtime traces and completion markers in the emulator log.
+
+## USBGamers Campaign Preflight
+
+Before running campaign scripts with `--emulator USBGamers`, use this recovery/probe sequence:
+
+```bash
+# Power-cycle Saturn first (manual or PSU controller)
+usbreset "FT245R USB FIFO"
+sleep 2
+ftx -c
+```
+
+If `ftx -c` reports `device not found`, do not start campaign scripts yet. Repeat power-cycle + reset until probe succeeds.
+
+Campaign scripts support PSU-assisted preflight directly:
+
+```bash
+bash Tests/test_campaign.sh --emulator USBGamers --psu-ip 192.168.1.106 --strict
+```
+
+Supported scripts:
+- `Tests/test_campaign.sh`
+- `Tests/test_background_campaign.sh`
+- `Tests/test_bulletml_campaign.sh`
+- `Tests/test_factory_campaign.sh`
+
 Usage:
 
 ```bash
