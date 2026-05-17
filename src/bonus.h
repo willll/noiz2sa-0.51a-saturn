@@ -31,3 +31,7 @@ void moveBonuses();
 void drawBonuses();
 /** @brief Spawns a bonus entity at the given position and velocity. */
 void addBonus(Vector *pos, Vector *vel);
+/** @brief Returns the number of active bonuses. */
+int getActiveBonusCount();
+/** @brief Returns the total bonus pool capacity. */
+int getBonusPoolCapacity();

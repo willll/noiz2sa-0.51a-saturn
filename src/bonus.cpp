@@ -180,3 +180,23 @@ void drawBonuses()
             BONUS_COLOR_1, BONUS_COLOR_2, buf);
   }
 }
+
+/** @brief Returns the number of active bonuses. */
+int getActiveBonusCount()
+{
+  int active = 0;
+  for (int i = 0; i < BONUS_MAX; i++)
+  {
+    if (bonus[i].cnt != NOT_EXIST)
+    {
+      active++;
+    }
+  }
+  return active;
+}
+
+/** @brief Returns the total bonus pool capacity. */
+int getBonusPoolCapacity()
+{
+  return BONUS_MAX;
+}
