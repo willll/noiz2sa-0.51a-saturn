@@ -6,7 +6,7 @@ This document covers running noiz2sa on a physical Sega Saturn with a USBGamers 
 
 The PSU controller currently used in this workspace is:
 
-- `http://192.168.1.106/`
+- `http://saturnpsu.local/`
 
 The hardware test script accepts the IP as either a positional argument or via `SATURN_PSU_IP`.
 
@@ -28,7 +28,7 @@ The ESP-SaturnPSU_Control firmware exposes a small REST API. The hardware test f
 Example status request:
 
 ```bash
-curl -sS http://192.168.1.106/api/v1/status
+curl -sS http://saturnpsu.local/api/v1/status
 ```
 
 Expected JSON shape:
@@ -40,13 +40,13 @@ Expected JSON shape:
 Example power-off request:
 
 ```bash
-curl -sS -X POST http://192.168.1.106/api/v1/off
+curl -sS -X POST http://saturnpsu.local/api/v1/off
 ```
 
 Example power-on request:
 
 ```bash
-curl -sS -X POST http://192.168.1.106/api/v1/on
+curl -sS -X POST http://saturnpsu.local/api/v1/on
 ```
 
 ## Hardware Test Flow
@@ -64,23 +64,23 @@ It performs:
 Typical invocation:
 
 ```bash
-./tools/test_hardware_full.sh 192.168.1.106
+./tools/test_hardware_full.sh saturnpsu.local
 ```
 
 You can also set the IP once:
 
 ```bash
-export SATURN_PSU_IP=192.168.1.106
+export SATURN_PSU_IP=saturnpsu.local
 ./tools/test_hardware_full.sh
 ```
 
 To control power only:
 
 ```bash
-./tools/test_hardware_full.sh --power-status 192.168.1.106
-./tools/test_hardware_full.sh --power-off 192.168.1.106
-./tools/test_hardware_full.sh --power-on 192.168.1.106
-./tools/test_hardware_full.sh --power-cycle 192.168.1.106
+./tools/test_hardware_full.sh --power-status saturnpsu.local
+./tools/test_hardware_full.sh --power-off saturnpsu.local
+./tools/test_hardware_full.sh --power-on saturnpsu.local
+./tools/test_hardware_full.sh --power-cycle saturnpsu.local
 ```
 
 ## Preflight Checklist
@@ -88,7 +88,7 @@ To control power only:
 Before running on real hardware:
 
 1. Build the `HW_DEBUG` target.
-2. Confirm the PSU controller is reachable at `192.168.1.106`.
+2. Confirm the PSU controller is reachable at `saturnpsu.local`.
 3. Confirm the USBGamers cartridge is connected and the host can access the USB device.
 4. Verify the USB reset/uploader tools are installed and in `PATH`.
 
@@ -104,7 +104,7 @@ Recommended stable sequence:
 
 ```bash
 # 1) Clean hardware state
-./tools/test_hardware_full.sh --power-cycle 192.168.1.106
+./tools/test_hardware_full.sh --power-cycle saturnpsu.local
 
 # 2) Reset USB cartridge state
 usbreset "FT245R USB FIFO"
