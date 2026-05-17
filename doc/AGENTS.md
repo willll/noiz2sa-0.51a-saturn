@@ -29,7 +29,7 @@ cmake --build build_hw_debug               # Compile for cartridge
 ./tools/run_on_saturn.bat                  # Upload via USBGamers (polyglot bash/batch script)
 
 # With optional ESP-SaturnPSU_Control for automated power control
-curl -X POST http://192.168.1.100/api/v1/on   # Power ON via REST API
+curl -X POST http://saturnpsu.local/api/v1/on   # Power ON via REST API
 ./tools/run_on_saturn.bat                      # Upload build
 ```
 
