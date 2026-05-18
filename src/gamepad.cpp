@@ -37,7 +37,7 @@ bool initGamepad() {
 
 /** @brief Releases the active gamepad handle. */
 void closeGamepad() {
-    destroyObject(gamepad);
+    destroyDigitalGamepad(gamepad);
 }
 
 // Initialize game controller subsystem
