@@ -63,3 +63,4 @@ Tests/cd_factory/data/*.TXT
 ABS.TXT
 BIB.TXT
 CPY.TXT
+build*
