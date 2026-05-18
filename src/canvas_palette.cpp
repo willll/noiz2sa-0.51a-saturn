@@ -119,7 +119,7 @@ int32_t Palette::initPalette()
     SRL::Types::HighColor* data = palette->GetData();
     if (data == nullptr)
     {
-        destroyObject(palette);
+        destroyCramPalette(palette);
         return -1;
     }
 
