@@ -79,18 +79,55 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
   for (uint32_t patternIndex = 0; patternIndex < patternCount && i < BARRAGE_PATTERN_MAX; ++patternIndex)
   {
+    const bool isBoss = (strcmp(dirPath, "BOSS") == 0);
+    const bool detailedTrace = isBoss && (patternIndex + 1u >= 14u);
+
     SRL::Logger::LogInfo("[INIT-BARRAGE] parse-begin type=%s idx=%lu/%lu hwfree=%lu",
                          dirPath,
                          (unsigned long)(patternIndex + 1u),
                          (unsigned long)patternCount,
                          (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+
+    if (detailedTrace)
+    {
+      SRL::Logger::LogInfo("[INIT-BARRAGE] parser-create-begin type=%s idx=%lu name=%s size=%lu",
+                           dirPath,
+                           (unsigned long)(patternIndex + 1u),
+                           patterns[patternIndex].name,
+                           (unsigned long)patterns[patternIndex].size);
+    }
     brg[i].bulletml = createEmbeddedBulletMlParser(patterns[patternIndex].name, patterns[patternIndex].data, patterns[patternIndex].size);
+    if (detailedTrace)
+    {
+      SRL::Logger::LogInfo("[INIT-BARRAGE] parser-create-end type=%s idx=%lu ptr=%p hwfree=%lu",
+                           dirPath,
+                           (unsigned long)(patternIndex + 1u),
+                           brg[i].bulletml,
+                           (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+    }
+
+    if (detailedTrace)
+    {
+      SRL::Logger::LogInfo("[INIT-BARRAGE] build-begin type=%s idx=%lu name=%s",
+                           dirPath,
+                           (unsigned long)(patternIndex + 1u),
+                           patterns[patternIndex].name);
+    }
     if (!brg[i].bulletml->build())
     {
       SRL::Logger::LogFatal("[HW_DEBUG] Failed to parse embedded BulletML file: %s/%s", dirPath, patterns[patternIndex].name);
-      destroyObject(brg[i].bulletml);
+      destroyBulletMlParser(brg[i].bulletml);
       SRL::System::Exit(1);
     }
+    if (detailedTrace)
+    {
+      SRL::Logger::LogInfo("[INIT-BARRAGE] build-end type=%s idx=%lu name=%s hwfree=%lu",
+                           dirPath,
+                           (unsigned long)(patternIndex + 1u),
+                           patterns[patternIndex].name,
+                           (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+    }
+
     SRL::Logger::LogInfo("[INIT-BARRAGE] parse-end type=%s idx=%lu/%lu name=%s hwfree=%lu",
                          dirPath,
                          (unsigned long)(patternIndex + 1u),
@@ -206,7 +243,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     if (!brg[i].bulletml->build()) {
       parseFailures++;
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
-      destroyObject(brg[i].bulletml);
+      destroyBulletMlParser(brg[i].bulletml);
       continue;
     }
     i++;
@@ -262,7 +299,7 @@ void closeBarragemanager() {
   
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
-      destroyObject(barragePattern[i][j].bulletml);
+      destroyBulletMlParser(barragePattern[i][j].bulletml);
     }
   }
   
