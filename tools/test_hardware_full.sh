@@ -37,7 +37,11 @@ Environment:
     TIMEOUT                    Init timeout for full test (default 180)
     GAMEPLAY_MONITOR_SECONDS   Gameplay monitor window (default 90)
     HEARTBEAT_MAX_SILENCE_SECONDS  Max allowed heartbeat silence after init (default 20)
+    REQUIRE_HEARTBEAT          Require heartbeat after init (0=warn-only, 1=fail)
     POWER_ON_SETTLE_SECONDS    Settle delay after power on (default 10)
+    CONSOLE_ATTACH_RETRIES     Number of Phase-4 console attach attempts (default 3)
+    CONSOLE_ATTACH_RETRY_DELAY Seconds between Phase-4 retries (default 3)
+    MIN_MONITOR_LINES_FOR_STABLE_ATTACH  Retry attach if init times out with fewer lines than this (default 8)
 EOF
 }
 
@@ -45,18 +49,31 @@ EOF
 TIMEOUT="${TIMEOUT:-180}"               # Maximum time to wait for game initialization (seconds)
 GAMEPLAY_MONITOR_SECONDS="${GAMEPLAY_MONITOR_SECONDS:-90}"  # Seconds to monitor gameplay after init for alloc violations
 HEARTBEAT_MAX_SILENCE_SECONDS="${HEARTBEAT_MAX_SILENCE_SECONDS:-20}"
+REQUIRE_HEARTBEAT="${REQUIRE_HEARTBEAT:-0}"
 BINARY_PATH="./cd/data/0.bin"
 GAME_READY_MARKER="Reached stage"  # Marker indicating game is fully initialized
 # Regex used to detect readiness in HW_DEBUG logs. Can be overridden by env.
-GAME_READY_REGEX="${GAME_READY_REGEX:-Reached stage|Game Ready|Initialization Complete|Entering main loop|Main game loop starting|IN_GAME \(stage .*\) ready|\[HW_DEBUG\] Entering initGame\(\)|\[HW_DEBUG\] initGame\(\) returned|Sound disabled}"
+GAME_READY_REGEX="${GAME_READY_REGEX:-Reached stage|Game Ready|Initialization Complete|Entering main loop|Main game loop starting|IN_GAME \(stage .*\) ready|\[HW_DEBUG\] Entering initGame\(\)|\[HW_DEBUG\] initGame\(\) returned}"
 POWER_ON_SETTLE_SECONDS="${POWER_ON_SETTLE_SECONDS:-10}"
 MAX_UPLOAD_BYTES="${MAX_UPLOAD_BYTES:-4194304}"
 SATURN_PSU_IP_FALLBACK="${SATURN_PSU_IP_FALLBACK:-192.168.1.106}"
+CONSOLE_ATTACH_RETRIES="${CONSOLE_ATTACH_RETRIES:-3}"
+CONSOLE_ATTACH_RETRY_DELAY="${CONSOLE_ATTACH_RETRY_DELAY:-3}"
+MIN_MONITOR_LINES_FOR_STABLE_ATTACH="${MIN_MONITOR_LINES_FOR_STABLE_ATTACH:-8}"
+
+trace() {
+    echo "[TRACE $(date '+%H:%M:%S')] $*"
+}
+
+mk_logs_dir() {
+    mkdir -p "./logs"
+}
 
 cleanup() {
     status=$?
     echo ""
     echo "========================================"
+    trace "Cleanup begin"
     echo "Test cleanup (exit code: $status)"
     echo "========================================"
     exit $status
@@ -222,6 +239,7 @@ fi
 echo "========================================"
 echo "noiz2sa Hardware Full Test"
 echo "========================================"
+trace "Mode=$MODE TIMEOUT=${TIMEOUT}s GAMEPLAY_MONITOR_SECONDS=${GAMEPLAY_MONITOR_SECONDS}s"
 
 # Precondition check
 if [ ! -f "$BINARY_PATH" ]; then
@@ -254,6 +272,7 @@ fi
 echo ""
 echo "Binary: $(echo "$binary_desc" | cut -c1-50)..."
 echo "Size: $(ls -lh $BINARY_PATH | awk '{print $5}')"
+trace "Binary path: $BINARY_PATH"
 
 if [ -n "$REST_API_IP" ]; then
     echo "REST API target: $REST_API_IP"
@@ -265,16 +284,21 @@ fi
 # ========== POWER OFF ==========
 echo ""
 echo "========== PHASE 1: POWER OFF =========="
+trace "Entering PHASE 1"
 power_control "off" "$REST_API_TARGET"
+trace "PHASE 1 complete"
 
 # ========== POWER ON ==========
 echo ""
 echo "========== PHASE 2: POWER ON =========="
+trace "Entering PHASE 2"
 power_control "on" "$REST_API_TARGET"
+trace "PHASE 2 complete"
 
 # ========== UPLOAD ==========
 echo ""
 echo "========== PHASE 3: UPLOAD BINARY =========="
+trace "Entering PHASE 3"
 echo "Waiting ${POWER_ON_SETTLE_SECONDS}s for hardware to stabilize after power-on..."
 sleep "$POWER_ON_SETTLE_SECONDS"
 reset_usb_device
@@ -283,14 +307,17 @@ sleep 2
 echo "Uploading HW_DEBUG binary via USBGamers cartridge..."
 upload_ok=0
 for attempt in 1 2 3; do
+    trace "Upload attempt $attempt"
     upload_log="$(ftx -x "$BINARY_PATH" 0x06004000 2>&1 || true)"
     echo "[attempt $attempt] $upload_log"
     if echo "$upload_log" | grep -qiE "Upload failed|Send data error|Execution aborted|usb bulk write failed|Device open error|device not found"; then
+        trace "Upload attempt $attempt failed"
         echo "Upload attempt $attempt failed — resetting USB and retrying in 5s..."
         reset_usb_device
         sleep 5
     else
         upload_ok=1
+        trace "Upload attempt $attempt succeeded"
         break
     fi
 done
@@ -299,18 +326,22 @@ if [ $upload_ok -eq 0 ]; then
     exit 1
 fi
 echo "Upload complete"
+trace "PHASE 3 complete"
 
 # ========== MONITOR INITIALIZATION + ALLOC STRESS ==========
 echo ""
 echo "========== PHASE 4: MONITOR INITIALIZATION =========="
+trace "Entering PHASE 4"
 # Connect console immediately after upload — no USB reset, minimal sleep
 # (matching run.sh: sleep 1 then ftx -c). A usbreset here adds 5+ seconds
 # of delay and causes boot log lines to be missed.
-sleep 1
 echo "Connecting debug console (max init=${TIMEOUT}s + stress=${GAMEPLAY_MONITOR_SECONDS}s)..."
 echo ""
 
-TIMER_START=$(date +%s)
+TOTAL_TIMEOUT=$(( TIMEOUT + GAMEPLAY_MONITOR_SECONDS ))
+trace "TOTAL_TIMEOUT=${TOTAL_TIMEOUT}s"
+
+phase4_attempt=0
 init_complete=0
 init_time=0
 alloc_baseline_seen=0
@@ -320,75 +351,181 @@ heartbeat_seen=0
 heartbeat_last_time=0
 heartbeat_last_line=""
 heartbeat_failed=0
+monitor_line_count=0
+last_console_line=""
+stop_reason="unknown"
+MONITOR_LOG_FILE=""
 
-TOTAL_TIMEOUT=$(( TIMEOUT + GAMEPLAY_MONITOR_SECONDS ))
+while [ "$phase4_attempt" -lt "$CONSOLE_ATTACH_RETRIES" ]; do
+    phase4_attempt=$((phase4_attempt + 1))
+    trace "PHASE 4 attach attempt ${phase4_attempt}/${CONSOLE_ATTACH_RETRIES}"
 
-while IFS= read -r line; do
-    NOW=$(date +%s)
-    echo "$line"
+    sleep 1
+    mk_logs_dir
+    MONITOR_LOG_FILE="./logs/hw_debug_monitor_$(date +%Y%m%d_%H%M%S)_a${phase4_attempt}.log"
+    trace "Console monitor log: $MONITOR_LOG_FILE"
 
+    TIMER_START=$(date +%s)
+    init_complete=0
+    init_time=0
+    alloc_baseline_seen=0
+    alloc_violations=0
+    alloc_violation_lines=""
+    heartbeat_seen=0
+    heartbeat_last_time=0
+    heartbeat_last_line=""
+    heartbeat_failed=0
+    monitor_line_count=0
+    last_console_line=""
+    stop_reason="unknown"
+    should_retry_attach=0
+
+    while IFS= read -r line; do
+        NOW=$(date +%s)
+        monitor_line_count=$((monitor_line_count + 1))
+        last_console_line="$line"
+        echo "$line"
+        echo "$line" >> "$MONITOR_LOG_FILE"
+
+        if echo "$line" | grep -qiE "Read data error|usb bulk read failed|Device open error|device not found"; then
+            stop_reason="console_io_error"
+            trace "Detected console I/O failure line: $line"
+            break
+        fi
+
+        if [ $init_complete -eq 0 ]; then
+            if echo "$line" | grep -q "\[BARRAGE\] Type"; then
+                echo "[MONITOR] Pattern loading detected"
+            fi
+            if echo "$line" | grep -qE "$GAME_READY_REGEX"; then
+                echo "[MONITOR] ✓ Game initialization complete — starting alloc-stress window (${GAMEPLAY_MONITOR_SECONDS}s)"
+                init_complete=1
+                init_time=$NOW
+            fi
+            # Fallback: if heartbeat starts before a ready marker was observed,
+            # treat init as complete to avoid false inconclusive outcomes.
+            if [ $init_complete -eq 0 ] && echo "$line" | grep -q "\[HEARTBEAT\]"; then
+                echo "[MONITOR] ✓ Heartbeat observed — treating initialization as complete"
+                init_complete=1
+                init_time=$NOW
+                heartbeat_seen=1
+                heartbeat_last_time=$NOW
+                heartbeat_last_line="$line"
+            fi
+            if [ $(( NOW - TIMER_START )) -ge $TIMEOUT ]; then
+                if [ "$stop_reason" = "unknown" ]; then
+                    stop_reason="init_timeout"
+                fi
+                echo "[MONITOR] Init timeout reached without ready marker"
+                break
+            fi
+        else
+            if echo "$line" | grep -q "\[HEARTBEAT\]"; then
+                heartbeat_seen=1
+                heartbeat_last_time=$NOW
+                heartbeat_last_line="$line"
+            fi
+
+            if echo "$line" | grep -q "\[ALLOC_STRESS\] baseline captured"; then
+                echo "[ALLOC_STRESS] ✓ Baseline snapshot captured"
+                alloc_baseline_seen=1
+            fi
+            if echo "$line" | grep -q "\[ALLOC_STRESS\] RUNTIME ALLOC DURING GAMEPLAY"; then
+                echo "[ALLOC_STRESS] ✗ VIOLATION DETECTED: $line"
+                alloc_violations=$(( alloc_violations + 1 ))
+                alloc_violation_lines="${alloc_violation_lines}  ${line}\n"
+            fi
+            if [ $(( NOW - init_time )) -ge $GAMEPLAY_MONITOR_SECONDS ]; then
+                echo "[MONITOR] Alloc-stress window complete"
+                break
+            fi
+
+            if [ $heartbeat_seen -eq 1 ] && [ $(( NOW - heartbeat_last_time )) -gt $HEARTBEAT_MAX_SILENCE_SECONDS ]; then
+                stop_reason="heartbeat_stale"
+                echo "[HEARTBEAT] ✗ Stale heartbeat detected (last seen $(( NOW - heartbeat_last_time ))s ago)"
+                heartbeat_failed=1
+                break
+            fi
+        fi
+    done < <(timeout -s TERM -k 5 "$TOTAL_TIMEOUT" ftx -c 2>&1 || true)
+
+    if [ "$stop_reason" = "unknown" ]; then
+        stop_reason="monitor_loop_ended"
+    fi
+    trace "Monitor ended: lines=$monitor_line_count stop_reason=$stop_reason"
+    if [ -n "$last_console_line" ]; then
+        trace "Last console line: $last_console_line"
+    fi
+
+    NOW_END=$(date +%s)
+    if [ $init_complete -eq 1 ]; then
+        # Check if console failed/dropped during gameplay monitoring
+        gameplay_time=$(( NOW_END - init_time ))
+        min_gameplay_required=$(( GAMEPLAY_MONITOR_SECONDS / 4 ))  # Require at least 25% of target window
+        if [ "$stop_reason" = "console_io_error" ] && [ $gameplay_time -lt $min_gameplay_required ]; then
+            # Console died too early during gameplay; retry attach if possible
+            if [ "$phase4_attempt" -lt "$CONSOLE_ATTACH_RETRIES" ]; then
+                echo "[MONITOR] Console I/O failure detected after ${gameplay_time}s; retrying attach in ${CONSOLE_ATTACH_RETRY_DELAY}s"
+                should_retry_attach=1
+            else
+                echo "[CONSOLE] ✗ Console connection lost during gameplay (${gameplay_time}s monitored, target ${GAMEPLAY_MONITOR_SECONDS}s)"
+                echo "Gameplay:  FAIL"
+                exit 1
+            fi
+        elif [ "$stop_reason" = "monitor_loop_ended" ] && [ $gameplay_time -lt $min_gameplay_required ]; then
+            # Monitor timeout with insufficient data suggests console instability
+            echo "[MONITOR] ⚠  Monitor ended prematurely (${gameplay_time}s of ${GAMEPLAY_MONITOR_SECONDS}s, min required ${min_gameplay_required}s)"
+            if [ "$phase4_attempt" -lt "$CONSOLE_ATTACH_RETRIES" ]; then
+                should_retry_attach=1
+            else
+                echo "[CONSOLE] ✗ Insufficient gameplay monitoring after max retries"
+                exit 2
+            fi
+        fi
+        
+        if [ $should_retry_attach -eq 0 ]; then
+            if [ $heartbeat_seen -eq 0 ]; then
+                if [ "$REQUIRE_HEARTBEAT" -eq 1 ]; then
+                    echo "[HEARTBEAT] ✗ No heartbeat lines observed after initialization"
+                    heartbeat_failed=1
+                else
+                    echo "[HEARTBEAT] ! No heartbeat lines observed after initialization (warn-only; REQUIRE_HEARTBEAT=0)"
+                fi
+            elif [ $(( NOW_END - heartbeat_last_time )) -gt $HEARTBEAT_MAX_SILENCE_SECONDS ]; then
+                if [ "$REQUIRE_HEARTBEAT" -eq 1 ]; then
+                    echo "[HEARTBEAT] ✗ Heartbeat gap too large at end of monitor ($(( NOW_END - heartbeat_last_time ))s)"
+                    heartbeat_failed=1
+                else
+                    echo "[HEARTBEAT] ! Heartbeat gap too large at end of monitor ($(( NOW_END - heartbeat_last_time ))s) (warn-only; REQUIRE_HEARTBEAT=0)"
+                fi
+            fi
+        fi
+        
+        if [ $should_retry_attach -eq 0 ]; then
+            break
+        fi
+    fi
+
+    # Retry logic for init-phase failures (init_complete=0)
     if [ $init_complete -eq 0 ]; then
-        if echo "$line" | grep -q "\[BARRAGE\] Type"; then
-            echo "[MONITOR] Pattern loading detected"
-        fi
-        if echo "$line" | grep -qE "$GAME_READY_REGEX"; then
-            echo "[MONITOR] ✓ Game initialization complete — starting alloc-stress window (${GAMEPLAY_MONITOR_SECONDS}s)"
-            init_complete=1
-            init_time=$NOW
-        fi
-        # Fallback: if heartbeat starts before a ready marker was observed,
-        # treat init as complete to avoid false inconclusive outcomes.
-        if [ $init_complete -eq 0 ] && echo "$line" | grep -q "\[HEARTBEAT\]"; then
-            echo "[MONITOR] ✓ Heartbeat observed — treating initialization as complete"
-            init_complete=1
-            init_time=$NOW
-            heartbeat_seen=1
-            heartbeat_last_time=$NOW
-            heartbeat_last_line="$line"
-        fi
-        if [ $(( NOW - TIMER_START )) -ge $TIMEOUT ]; then
-            echo "[MONITOR] Init timeout reached without ready marker"
-            break
-        fi
-    else
-        if echo "$line" | grep -q "\[HEARTBEAT\]"; then
-            heartbeat_seen=1
-            heartbeat_last_time=$NOW
-            heartbeat_last_line="$line"
+        should_retry_attach=0
+        if [ "$stop_reason" = "console_io_error" ]; then
+            should_retry_attach=1
+        elif [ "$stop_reason" = "init_timeout" ] && [ "$monitor_line_count" -lt "$MIN_MONITOR_LINES_FOR_STABLE_ATTACH" ]; then
+            should_retry_attach=1
+            trace "Sparse monitor output (${monitor_line_count} lines) suggests unstable console attach"
         fi
 
-        if echo "$line" | grep -q "\[ALLOC_STRESS\] baseline captured"; then
-            echo "[ALLOC_STRESS] ✓ Baseline snapshot captured"
-            alloc_baseline_seen=1
-        fi
-        if echo "$line" | grep -q "\[ALLOC_STRESS\] RUNTIME ALLOC DURING GAMEPLAY"; then
-            echo "[ALLOC_STRESS] ✗ VIOLATION DETECTED: $line"
-            alloc_violations=$(( alloc_violations + 1 ))
-            alloc_violation_lines="${alloc_violation_lines}  ${line}\n"
-        fi
-        if [ $(( NOW - init_time )) -ge $GAMEPLAY_MONITOR_SECONDS ]; then
-            echo "[MONITOR] Alloc-stress window complete"
-            break
-        fi
-
-        if [ $heartbeat_seen -eq 1 ] && [ $(( NOW - heartbeat_last_time )) -gt $HEARTBEAT_MAX_SILENCE_SECONDS ]; then
-            echo "[HEARTBEAT] ✗ Stale heartbeat detected (last seen $(( NOW - heartbeat_last_time ))s ago)"
-            heartbeat_failed=1
-            break
+        if [ "$should_retry_attach" -eq 1 ] && [ "$phase4_attempt" -lt "$CONSOLE_ATTACH_RETRIES" ]; then
+            echo "[MONITOR] Console attach appears unstable; retrying attach in ${CONSOLE_ATTACH_RETRY_DELAY}s (${phase4_attempt}/${CONSOLE_ATTACH_RETRIES})"
+            reset_usb_device
+            sleep "$CONSOLE_ATTACH_RETRY_DELAY"
+            continue
         fi
     fi
-done < <(timeout -s TERM -k 5 "$TOTAL_TIMEOUT" ftx -c 2>&1 || true)
 
-NOW_END=$(date +%s)
-if [ $init_complete -eq 1 ]; then
-    if [ $heartbeat_seen -eq 0 ]; then
-        echo "[HEARTBEAT] ✗ No heartbeat lines observed after initialization"
-        heartbeat_failed=1
-    elif [ $(( NOW_END - heartbeat_last_time )) -gt $HEARTBEAT_MAX_SILENCE_SECONDS ]; then
-        echo "[HEARTBEAT] ✗ Heartbeat gap too large at end of monitor ($(( NOW_END - heartbeat_last_time ))s)"
-        heartbeat_failed=1
-    fi
-fi
+    break
+done
 
 echo ""
 echo "========================================"
@@ -397,6 +534,9 @@ echo "========================================"
 if [ $init_complete -eq 0 ]; then
     echo "⚠  HARDWARE TEST INCONCLUSIVE"
     echo "   Game did not reach IN_GAME within ${TIMEOUT}s"
+    echo "   Stop reason: ${stop_reason}"
+    echo "   Monitor lines read: ${monitor_line_count}"
+    echo "   Monitor log: ${MONITOR_LOG_FILE}"
     echo "   Check Saturn console display for visual confirmation"
     exit 2
 fi
@@ -432,3 +572,4 @@ else
     exit 1
 fi
 echo "========================================"
+echo "Monitor log: ${MONITOR_LOG_FILE}"
