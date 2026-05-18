@@ -37,6 +37,26 @@ Supported scripts:
 - `Tests/test_bulletml_campaign.sh`
 - `Tests/test_factory_campaign.sh`
 
+## Hardware Full Test Policy
+
+Use `tools/test_hardware_full.sh` for real Saturn HW_DEBUG validation with PSU power-cycle, upload, and runtime monitoring.
+
+Default campaign policy is stability-first:
+- `REQUIRE_HEARTBEAT=0` (default): missing or stale heartbeat is warn-only
+- init and alloc checks still determine pass/fail verdict
+
+Strict diagnostic policy is still available:
+
+```bash
+REQUIRE_HEARTBEAT=1 TIMEOUT=300 GAMEPLAY_MONITOR_SECONDS=10 ./tools/test_hardware_full.sh saturnpsu.local
+```
+
+Recommended stability run:
+
+```bash
+TIMEOUT=300 GAMEPLAY_MONITOR_SECONDS=10 ./tools/test_hardware_full.sh saturnpsu.local
+```
+
 Usage:
 
 ```bash
