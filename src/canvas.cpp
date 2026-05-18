@@ -22,7 +22,7 @@ Canvas::Canvas(uint16_t width, uint16_t height, Palette& palette)
 Canvas::~Canvas()
 {
         destroyArray(imageData_);
-        destroyObject(bitmap_);
+    destroyBitmapInfo(bitmap_);
 }
 
 /** @brief Returns the raw pixel buffer. */
