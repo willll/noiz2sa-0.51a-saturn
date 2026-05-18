@@ -31,6 +31,10 @@ Usage:
     ./tools/test_hardware_full.sh --power-cycle [REST_API_IP]
     ./tools/test_hardware_full.sh --power-status [REST_API_IP]
 
+Notes:
+    This script does not accept a -e flag.
+    The optional positional argument is only REST_API_IP.
+
 Environment:
     SATURN_PSU_IP              Optional REST API IP for PSU controller
     SATURN_PSU_IP_FALLBACK     Fallback IP when hostname is not resolvable (default 192.168.1.106)
@@ -203,6 +207,13 @@ fi
 if [ "$1" = "--power-off" ] || [ "$1" = "--power-on" ] || [ "$1" = "--power-cycle" ] || [ "$1" = "--power-status" ]; then
     MODE="${1#--power-}"
     shift
+fi
+
+# Reject unknown flags early. The only accepted leading flag is --power-*.
+if [ -n "${1:-}" ] && [[ "$1" == -* ]]; then
+    echo "ERROR: Unknown option '$1'"
+    print_usage
+    exit 2
 fi
 
 REST_API_IP="${1:-${SATURN_PSU_IP:-}}"
