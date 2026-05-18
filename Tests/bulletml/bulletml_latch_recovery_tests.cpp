@@ -1,5 +1,5 @@
-#include <cstdlib>
-#include <iostream>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "bulletml_binary/bulletml_alloc_latch.h"
 
@@ -10,7 +10,7 @@ static int g_failed = 0;
   {                                                                                       \
     if (!(expr))                                                                          \
     {                                                                                     \
-      std::cerr << "EXPECT_TRUE failed at line " << __LINE__ << ": " #expr "\n";      \
+      printf("EXPECT_TRUE failed at line %d: %s\n", __LINE__, #expr);                   \
       g_failed++;                                                                         \
     }                                                                                     \
   } while (0)
@@ -24,8 +24,8 @@ static int g_failed = 0;
     const auto _b = (b);                                                                  \
     if (!(_a == _b))                                                                      \
     {                                                                                     \
-      std::cerr << "EXPECT_EQ failed at line " << __LINE__ << ": " #a "=" << _a         \
-                << " " #b "=" << _b << "\n";                                             \
+                  printf("EXPECT_EQ failed at line %d: %s != %s\n",                                 \
+                    __LINE__, #a, #b);                                                          \
       g_failed++;                                                                         \
     }                                                                                     \
   } while (0)
@@ -59,17 +59,20 @@ static void test_repeated_failures_after_tick_clear_are_tracked()
   EXPECT_EQ(getBulletMlAllocFailureCount(), 2u);
 }
 
-int main()
+extern "C" int logic_test_main()
 {
   test_latch_can_be_cleared_without_resetting_counter();
   test_repeated_failures_after_tick_clear_are_tracked();
 
   if (g_failed != 0)
   {
-    std::cerr << "BulletML latch recovery tests FAILED: " << g_failed << " assertion(s).\n";
-    return EXIT_FAILURE;
+        printf("BulletML latch recovery tests FAILED: %d assertion(s).\n",
+          g_failed);
+    printf("***UT_END***\n");
+    return 1;
   }
 
-  std::cout << "BulletML latch recovery tests PASSED.\n";
-  return EXIT_SUCCESS;
+  printf("BulletML latch recovery tests PASSED.\n");
+  printf("***UT_END***\n");
+  return 0;
 }

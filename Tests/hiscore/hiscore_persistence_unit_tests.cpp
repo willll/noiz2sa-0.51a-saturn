@@ -1,5 +1,5 @@
-#include <cstdlib>
-#include <iostream>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "attractmanager.h"
 #include "hiscore_persistence_format.h"
@@ -11,7 +11,7 @@ static int g_failed = 0;
   {                                                                                       \
     if (!(expr))                                                                          \
     {                                                                                     \
-      std::cerr << "EXPECT_TRUE failed at line " << __LINE__ << ": " #expr "\n";      \
+      printf("EXPECT_TRUE failed at line %d: %s\n", __LINE__, #expr);                   \
       g_failed++;                                                                         \
     }                                                                                     \
   } while (0)
@@ -25,8 +25,7 @@ static int g_failed = 0;
     const auto _b = (b);                                                                  \
     if (!(_a == _b))                                                                      \
     {                                                                                     \
-      std::cerr << "EXPECT_EQ failed at line " << __LINE__ << ": " #a "=" << _a         \
-                << " " #b "=" << _b << "\n";                                             \
+      printf("EXPECT_EQ failed at line %d: %s != %s\n", __LINE__, #a, #b);             \
       g_failed++;                                                                         \
     }                                                                                     \
   } while (0)
@@ -111,7 +110,7 @@ static void test_binary_layout_matches_gp32_sequence()
   EXPECT_EQ(words[index++], original.stage);
 }
 
-int main()
+extern "C" int logic_test_main()
 {
   test_encode_then_decode_round_trip();
   test_decode_rejects_version_mismatch();
@@ -119,10 +118,12 @@ int main()
 
   if (g_failed != 0)
   {
-    std::cerr << "Hi-score persistence unit tests FAILED: " << g_failed << " assertion(s).\n";
-    return EXIT_FAILURE;
+    printf("Hi-score persistence unit tests FAILED: %d assertion(s).\n", g_failed);
+    printf("***UT_END***\n");
+    return 1;
   }
 
-  std::cout << "Hi-score persistence unit tests PASSED.\n";
-  return EXIT_SUCCESS;
+  printf("Hi-score persistence unit tests PASSED.\n");
+  printf("***UT_END***\n");
+  return 0;
 }
