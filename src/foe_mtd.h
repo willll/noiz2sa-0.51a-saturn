@@ -58,3 +58,13 @@ void setFoeBudgetLimit(int limit);
 // Returns the total number of live projectiles (active + normal + boss active bullets).
 /** @brief Returns the total number of live projectiles. */
 int getLiveProjectileCount();
+
+/** @brief Returns the number of active foe slots. */
+int getActiveFoeCount();
+/** @brief Returns the total foe pool capacity. */
+int getFoePoolCapacity();
+
+/** @brief Returns the number of cached FoeCommand nodes kept for reuse. */
+int getFoeCommandPoolCachedCount();
+/** @brief Trims cached FoeCommand nodes down to maxCached. */
+void trimFoeCommandPoolCachedCount(int maxCached);

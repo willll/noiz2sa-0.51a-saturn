@@ -22,6 +22,8 @@
 #include "degutil.h"
 #include "ship.h"
 #include "shot.h"
+#include "foecommand.h"
+#include "bulletml_binary/bulletml_alloc_latch.h"
 #include "frag.h"
 #include "bonus.h"
 #include "soundmanager.h"
@@ -75,6 +77,30 @@ static int sLiveBossActiveBullets = 0;
 int getLiveProjectileCount()
 {
   return sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets;
+}
+
+int getActiveFoeCount()
+{
+  return foeActiveCount;
+}
+
+int getFoePoolCapacity()
+{
+  return FOE_MAX;
+}
+
+int getFoeCommandPoolCachedCount()
+{
+  return (int)getFoeCommandCachedCount();
+}
+
+void trimFoeCommandPoolCachedCount(int maxCached)
+{
+  if (maxCached < 0)
+  {
+    maxCached = 0;
+  }
+  trimFoeCommandPool((size_t)maxCached);
 }
 
 /** @brief Returns the array index for a foe pointer. */
@@ -384,7 +410,7 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
       totalProjectiles >= kMaxTotalProjectiles)
   {
     bulletSpawnFailed++;
-    delete state;
+    destroyBulletMlState(state);
     return;
   }
 
@@ -392,14 +418,14 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
   if (!fe)
   {
     bulletSpawnFailed++;
-    delete state;
+    destroyBulletMlState(state);
     return;
   }
   fe->cmd = createFoeCommand(state, fe);
   if (!fe->cmd)
   {
     bulletSpawnFailed++;
-    delete state;
+    destroyBulletMlState(state);
     return;
   }
   fe->spos = fe->ppos = fe->pos = *pos;
