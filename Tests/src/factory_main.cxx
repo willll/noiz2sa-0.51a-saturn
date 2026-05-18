@@ -276,10 +276,97 @@ MU_TEST(test_state_pool_recycles_node_arrays)
   releaseBulletMlStatePools();
 }
 
+MU_TEST(test_state_pool_cached_count_tracks_lifecycle)
+{
+  releaseBulletMlStatePools();
+  mu_assert_int_eq(0, (int)getBulletMlStateCachedCount());
+
+  BulletMLNode** nodes = createBulletMlStateNodeArray(1);
+  mu_check(nodes != nullptr);
+  nodes[0] = nullptr;
+
+  BulletMLState* state = createBulletMlState(nullptr, nodes, 1, nullptr, 0);
+  mu_check(state != nullptr);
+  mu_assert_int_eq(0, (int)getBulletMlStateCachedCount());
+
+  destroyBulletMlState(state);
+  mu_assert_int_eq(1, (int)getBulletMlStateCachedCount());
+
+  BulletMLNode** nodes2 = createBulletMlStateNodeArray(1);
+  mu_check(nodes2 != nullptr);
+  nodes2[0] = nullptr;
+
+  BulletMLState* reused = createBulletMlState(nullptr, nodes2, 1, nullptr, 0);
+  mu_check(reused != nullptr);
+  mu_assert_int_eq(0, (int)getBulletMlStateCachedCount());
+
+  destroyBulletMlState(reused);
+  releaseBulletMlStatePools();
+}
+
+MU_TEST(test_state_pool_recycles_parameter_arrays)
+{
+  releaseBulletMlStatePools();
+  mu_assert_int_eq(0, (int)getBulletMlStateParameterArrayCachedCount(4));
+
+  BulletMLNode** nodes = createBulletMlStateNodeArray(1);
+  mu_check(nodes != nullptr);
+  nodes[0] = nullptr;
+
+  Fxp params[3];
+  params[0] = Fxp::Convert(1);
+  params[1] = Fxp::Convert(2);
+  params[2] = Fxp::Convert(3);
+
+  BulletMLState* state = createBulletMlState(nullptr, nodes, 1, params, 3);
+  mu_check(state != nullptr);
+
+  destroyBulletMlState(state);
+  mu_assert_int_eq(1, (int)getBulletMlStateParameterArrayCachedCount(4));
+
+  BulletMLNode** nodes2 = createBulletMlStateNodeArray(1);
+  mu_check(nodes2 != nullptr);
+  nodes2[0] = nullptr;
+  BulletMLState* reused = createBulletMlState(nullptr, nodes2, 1, params, 3);
+  mu_check(reused != nullptr);
+  mu_assert_int_eq(0, (int)getBulletMlStateParameterArrayCachedCount(4));
+
+  destroyBulletMlState(reused);
+  releaseBulletMlStatePools();
+}
+
+MU_TEST(test_state_pool_large_arrays_not_cached)
+{
+  releaseBulletMlStatePools();
+  mu_assert_int_eq(0, (int)getBulletMlStateBucketedCapacity(33));
+
+  BulletMLNode** nodes = createBulletMlStateNodeArray(33);
+  mu_check(nodes != nullptr);
+
+  Fxp params[33];
+  for (int i = 0; i < 33; ++i)
+  {
+    params[i] = Fxp::Convert(i);
+    nodes[i] = nullptr;
+  }
+
+  BulletMLState* state = createBulletMlState(nullptr, nodes, 33, params, 33);
+  mu_check(state != nullptr);
+  destroyBulletMlState(state);
+
+  mu_assert_int_eq(0, (int)getBulletMlStateNodeArrayCachedCount(32));
+  mu_assert_int_eq(0, (int)getBulletMlStateParameterArrayCachedCount(32));
+
+  releaseBulletMlStatePools();
+}
+
 MU_TEST_SUITE(suite_bulletml_state_pool)
 {
   MU_RUN_TEST(test_state_pool_recycles_state_object);
   MU_RUN_TEST(test_state_pool_recycles_node_arrays);
+  MU_RUN_TEST(test_state_pool_cached_count_tracks_lifecycle);
+  MU_RUN_TEST(test_state_pool_recycles_parameter_arrays);
+  MU_RUN_TEST(test_state_pool_large_arrays_not_cached);
 }
 
 /* =========================================================================
