@@ -12,6 +12,7 @@
 #include "bulletml_binary/bulletmlparser_blb.hpp"
 #include "foe.h"
 #include <cstdint>
+#include "foecommand.h"
 #include <srl_log.hpp>
 #include <srl_memory.hpp>
 
@@ -19,6 +20,7 @@
 #include "noiz2sa.h"
 #include "degutil.h"
 #include "ship.h"
+#include "bulletml_binary/bulletml_alloc_latch.h"
 
 #include <new>
 
@@ -77,6 +79,8 @@ struct FoeCommandFreeNode
 };
 
 static FoeCommandFreeNode* sFoeCommandFreeList = nullptr;
+static std::size_t sFoeCommandFreeCount = 0;
+static std::size_t sMinPoolSize = 0;  ///< Minimum guaranteed pool size
 }
 
 template <typename... Args>
@@ -87,8 +91,20 @@ static FoeCommand* createFoeCommandFromPool(Args&&... args)
   {
     FoeCommandFreeNode* node = sFoeCommandFreeList;
     sFoeCommandFreeList = node->next;
+    if (sFoeCommandFreeCount > 0)
+    {
+      sFoeCommandFreeCount--;
+    }
     return new (node) FoeCommand(std::forward<Args>(args)...);
   }
+  static std::size_t sFallbackAllocLogs = 0;
+  if (sFallbackAllocLogs < 12 || (sFallbackAllocLogs % 64) == 0)
+  {
+    SRL::Logger::LogInfo("[FOECMD_POOL] pool empty fallback alloc cached=%u min_pool=%u",
+               (unsigned int)sFoeCommandFreeCount,
+               (unsigned int)sMinPoolSize);
+  }
+  ++sFallbackAllocLogs;
   return createBulletMlRuntimeObject<FoeCommand>(std::forward<Args>(args)...);
 }
 
@@ -117,7 +133,7 @@ FoeCommand* createFoeCommand(BulletMLParserBLB* parser, Foe* f) {
 /** @brief Creates a FoeCommand for an existing BulletML state. */
 FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
   if (hasBulletMlAllocFailureLatched()) {
-    delete state;
+    destroyBulletMlState(state);
     return nullptr;
   }
   return createFoeCommandFromPool(state, f);
@@ -136,6 +152,7 @@ void destroyFoeCommand(FoeCommand*& cmd)
   FoeCommandFreeNode* node = reinterpret_cast<FoeCommandFreeNode*>(cmd);
   node->next = sFoeCommandFreeList;
   sFoeCommandFreeList = node;
+  sFoeCommandFreeCount++;
 
   cmd = nullptr;
 }
@@ -148,7 +165,54 @@ void releaseFoeCommandPool()
     FoeCommandFreeNode* node = sFoeCommandFreeList;
     sFoeCommandFreeList = node->next;
     SRL::Memory::Free(node);
+    if (sFoeCommandFreeCount > 0)
+    {
+      sFoeCommandFreeCount--;
+    }
   }
+  sFoeCommandFreeCount = 0;
+}
+
+std::size_t getFoeCommandCachedCount()
+{
+  return sFoeCommandFreeCount;
+}
+
+void trimFoeCommandPool(std::size_t maxCached)
+{
+  // Never trim below the minimum pool size
+  std::size_t trimLimit = (maxCached > sMinPoolSize) ? maxCached : sMinPoolSize;
+  while (sFoeCommandFreeCount > trimLimit && sFoeCommandFreeList)
+  {
+    FoeCommandFreeNode* node = sFoeCommandFreeList;
+    sFoeCommandFreeList = node->next;
+    SRL::Memory::Free(node);
+    sFoeCommandFreeCount--;
+  }
+}
+
+/** @brief Pre-allocates a guaranteed minimum pool of FoeCommand objects.
+ *  This prevents allocation failures during peak gameplay load.
+ */
+void preallocateFoeCommandPool(std::size_t count)
+{
+  sMinPoolSize = count;
+  for (std::size_t i = 0; i < count; ++i)
+  {
+    void* mem = SRL::Memory::HighWorkRam::Malloc(sizeof(FoeCommand));
+    if (!mem)
+    {
+      SRL::Logger::LogWarning("[FOECMD_POOL] Preallocation failed at index %u (wanted %u total)",
+              (unsigned int)i, (unsigned int)count);
+      break;
+    }
+    FoeCommandFreeNode* node = reinterpret_cast<FoeCommandFreeNode*>(mem);
+    node->next = sFoeCommandFreeList;
+    sFoeCommandFreeList = node;
+    sFoeCommandFreeCount++;
+  }
+  SRL::Logger::LogInfo("[FOECMD_POOL] Preallocated %u FoeCommand objects (min pool size=%u)",
+                       (unsigned int)sFoeCommandFreeCount, (unsigned int)sMinPoolSize);
 }
 
 Fxp FoeCommand::getBulletDirection() {
@@ -179,7 +243,7 @@ void FoeCommand::createSimpleBullet(Fxp direction, Fxp speed) {
 
 void FoeCommand::createBullet(BulletMLState* state, Fxp direction, Fxp speed) {
   if (hasBulletMlAllocFailureLatched()) {
-    delete state;
+    destroyBulletMlState(state);
     return;
   }
 

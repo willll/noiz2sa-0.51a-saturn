@@ -12,9 +12,14 @@
 #ifndef FOECOMMAND_H_
 #define FOECOMMAND_H_
 
+#include <cstddef>
+
+struct foe;  // Forward declaration
+
 #include "bulletml_binary/bulletmlparser_blb.hpp"
 #include "bulletml_binary/bulletmlrunner.hpp"
-#include "foe.h"
+
+struct foe;  // Forward declaration
 
 class FoeCommand : public BulletMLRunner {
  public:
@@ -65,7 +70,10 @@ class FoeCommand : public BulletMLRunner {
 FoeCommand* createFoeCommand(BulletMLParserBLB* parser, struct foe* f);
 FoeCommand* createFoeCommand(BulletMLState* state, struct foe* f);
 void destroyFoeCommand(FoeCommand*& cmd);
+void preallocateFoeCommandPool(std::size_t count);
 void releaseFoeCommandPool();
+std::size_t getFoeCommandCachedCount();
+void trimFoeCommandPool(std::size_t maxCached);
 
 #endif
 
