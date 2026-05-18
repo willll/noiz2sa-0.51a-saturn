@@ -131,7 +131,7 @@ void closeSound() {
   for (int i = 0; i < CHUNK_NUM; i++) {
     sglChunkFileName[i][0] = '\0';
     if (sglChunks[i] != nullptr) {
-      destroyObject(sglChunks[i]);
+      destroyWaveSound(sglChunks[i]);
     }
   }
 #  else
@@ -195,7 +195,7 @@ void loadSounds() {
     SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loading %s", sglChunkFileName[i]);
 
     SRL::Sound::Pcm::WaveSound* preload = createWaveSound(sglChunkFileName[i]);
-    destroyObject(preload);
+    destroyWaveSound(preload);
     sglChunkExists[i] = true;
     SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loaded WAV %s during init (released)", sglChunkFileName[i]);
     loaded++;
