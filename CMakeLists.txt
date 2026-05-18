@@ -108,6 +108,11 @@ option(NOIZ2SA_SHOW_FPS "Display FPS counter on screen" ON)
 # Memory debug display options
 option(NOIZ2SA_SHOW_FREE_HWRAM "Display free High Work RAM on screen" ON)
 option(NOIZ2SA_SHOW_FREE_LWRAM "Display free Low Work RAM on screen" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOLS "Display pool free/total counters on screen" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOL_FOE "Display foe pool free/total" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOL_SHOT "Display shot pool free/total" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOL_BONUS "Display bonus pool free/total" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOL_FRAG "Display frag pool free/total" ON)
 
 # Performance/Debug logging option
 option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
@@ -127,6 +132,36 @@ if(NOIZ2SA_SHOW_FREE_LWRAM)
     add_compile_definitions(NOIZ2SA_SHOW_FREE_LWRAM=1)
 else()
     add_compile_definitions(NOIZ2SA_SHOW_FREE_LWRAM=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOLS)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOLS=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOLS=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOL_FOE)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FOE=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FOE=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOL_SHOT)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_SHOT=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_SHOT=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOL_BONUS)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_BONUS=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_BONUS=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOL_FRAG)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FRAG=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FRAG=0)
 endif()
 
 if(NOIZ2SA_ENABLE_PERF_LOGS)
@@ -170,6 +205,8 @@ set_property(CACHE HW_DEBUG_ENDLESS_STAGE PROPERTY STRINGS 10 11 12 13)
 
 if(HW_DEBUG)
     set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
+    set(NOIZ2SA_SHOW_FREE_HWRAM ON CACHE BOOL "Display free High Work RAM on screen" FORCE)
+    set(NOIZ2SA_SHOW_FREE_LWRAM ON CACHE BOOL "Display free Low Work RAM on screen" FORCE)
     set(NOIZ2SA_ENABLE_SOUND OFF CACHE BOOL "Enable in-game sound (PCM SFX + CDDA BGM)" FORCE)
     set(NOIZ2SA_ENABLE_PCM_SFX OFF CACHE BOOL "Enable PCM SFX loading through Ponesound backend" FORCE)
     set(NOIZ2SA_ENABLE_INVINCIBLE ON CACHE BOOL "Make player invincible (debug/testing)" FORCE)
@@ -1360,63 +1397,138 @@ add_custom_target(${FACTORY_HEADERS_SH2_TEST_CD_NAME}_build ALL
 enable_testing()
 
 # ============================================================================
-# BulletML Parity Test (compiled with native compiler, not Saturn toolchain)
+# Saturn-hosted logic/parity tests (no native host g++ unit tests)
 # ============================================================================
 
-set(BULLETML_TEST_NAME "bulletml_parity_ut")
-set(BULLETML_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_parity_tests.cpp")
-set(BULLETML_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_TEST_NAME}")
+function(add_sh2_logic_test TEST_CD_NAME TEST_SOURCE TEST_ASSET_SUBDIR)
+    set(TEST_BUILD_DROP "${CMAKE_SOURCE_DIR}/Tests/BuildDrop")
+    set(TEST_ASSETS_DIR "${CMAKE_SOURCE_DIR}/Tests/${TEST_ASSET_SUBDIR}/data")
+    set(TEST_MAP "${TEST_BUILD_DROP}/${TEST_CD_NAME}.map")
+    set(TEST_ISO "${TEST_BUILD_DROP}/${TEST_CD_NAME}.iso")
+    set(TEST_CUE "${TEST_BUILD_DROP}/${TEST_CD_NAME}.cue")
 
-set(BULLETML_LATCH_TEST_NAME "bulletml_latch_recovery_ut")
-set(BULLETML_LATCH_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_latch_recovery_tests.cpp")
-set(BULLETML_LATCH_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_LATCH_TEST_NAME}")
+    file(MAKE_DIRECTORY "${TEST_BUILD_DROP}")
+    file(MAKE_DIRECTORY "${TEST_ASSETS_DIR}")
+    file(WRITE "${TEST_ASSETS_DIR}/ABS.TXT" "NOT Abstracted by SEGA\n")
+    file(WRITE "${TEST_ASSETS_DIR}/BIB.TXT" "NOT Bibliographiced by SEGA\n")
+    file(WRITE "${TEST_ASSETS_DIR}/CPY.TXT" "")
 
-set(HISCORE_TEST_NAME "hiscore_persistence_ut")
-set(HISCORE_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/hiscore/hiscore_persistence_unit_tests.cpp")
-set(HISCORE_TEST_SUPPORT_SOURCE "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.cpp")
-set(HISCORE_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${HISCORE_TEST_NAME}")
+    add_executable(${TEST_CD_NAME}.elf
+        "${SGL_PRELOADER_SOURCE}"
+        "${CMAKE_SOURCE_DIR}/Tests/src/logic_test_srl_main.cpp"
+        "${TEST_SOURCE}"
+        ${SOURCES_SGL_SYSTEM}
+        ${ARGN}
+    )
 
-# Build bulletml parity test with native compiler (not Saturn SH-ELF)
-add_custom_command(
-    OUTPUT "${BULLETML_TEST_EXECUTABLE}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/Tests"
-    COMMAND g++ -std=c++11 -Wall -Wextra -o "${BULLETML_TEST_EXECUTABLE}" "${BULLETML_TEST_SOURCE}"
-    DEPENDS "${BULLETML_TEST_SOURCE}"
-    COMMENT "Building bulletml parity test with native compiler"
-    VERBATIM
+    set_target_properties(${TEST_CD_NAME}.elf PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${TEST_BUILD_DROP}"
+    )
+
+    target_include_directories(${TEST_CD_NAME}.elf PUBLIC
+        ${SRL_INSTALL_ROOT}/saturnringlib
+        ${SRL_INSTALL_ROOT}/modules/sgl/INC
+        ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+        ${SRL_INSTALL_ROOT}/modules/tlsf
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/Tests/src
+    )
+
+    target_compile_options(${TEST_CD_NAME}.elf PUBLIC
+        $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags} -include ${CMAKE_SOURCE_DIR}/Tests/src/logic_test_compat.h>
+        $<$<COMPILE_LANGUAGE:C>:${c_flags} -include ${CMAKE_SOURCE_DIR}/Tests/src/logic_test_compat.h>
+    )
+
+    target_compile_definitions(${TEST_CD_NAME}.elf PUBLIC
+        $<$<COMPILE_LANGUAGE:C>:bool=int>
+        $<$<COMPILE_LANGUAGE:C>:true=1>
+        $<$<COMPILE_LANGUAGE:C>:false=0>
+    )
+
+    target_link_options(${TEST_CD_NAME}.elf PUBLIC
+        "SHELL:-m2"
+        "SHELL:-L${SRL_SGL_DIR}/LIB"
+        "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+        "SHELL:-Xlinker -Map -Xlinker ${TEST_MAP}"
+        "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+    )
+
+    if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+        target_link_options(${TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+    endif()
+
+    srl_link_target(${TEST_CD_NAME}.elf)
+
+    add_custom_command(TARGET ${TEST_CD_NAME}.elf POST_BUILD
+        COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${TEST_CD_NAME}.elf>" "${TEST_ASSETS_DIR}/0.bin"
+        COMMENT "Converting ${TEST_CD_NAME} ELF to binary: ${TEST_ASSETS_DIR}/0.bin"
+        VERBATIM
+    )
+
+    if(XORRISOFS_EXECUTABLE)
+        add_custom_target(${TEST_CD_NAME}_iso
+            DEPENDS ${TEST_CD_NAME}.elf
+            COMMAND ${XORRISOFS_EXECUTABLE}
+                --norock -quiet
+                -sysid "SEGA SATURN"
+                -volid "${TEST_CD_NAME}"
+                -volset "${TEST_CD_NAME}"
+                -publisher "SEGA ENTERPRISES, LTD."
+                -preparer "SEGA ENTERPRISES, LTD."
+                -appid "${TEST_CD_NAME}"
+                -abstract "NOT Abstracted by SEGA"
+                -copyright ""
+                -biblio ""
+                -generic-boot "${IPFILE}"
+                -full-iso9660-filenames
+                -o "${TEST_ISO}"
+                "${TEST_ASSETS_DIR}"
+            COMMENT "Building ${TEST_CD_NAME} ISO"
+            VERBATIM
+        )
+    endif()
+
+    if(EXISTS "${ISO2RAW_EXECUTABLE}")
+        add_custom_target(${TEST_CD_NAME}_bin_cue
+            DEPENDS ${TEST_CD_NAME}_iso
+            COMMAND "${ISO2RAW_EXECUTABLE}" "${TEST_ISO}"
+            COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${TEST_CUE}" "${TEST_CD_NAME}.bin"
+            COMMENT "Creating ${TEST_CD_NAME} BIN/CUE"
+            VERBATIM
+        )
+    endif()
+endfunction()
+
+add_sh2_logic_test(
+    "noiz2sa_bulletml_parity_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_parity_tests.cpp"
+    "cd_bulletml_parity"
 )
 
-add_custom_target(bulletml_parity_ut_build ALL
-    DEPENDS "${BULLETML_TEST_EXECUTABLE}"
+add_sh2_logic_test(
+    "noiz2sa_bulletml_latch_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_latch_recovery_tests.cpp"
+    "cd_bulletml_latch"
 )
 
-add_custom_command(
-    OUTPUT "${BULLETML_LATCH_TEST_EXECUTABLE}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/Tests"
-    COMMAND g++ -std=c++17 -Wall -Wextra
-            -I${CMAKE_SOURCE_DIR}/src
-            -o "${BULLETML_LATCH_TEST_EXECUTABLE}"
-            "${BULLETML_LATCH_TEST_SOURCE}"
-    DEPENDS "${BULLETML_LATCH_TEST_SOURCE}" "${CMAKE_SOURCE_DIR}/src/bulletml_binary/bulletml_alloc_latch.h"
-    COMMENT "Building BulletML latch recovery test with native compiler"
-    VERBATIM
+add_sh2_logic_test(
+    "noiz2sa_foecommand_trim_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/bulletml/foecommand_trim_tests.cpp"
+    "cd_foecommand_trim"
 )
 
-add_custom_target(bulletml_latch_recovery_ut_build ALL
-    DEPENDS "${BULLETML_LATCH_TEST_EXECUTABLE}"
+add_sh2_logic_test(
+    "noiz2sa_memory_pressure_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/bulletml/memory_pressure_tests.cpp"
+    "cd_memory_pressure"
 )
 
-add_custom_command(
-    OUTPUT "${HISCORE_TEST_EXECUTABLE}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/Tests"
-    COMMAND g++ -std=c++11 -Wall -Wextra -I${CMAKE_SOURCE_DIR}/src -o "${HISCORE_TEST_EXECUTABLE}" "${HISCORE_TEST_SOURCE}" "${HISCORE_TEST_SUPPORT_SOURCE}"
-    DEPENDS "${HISCORE_TEST_SOURCE}" "${HISCORE_TEST_SUPPORT_SOURCE}" "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.h"
-    COMMENT "Building hi-score persistence unit test with native compiler"
-    VERBATIM
-)
-
-add_custom_target(hiscore_persistence_ut_build ALL
-    DEPENDS "${HISCORE_TEST_EXECUTABLE}"
+add_sh2_logic_test(
+    "noiz2sa_hiscore_persistence_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/hiscore/hiscore_persistence_unit_tests.cpp"
+    "cd_hiscore"
+    "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.cpp"
 )
 
 # ============================================================================
@@ -1443,21 +1555,53 @@ set_tests_properties(sh2_factory_campaign PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME bulletml_parity_test
-    COMMAND "${BULLETML_TEST_EXECUTABLE}"
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_bulletml_parity_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_bulletml_parity.log"
 )
-set_tests_properties(bulletml_parity_test PROPERTIES TIMEOUT 60)
+set_tests_properties(bulletml_parity_test PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME bulletml_latch_recovery_test
-    COMMAND "${BULLETML_LATCH_TEST_EXECUTABLE}"
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_bulletml_latch_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_bulletml_latch.log"
 )
-set_tests_properties(bulletml_latch_recovery_test PROPERTIES TIMEOUT 60)
+set_tests_properties(bulletml_latch_recovery_test PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME foecommand_trim_test
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_foecommand_trim_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_foecommand_trim.log"
+)
+set_tests_properties(foecommand_trim_test PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME memory_pressure_policy_test
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_memory_pressure_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_memory_pressure.log"
+)
+set_tests_properties(memory_pressure_policy_test PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME hiscore_persistence_test
-    COMMAND "${HISCORE_TEST_EXECUTABLE}"
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_hiscore_persistence_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_hiscore_persistence.log"
 )
-set_tests_properties(hiscore_persistence_test PROPERTIES TIMEOUT 60)
+set_tests_properties(hiscore_persistence_test PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME bulletml_all_xml_recursive_test
