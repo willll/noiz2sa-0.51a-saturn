@@ -23,6 +23,7 @@
 #include "../../src/memory_factory.h"
 #include "../../src/bulletml_binary/bulletml_alloc_latch.h"
 #include "../../src/bulletml_binary/bulletmlrunner.hpp"
+#include "../../src/bulletml_binary/bulletmlstate.hpp"
 
 using namespace SRL::Logger;
 
@@ -51,6 +52,8 @@ static void resetAllState()
   resetBulletMlAllocFailureState();
   /* Drop any retained task-buffer cache */
   BulletMLRunnerImpl::ReleaseTaskBufferCache();
+  /* Drop any retained BulletMLState object and array pools */
+  releaseBulletMlStatePools();
 }
 
 /* =========================================================================
@@ -226,6 +229,60 @@ MU_TEST_SUITE(suite_task_buffer_cache)
 }
 
 /* =========================================================================
+ * Suite: BulletMLState pooling
+ * ========================================================================= */
+
+MU_TEST(test_state_pool_recycles_state_object)
+{
+  releaseBulletMlStatePools();
+
+  BulletMLNode** nodes = createBulletMlStateNodeArray(1);
+  mu_check(nodes != nullptr);
+  nodes[0] = nullptr;
+
+  BulletMLState* first = createBulletMlState(nullptr, nodes, 1, nullptr, 0);
+  mu_check(first != nullptr);
+  void* firstAddr = static_cast<void*>(first);
+  destroyBulletMlState(first);
+
+  BulletMLNode** nextNodes = createBulletMlStateNodeArray(1);
+  mu_check(nextNodes != nullptr);
+  nextNodes[0] = nullptr;
+
+  BulletMLState* second = createBulletMlState(nullptr, nextNodes, 1, nullptr, 0);
+  mu_check(second != nullptr);
+  mu_check(static_cast<void*>(second) == firstAddr);
+
+  destroyBulletMlState(second);
+  releaseBulletMlStatePools();
+}
+
+MU_TEST(test_state_pool_recycles_node_arrays)
+{
+  releaseBulletMlStatePools();
+  mu_assert_int_eq(0, (int)getBulletMlStateNodeArrayCachedCount(4));
+
+  BulletMLNode** nodes = createBulletMlStateNodeArray(1);
+  mu_check(nodes != nullptr);
+  destroyBulletMlStateNodeArray(nodes, 1);
+
+  mu_assert_int_eq(1, (int)getBulletMlStateNodeArrayCachedCount(4));
+
+  BulletMLNode** reused = createBulletMlStateNodeArray(1);
+  mu_check(reused != nullptr);
+  mu_assert_int_eq(0, (int)getBulletMlStateNodeArrayCachedCount(4));
+
+  destroyBulletMlStateNodeArray(reused, 1);
+  releaseBulletMlStatePools();
+}
+
+MU_TEST_SUITE(suite_bulletml_state_pool)
+{
+  MU_RUN_TEST(test_state_pool_recycles_state_object);
+  MU_RUN_TEST(test_state_pool_recycles_node_arrays);
+}
+
+/* =========================================================================
  * Entry point
  * ========================================================================= */
 
@@ -238,6 +295,7 @@ int main()
   MU_RUN_SUITE(suite_pool_mechanics);
   MU_RUN_SUITE(suite_alloc_latch);
   MU_RUN_SUITE(suite_task_buffer_cache);
+  MU_RUN_SUITE(suite_bulletml_state_pool);
 
   MU_REPORT();
 
