@@ -67,6 +67,12 @@ Typical invocation:
 ./tools/test_hardware_full.sh saturnpsu.local
 ```
 
+10-minute stability window:
+
+```bash
+TIMEOUT=600 GAMEPLAY_MONITOR_SECONDS=600 ./tools/test_hardware_full.sh saturnpsu.local
+```
+
 You can also set the IP once:
 
 ```bash
@@ -81,6 +87,24 @@ To control power only:
 ./tools/test_hardware_full.sh --power-off saturnpsu.local
 ./tools/test_hardware_full.sh --power-on saturnpsu.local
 ./tools/test_hardware_full.sh --power-cycle saturnpsu.local
+```
+
+## Command Pitfalls
+
+- Do not pass `-e` to `tools/test_hardware_full.sh`.
+- The script only accepts `REST_API_IP` as an optional positional argument.
+- Power actions are only `--power-status`, `--power-off`, `--power-on`, `--power-cycle`.
+
+Correct:
+
+```bash
+./tools/test_hardware_full.sh saturnpsu.local
+```
+
+Incorrect:
+
+```bash
+./tools/test_hardware_full.sh -e BuildDrop/noiz2sa.elf
 ```
 
 ## Preflight Checklist

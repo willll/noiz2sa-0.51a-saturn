@@ -181,7 +181,19 @@ cmake --build build_hw_debug
 
 # Run full hardware test (requires ESP-SaturnPSU_Control at saturnpsu.local)
 ./tools/test_hardware_full.sh saturnpsu.local
+
+# Run manual-power mode (no PSU REST API)
+./tools/test_hardware_full.sh
+
+# Run a 10-minute hardware window with extended monitoring
+TIMEOUT=600 GAMEPLAY_MONITOR_SECONDS=600 ./tools/test_hardware_full.sh saturnpsu.local
+
+# Optional outer timeout wrapper for CI-style control
+timeout 600 ./tools/test_hardware_full.sh saturnpsu.local
 ```
+
+Important:
+- The script does not accept `-e`. The only positional argument is `REST_API_IP`.
 
 The script will:
 - Power cycle the Saturn automatically
