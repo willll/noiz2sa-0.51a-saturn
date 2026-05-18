@@ -21,7 +21,8 @@
       "binaryDir": "${sourceDir}/build-hwdebug",
       "cacheVariables": {
         "HW_DEBUG": "ON",
-        "HW_DEBUG_ENDLESS_STAGE": "10"
+        "HW_DEBUG_ENDLESS_STAGE": "10",
+        "NOIZ2SA_SHOW_MEMORY_POOLS": "ON"
       }
     }
   ],
