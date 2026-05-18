@@ -625,7 +625,7 @@ static void loadSprites()
     sprite[i] = SRL_Surface(textureIndex, info.Width, info.Height);
     SRL::Logger::LogTrace("[SPRITE] SDL surface created for sprite %d", i);
 
-    destroyObject(tga);
+    destroyBitmapTga(tga);
 
     SRL::Logger::LogDebug("[SPRITE] Sprite %d loaded successfully", i);
   }
