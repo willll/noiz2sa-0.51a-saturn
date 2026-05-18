@@ -1060,7 +1060,7 @@ private:
                     return;
                 }
 
-                BulletMLNode** acts = allocBulletMlArray<BulletMLNode*>("runner.bullet.actions", total);
+                BulletMLNode** acts = createBulletMlStateNodeArray(total);
                 if (!acts) return;
 
                 uint16_t w = 0;
@@ -1074,9 +1074,9 @@ private:
                     if (c && c->getNameAsName() == BulletMLNode::actionRef) acts[w++] = c;
                 }
 
-                BulletMLState* st = allocBulletMlObject<BulletMLState>("runner.bullet.state", parser_, acts, total, params_, param_count_);
+                BulletMLState* st = createBulletMlState(parser_, acts, total, params_, param_count_);
                 if (!st) {
-                    delete[] acts;
+                    destroyBulletMlStateNodeArray(acts, total);
                     SRL::Logger::LogWarning("[BML-RUNNER] Failed to allocate child state for bullet actions=%u", total);
                     return;
                 }
@@ -1338,19 +1338,19 @@ inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
     for (uint16_t i = 0; i < top_count; ++i) impls_[i] = nullptr;
 
     for (uint16_t i = 0; i < top_count; ++i) {
-        BulletMLNode** nodes = allocBulletMlArray<BulletMLNode*>("runner.top.nodes", 1);
+        BulletMLNode** nodes = createBulletMlStateNodeArray(1);
         if (!nodes) break;
         nodes[0] = top_actions[i];
 
-        BulletMLState* st = allocBulletMlObject<BulletMLState>("runner.top.state", parser_, nodes, 1, nullptr, 0);
+        BulletMLState* st = createBulletMlState(parser_, nodes, 1, nullptr, 0);
         if (!st) {
-            delete[] nodes;
+            destroyBulletMlStateNodeArray(nodes, 1);
             break;
         }
 
         BulletMLRunnerImpl* impl = allocBulletMlObject<BulletMLRunnerImpl>("runner.top.impl", st, this);
         if (!impl) {
-            delete st;
+            destroyBulletMlState(st);
             break;
         }
 
@@ -1386,7 +1386,7 @@ inline BulletMLRunner::~BulletMLRunner() {
     impls_ = nullptr;
     impl_count_ = 0;
 
-    delete state_;
+    destroyBulletMlState(state_);
     state_ = nullptr;
 }
 
