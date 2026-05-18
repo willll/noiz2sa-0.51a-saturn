@@ -22,6 +22,8 @@
 
 Frag frag[FRAG_MAX];
 
+static constexpr int kFragSpawnMultiplier = 3;
+
 /** @brief Initialises the fragment pool. */
 void initFrags()
 {
@@ -113,9 +115,12 @@ void addShotFrag(Vector *p)
   Vector pos, vel;
   pos.x = (p->x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
   pos.y = (p->y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
-  vel.x = randNS(SHOT_SPEED >> 11) * LAYER_WIDTH / SCAN_WIDTH;
-  vel.y = (-(SHOT_SPEED >> 8) + randNS(SHOT_SPEED >> 11)) * LAYER_HEIGHT / SCAN_HEIGHT;
-  addFrag(&pos, &vel, 0, 0);
+  for (int i = 0; i < kFragSpawnMultiplier; i++)
+  {
+    vel.x = randNS(SHOT_SPEED >> 11) * LAYER_WIDTH / SCAN_WIDTH;
+    vel.y = (-(SHOT_SPEED >> 8) + randNS(SHOT_SPEED >> 11)) * LAYER_HEIGHT / SCAN_HEIGHT;
+    addFrag(&pos, &vel, 0, 0);
+  }
 }
 
 /** @brief Spawns fragments for an enemy explosion. */
@@ -129,13 +134,13 @@ void addEnemyFrag(Vector *p, int mx, int my, int type)
   cmx = (mx / SCAN_WIDTH * LAYER_WIDTH) >> 8;
   cmy = (my / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
   type = type * 2 + 1;
-  for (i = 0; i < type + randN(type * 2); i++)
+  for (i = 0; i < (unsigned int)((type + randN(type * 2)) * kFragSpawnMultiplier); i++)
   {
     vel.x = randNS(16);
     vel.y = randNS(16);
     addFrag(&pos, &vel, 0, 0);
   }
-  for (i = 0; i < type * 2 + randN(type); i++)
+  for (i = 0; i < (unsigned int)((type * 2 + randN(type)) * kFragSpawnMultiplier); i++)
   {
     vel.x = cmx + randNS(3);
     vel.y = cmy + randNS(3);
@@ -151,17 +156,17 @@ void addShipFrag(Vector *p)
   int i;
 
   // Ship explosion should remain visible even in effect-heavy scenes.
-  ensureFragCapacity(48 + 32);
+  ensureFragCapacity((48 + 32) * kFragSpawnMultiplier);
 
   pos.x = (p->x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
   pos.y = (p->y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
-  for (i = 0; i < 48; i++)
+  for (i = 0; i < 48 * kFragSpawnMultiplier; i++)
   {
     vel.x = randNS(24);
     vel.y = randNS(24);
     addFrag(&pos, &vel, 0, 0);
   }
-  for (i = 0; i < 32; i++)
+  for (i = 0; i < 32 * kFragSpawnMultiplier; i++)
   {
     vel.x = randNS(4);
     vel.y = randNS(4);
@@ -177,7 +182,10 @@ void addClearFrag(Vector *p, Vector *v)
   pos.y = (p->y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
   vel.x = (v->x / SCAN_WIDTH * LAYER_WIDTH) >> 8;
   vel.y = (v->y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8;
-  addFrag(&pos, &vel, 2, 0);
+  for (int i = 0; i < kFragSpawnMultiplier; i++)
+  {
+    addFrag(&pos, &vel, 2, 0);
+  }
 }
 
 /** @brief Advances all active fragments. */
@@ -217,4 +225,24 @@ void drawFrags()
     drawBox(fr->pos.x, fr->pos.y, fr->width, fr->height,
           fragColor[fr->spc][c][0], fragColor[fr->spc][c][1], buf);
   }
+}
+
+/** @brief Returns the number of active fragments. */
+int getActiveFragCount()
+{
+  int active = 0;
+  for (int i = 0; i < FRAG_MAX; i++)
+  {
+    if (frag[i].cnt > 0)
+    {
+      active++;
+    }
+  }
+  return active;
+}
+
+/** @brief Returns the total fragment pool capacity. */
+int getFragPoolCapacity()
+{
+  return FRAG_MAX;
 }
