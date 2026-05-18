@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <srl.hpp>
+#include <srl_log.hpp>
 
 #include "../bulletml_runtime_factory.h"
 
@@ -25,12 +26,24 @@ public:
           parameters_(nullptr),
           parameter_count_(0) {
         if (parameter_count > 0 && parameters) {
+            static uint32_t sParameterCopyLogs = 0;
+            if (sParameterCopyLogs < 12 || (sParameterCopyLogs % 64) == 0) {
+                SRL::Logger::LogInfo("[BML-STATE] param copy count=%u node_count=%u",
+                                     static_cast<unsigned>(parameter_count),
+                                     static_cast<unsigned>(node_count));
+            }
+            ++sParameterCopyLogs;
             parameters_ = createBulletMlRuntimeArray<Fxp>(parameter_count);
             if (parameters_) {
                 for (uint16_t i = 0; i < parameter_count; ++i) {
                     parameters_[i] = parameters[i];
                 }
                 parameter_count_ = parameter_count;
+            }
+            else {
+                SRL::Logger::LogWarning("[BML-STATE] param copy allocation failed count=%u node_count=%u",
+                                        static_cast<unsigned>(parameter_count),
+                                        static_cast<unsigned>(node_count));
             }
         }
     }

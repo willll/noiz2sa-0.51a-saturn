@@ -231,6 +231,19 @@ public:
 
     uint16_t getPeakTaskCount() const { return peak_task_count_; }
 
+    static void ReleaseTaskBufferCache() {
+        TaskBufferCache& cache = getTaskBufferCache();
+        if (cache.ptr) {
+            delete[] cache.ptr;
+            cache.ptr = nullptr;
+            cache.capacity = 0;
+        }
+    }
+
+    static uint16_t GetTaskBufferCacheCapacity() {
+        return getTaskBufferCache().capacity;
+    }
+
     void run() {
         if (end_) return;
         if (hasBulletMlAllocFailureLatched()) {
@@ -394,6 +407,19 @@ private:
     bool ensureTaskCapacity(uint32_t needed) {
         if (needed <= task_capacity_) return true;
 
+        if (capacity_fail_logs_ < 12) {
+            SRL::Logger::LogInfo(
+                "[BML-RUNNER] task growth request needed=%u current=%u turn=%d wait=%d ctx_name=%u ctx_ref=%u ctx_fanout=%u ctx_children=%u",
+                static_cast<unsigned>(needed),
+                static_cast<unsigned>(task_capacity_),
+                runner_ ? runner_->getTurn() : -1,
+                wait_until_turn_,
+                static_cast<unsigned>(expand_name_),
+                static_cast<unsigned>(expand_ref_id_),
+                static_cast<unsigned>(expand_fanout_),
+                static_cast<unsigned>(expand_child_count_));
+        }
+
         if (needed > kMaxTaskCapacity) {
             if (capacity_fail_logs_ < 12) {
                 ++capacity_fail_logs_;
@@ -438,7 +464,17 @@ private:
         uint16_t cached_cap = 0;
         Task* t = takeCachedTaskBuffer(new_cap, cached_cap);
         if (!t) {
+            if (capacity_fail_logs_ < 12) {
+                SRL::Logger::LogInfo("[BML-RUNNER] task buffer cache miss needed=%u new_cap=%u",
+                                     static_cast<unsigned>(needed),
+                                     static_cast<unsigned>(new_cap));
+            }
             t = allocBulletMlArray<Task>("runner.tasks", new_cap);
+        }
+        else if (capacity_fail_logs_ < 12) {
+            SRL::Logger::LogInfo("[BML-RUNNER] task buffer cache hit needed=%u cached_cap=%u",
+                                 static_cast<unsigned>(needed),
+                                 static_cast<unsigned>(cached_cap));
         }
         if (!t) return false;
 
