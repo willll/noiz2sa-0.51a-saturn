@@ -46,6 +46,8 @@ Environment:
     CONSOLE_ATTACH_RETRIES     Number of Phase-4 console attach attempts (default 3)
     CONSOLE_ATTACH_RETRY_DELAY Seconds between Phase-4 retries (default 3)
     MIN_MONITOR_LINES_FOR_STABLE_ATTACH  Retry attach if init times out with fewer lines than this (default 8)
+    ENABLE_STALL_DIAGNOSTIC    Run re-attach probe when heartbeat goes stale (0/1, default 1)
+    REATTACH_PROBE_SECONDS     Duration of post-failure probe attach (default 20)
 EOF
 }
 
@@ -64,6 +66,12 @@ SATURN_PSU_IP_FALLBACK="${SATURN_PSU_IP_FALLBACK:-192.168.1.106}"
 CONSOLE_ATTACH_RETRIES="${CONSOLE_ATTACH_RETRIES:-3}"
 CONSOLE_ATTACH_RETRY_DELAY="${CONSOLE_ATTACH_RETRY_DELAY:-3}"
 MIN_MONITOR_LINES_FOR_STABLE_ATTACH="${MIN_MONITOR_LINES_FOR_STABLE_ATTACH:-8}"
+ENABLE_STALL_DIAGNOSTIC="${ENABLE_STALL_DIAGNOSTIC:-1}"
+REATTACH_PROBE_SECONDS="${REATTACH_PROBE_SECONDS:-20}"
+
+DIAG_CLASS="UNSET"
+DIAG_DETAILS=""
+PROBE_LOG_FILE=""
 
 trace() {
     echo "[TRACE $(date '+%H:%M:%S')] $*"
@@ -195,6 +203,89 @@ resolve_rest_api_target() {
     fi
 
     echo "$input"
+}
+
+extract_heartbeat_tick() {
+    local line="$1"
+    echo "$line" | sed -n 's/.*tick=\([0-9][0-9]*\).*/\1/p'
+}
+
+extract_heartbeat_ms() {
+    local line="$1"
+    echo "$line" | sed -n 's/.*ms=\([0-9][0-9]*\).*/\1/p'
+}
+
+run_stall_diagnostic_probe() {
+    local last_heartbeat_line="$1"
+    local last_liveness_line="$2"
+    local last_tick
+    local last_liveness_tick
+    local reference_tick
+    local last_ms
+    local probe_last_heartbeat
+    local probe_last_liveness
+    local probe_source
+    local probe_tick
+    local probe_ms
+    local probe_output
+
+    if [ "$ENABLE_STALL_DIAGNOSTIC" != "1" ]; then
+        DIAG_CLASS="SKIPPED"
+        DIAG_DETAILS="ENABLE_STALL_DIAGNOSTIC=0"
+        return
+    fi
+
+    mk_logs_dir
+    PROBE_LOG_FILE="./logs/hw_debug_probe_$(date +%Y%m%d_%H%M%S).log"
+    trace "Running stall diagnostic probe (${REATTACH_PROBE_SECONDS}s)"
+    trace "Probe log: ${PROBE_LOG_FILE}"
+
+    last_tick="$(extract_heartbeat_tick "$last_heartbeat_line")"
+    last_ms="$(extract_heartbeat_ms "$last_heartbeat_line")"
+    last_liveness_tick="$(extract_heartbeat_tick "$last_liveness_line")"
+
+    reference_tick="$last_tick"
+    if [ -n "$last_liveness_tick" ] && { [ -z "$reference_tick" ] || [ "$last_liveness_tick" -gt "$reference_tick" ]; }; then
+        reference_tick="$last_liveness_tick"
+    fi
+
+    probe_output="$(timeout -s TERM -k 3 "${REATTACH_PROBE_SECONDS}" ftx -c 2>&1 || true)"
+    printf '%s\n' "$probe_output" > "$PROBE_LOG_FILE"
+
+    if echo "$probe_output" | grep -qiE "Device open error|device not found|Read data error|usb bulk read failed"; then
+        DIAG_CLASS="LINK_FAILURE"
+        DIAG_DETAILS="Console probe hit transport/device error"
+        return
+    fi
+
+    probe_last_heartbeat="$(echo "$probe_output" | grep "\[HEARTBEAT\]" | tail -n 1)"
+    probe_last_liveness="$(echo "$probe_output" | grep "\[LIVENESS\]" | tail -n 1)"
+    if [ -z "$probe_last_heartbeat" ] && [ -z "$probe_last_liveness" ]; then
+        DIAG_CLASS="STALL_OR_SILENT"
+        DIAG_DETAILS="Probe saw no heartbeat or liveness lines"
+        return
+    fi
+
+    if [ -n "$probe_last_heartbeat" ]; then
+        probe_source="HEARTBEAT"
+        probe_tick="$(extract_heartbeat_tick "$probe_last_heartbeat")"
+        probe_ms="$(extract_heartbeat_ms "$probe_last_heartbeat")"
+    else
+        probe_source="LIVENESS"
+        probe_tick="$(extract_heartbeat_tick "$probe_last_liveness")"
+        probe_ms="$(extract_heartbeat_ms "$probe_last_liveness")"
+    fi
+
+    if [ -n "$probe_tick" ] && [ -n "$reference_tick" ] && [ "$probe_tick" -gt "$reference_tick" ]; then
+        DIAG_CLASS="CONSOLE_PATH_STALL"
+        DIAG_DETAILS="Probe recovered progression via ${probe_source} (tick ${reference_tick}->${probe_tick}, ms ${last_ms}->${probe_ms})"
+    elif [ -z "$reference_tick" ] && [ -n "$probe_tick" ]; then
+        DIAG_CLASS="CONSOLE_PATH_STALL"
+        DIAG_DETAILS="Probe observed ${probe_source} when no baseline marker was available"
+    else
+        DIAG_CLASS="STALL_OR_SILENT"
+        DIAG_DETAILS="Markers did not advance during probe (last tick=${reference_tick:-none}, probe tick=${probe_tick:-none})"
+    fi
 }
 
 trap cleanup EXIT
@@ -362,6 +453,9 @@ heartbeat_seen=0
 heartbeat_last_time=0
 heartbeat_last_line=""
 heartbeat_failed=0
+liveness_seen=0
+liveness_last_time=0
+liveness_last_line=""
 monitor_line_count=0
 last_console_line=""
 stop_reason="unknown"
@@ -386,6 +480,9 @@ while [ "$phase4_attempt" -lt "$CONSOLE_ATTACH_RETRIES" ]; do
     heartbeat_last_time=0
     heartbeat_last_line=""
     heartbeat_failed=0
+    liveness_seen=0
+    liveness_last_time=0
+    liveness_last_line=""
     monitor_line_count=0
     last_console_line=""
     stop_reason="unknown"
@@ -423,6 +520,14 @@ while [ "$phase4_attempt" -lt "$CONSOLE_ATTACH_RETRIES" ]; do
                 heartbeat_last_time=$NOW
                 heartbeat_last_line="$line"
             fi
+            if [ $init_complete -eq 0 ] && echo "$line" | grep -q "\[LIVENESS\]"; then
+                echo "[MONITOR] ✓ Liveness observed — treating initialization as complete"
+                init_complete=1
+                init_time=$NOW
+                liveness_seen=1
+                liveness_last_time=$NOW
+                liveness_last_line="$line"
+            fi
             if [ $(( NOW - TIMER_START )) -ge $TIMEOUT ]; then
                 if [ "$stop_reason" = "unknown" ]; then
                     stop_reason="init_timeout"
@@ -435,6 +540,11 @@ while [ "$phase4_attempt" -lt "$CONSOLE_ATTACH_RETRIES" ]; do
                 heartbeat_seen=1
                 heartbeat_last_time=$NOW
                 heartbeat_last_line="$line"
+            fi
+            if echo "$line" | grep -q "\[LIVENESS\]"; then
+                liveness_seen=1
+                liveness_last_time=$NOW
+                liveness_last_line="$line"
             fi
 
             if echo "$line" | grep -q "\[ALLOC_STRESS\] baseline captured"; then
@@ -571,6 +681,27 @@ else
     echo "Heartbeat: FAIL — heartbeat missing/stale"
     if [ -n "$heartbeat_last_line" ]; then
         echo "           Last heartbeat: $heartbeat_last_line"
+    fi
+fi
+
+if [ $liveness_seen -eq 1 ]; then
+    echo "Liveness: PASS — liveness marker observed"
+else
+    echo "Liveness: WARN — no liveness marker observed"
+fi
+
+if [ $heartbeat_failed -eq 1 ] && [ -n "$heartbeat_last_line" ]; then
+    NOW_SUMMARY=$(date +%s)
+    if [ $liveness_seen -eq 1 ] && [ $(( NOW_SUMMARY - liveness_last_time )) -le $HEARTBEAT_MAX_SILENCE_SECONDS ]; then
+        DIAG_CLASS="HEARTBEAT_PATH_STALL"
+        DIAG_DETAILS="Liveness continued while heartbeat went stale"
+    else
+        run_stall_diagnostic_probe "$heartbeat_last_line" "$liveness_last_line"
+    fi
+    echo "Diag:     ${DIAG_CLASS}"
+    echo "          ${DIAG_DETAILS}"
+    if [ -n "$PROBE_LOG_FILE" ]; then
+        echo "          Probe log: ${PROBE_LOG_FILE}"
     fi
 fi
 

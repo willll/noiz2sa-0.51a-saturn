@@ -169,7 +169,7 @@ XML:
 Binary representation (hexadecimal):
 ```
 Header:
-42 4D 4C 42  01 00  00  00    "BMLB" version=1 orientation=vertical flags=0
+42 4C 42 00  01 00  00  00    "BLB\0" version=1 orientation=vertical flags=0
 18 00 00 00  XX XX XX XX      string_table_offset refmap_offset
 YY YY YY YY  ZZ ZZ ZZ ZZ      tree_offset file_size
 

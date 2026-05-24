@@ -11,8 +11,8 @@ Options:
   --emulator <mednafen|kronos|USBGamers>   Emulator target (default: mednafen)
   --psu-ip <ip-or-url>                    Optional PSU controller endpoint for USBGamers preflight
   --skip-build                            Skip CMake build step for SH2 test disc image
-  --skip-run                              Skip running emulator (requires existing logs/uts.log)
-  --log <path>                            Path to uts.log (default: <repo>/logs/uts.log)
+  --skip-run                              Skip running emulator (requires existing Tests/logs/uts.log)
+  --log <path>                            Path to uts.log (default: <repo>/Tests/logs/uts.log)
   --strict                                Exit non-zero if uts.log contains any FATAL failures
   -h, --help                              Show help
 EOF
@@ -26,8 +26,8 @@ SKIP_RUN=0
 STRICT=0
 PSU_IP=""
 SATURN_PSU_IP_FALLBACK="${SATURN_PSU_IP_FALLBACK:-192.168.1.106}"
-LOG_FILE="$ROOT_DIR/logs/uts.log"
-mkdir -p "$ROOT_DIR/logs"
+LOG_FILE="$ROOT_DIR/Tests/logs/uts.log"
+mkdir -p "$ROOT_DIR/Tests/logs"
 
 ensure_emulator_log_output() {
   # UT runners detect completion via emulator console marker (***UT_END***).
@@ -164,6 +164,7 @@ if [[ $SKIP_RUN -eq 0 ]]; then
   echo "[campaign] Running SH2 tests via emulator: $EMULATOR"
   (
     cd "$ROOT_DIR/Tests"
+    UT_LOG_FILE="$LOG_FILE" \
     MEDNAFEN_ALLOWMULTI="${MEDNAFEN_ALLOWMULTI:-1}" \
       bash "$ROOT_DIR/Tests/run_tests.bat" "$EMULATOR"
   )

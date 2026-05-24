@@ -47,6 +47,7 @@
     cue_base="$(basename "$cue_path" .cue)"
 
     mkdir -p "$pgconfig_dir" "$cheats_dir"
+
     : > "$mednafen_base/ss.cfg"
     : > "$pgconfig_dir/${cue_base}.ss.cfg"
     : > "$cheats_dir/ss.cht"
