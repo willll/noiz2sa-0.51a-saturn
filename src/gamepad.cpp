@@ -26,7 +26,7 @@ bool initGamepad() {
         SRL::Logger::LogInfo("[GAMEPAD] Gamepad initialized successfully");
     }
 
-    if (gamepad->IsConnected()) {   
+    if (gamepad->IsConnected()) {
         SRL::Logger::LogInfo("[GAMEPAD] Gamepad is connected");
         return true;
     } else {
