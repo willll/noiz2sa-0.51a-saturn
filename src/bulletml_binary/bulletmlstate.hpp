@@ -268,4 +268,14 @@ inline std::size_t getBulletMlStateNodeArrayCachedCount(uint16_t capacity)
     return bulletml_state_pool::getArrayPoolCachedCount<BulletMLNode*>(capacity);
 }
 
+inline std::size_t getBulletMlStateParameterArrayCachedCount(uint16_t capacity)
+{
+    return bulletml_state_pool::getArrayPoolCachedCount<Fxp>(capacity);
+}
+
+inline uint16_t getBulletMlStateBucketedCapacity(uint16_t count)
+{
+    return bulletml_state_pool::getBucketedCapacity(count);
+}
+
 #endif // BULLETMLSTATE_HPP_
