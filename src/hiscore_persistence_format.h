@@ -25,5 +25,7 @@ struct HiScoreBackupData
   int32_t stage;
 };
 
+/** @brief Encodes a HiScore structure into the on-disk backup layout. */
 void encodeHiScoreBackupData(HiScoreBackupData *outData, const HiScore *hiScore);
+/** @brief Decodes the on-disk backup layout into a HiScore structure. */
 bool decodeHiScoreBackupData(const HiScoreBackupData *data, HiScore *outHiScore);

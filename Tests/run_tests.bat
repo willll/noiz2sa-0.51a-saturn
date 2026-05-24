@@ -47,6 +47,7 @@
     cue_base="$(basename "$cue_path" .cue)"
 
     mkdir -p "$pgconfig_dir" "$cheats_dir"
+
     : > "$mednafen_base/ss.cfg"
     : > "$pgconfig_dir/${cue_base}.ss.cfg"
     : > "$cheats_dir/ss.cht"
@@ -72,7 +73,8 @@
     exit 1
   fi
 
-  log="${UT_LOG_FILE:-uts.log}"
+  log="${UT_LOG_FILE:-logs/uts.log}"
+  mkdir -p "$(dirname "$log")"
   match="***UT_END***"
 
   echo "Test command: $command"

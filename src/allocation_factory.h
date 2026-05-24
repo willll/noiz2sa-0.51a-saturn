@@ -6,3 +6,11 @@
 #include "sound_factory.h"
 #include "bulletml_factory.h"
 #include "bulletml_runtime_factory.h"
+
+inline void releaseFactoryPools()
+{
+	releaseSystemFactoryPools();
+	releaseGraphicsFactoryPools();
+	releaseSoundFactoryPools();
+	releaseBulletMlParserPool();
+}

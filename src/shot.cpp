@@ -22,6 +22,7 @@
 
 Shot shot[SHOT_MAX];
 
+/** @brief Initialises the shot pool. */
 void initShots() {
   int i;
   for ( i=0 ; i<SHOT_MAX ; i++ ) {
@@ -31,6 +32,7 @@ void initShots() {
 
 static int shotIdx = SHOT_MAX;
 
+/** @brief Spawns a shot at the supplied position. */
 void addShot(Vector *pos) {
   int i;
   for ( i=0 ; i<SHOT_MAX ; i++ ) {
@@ -43,6 +45,7 @@ void addShot(Vector *pos) {
   playChunk(0);
 }
 
+/** @brief Advances all active shots. */
 void moveShots() {
   int i;
   Shot *st;
@@ -58,6 +61,7 @@ void moveShots() {
   }
 }
 
+/** @brief Draws all active shots. */
 void drawShots() {
   int x, y, d;
   int i;
@@ -71,5 +75,25 @@ void drawShots() {
     drawBox(x+((sctbl[d]*SHOT_WIDTH)>>8), y, SHOT_WIDTH, SHOT_HEIGHT, 16*7-8, 16*7-1, buf);
     drawBox(x-((sctbl[d]*SHOT_WIDTH)>>8), y, SHOT_WIDTH, SHOT_HEIGHT, 16*7-8, 16*7-1, buf);
   }
+}
+
+/** @brief Returns the number of active shots. */
+int getActiveShotCount()
+{
+  int active = 0;
+  for (int i = 0; i < SHOT_MAX; i++)
+  {
+    if (shot[i].cnt != NOT_EXIST)
+    {
+      active++;
+    }
+  }
+  return active;
+}
+
+/** @brief Returns the total shot pool capacity. */
+int getShotPoolCapacity()
+{
+  return SHOT_MAX;
 }
 

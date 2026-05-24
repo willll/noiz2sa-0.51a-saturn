@@ -23,7 +23,9 @@
 #include "brgmng_mtd.h"
 #include "soundmanager.h"
 #include "degutil.h"
+#if NOIZ2SA_ENABLE_BACKUP_PERSISTENCE
 #include "hiscore_persistence.h"
+#endif
 
 int score;
 static int nextExtend, neAdd;
@@ -72,10 +74,18 @@ void loadPreference()
 
   initHiScore();
 
+#if HW_DEBUG
+  // In HW_DEBUG soak mode, avoid backup-device I/O during boot because
+  // intermittent backup bus issues can stall startup at "Loading preferences".
+  return;
+#else
+#if NOIZ2SA_ENABLE_BACKUP_PERSISTENCE
   if (loadHiScorePersistence(&hiScore) == HiScoreLoadStatus::Loaded)
   {
     return;
   }
+#endif
+#endif
 
   // Preferences are read-only on Saturn (from CD image).
   if (!prefFile.Exists() || !prefFile.Open())
@@ -129,12 +139,18 @@ void loadPreference()
 // Save preference.
 void savePreference()
 {
+#if HW_DEBUG
+  return;
+#else
+#if NOIZ2SA_ENABLE_BACKUP_PERSISTENCE
   if (saveHiScorePersistence(&hiScore) == HiScoreSaveStatus::Saved)
   {
     return;
   }
+#endif
 
   // CD media is read-only on Saturn; keep in-memory highscores only.
+#endif
 }
 
 void initGameState(int stg)

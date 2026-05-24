@@ -47,6 +47,7 @@ cd/music/*.raw
 **/__pycache__/**
 
 *.log
+build*.txt
 *.SGL.WAV
 0.bin
 build_profile/**
@@ -58,3 +59,8 @@ build_hw_debug/*
 logs/*
 src/bulletml_binary/Makefile
 cd/data/IP.BIN
+Tests/cd_factory/data/*.TXT
+ABS.TXT
+BIB.TXT
+CPY.TXT
+build*

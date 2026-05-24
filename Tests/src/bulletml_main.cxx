@@ -380,6 +380,28 @@ bool verifyOnePattern(const char *dir, const char *filename)
   return true;
 }
 
+MU_TEST(test_parser_rejects_empty_buffer)
+{
+  BulletMLParserBLB parser(static_cast<const uint8_t *>(nullptr), 0);
+  mu_check(!parser.build());
+}
+
+MU_TEST(test_parser_rejects_bad_magic)
+{
+  static const uint8_t kBadMagic[24] = {
+    'X', 'X', 'X', '\0',   /* wrong magic, not "BLB\0" */
+    0x01, 0x00,             /* version */
+    0x00, 0x00,             /* orientation, flags */
+    0x18, 0x00, 0x00, 0x00, /* string_table_offset */
+    0x18, 0x00, 0x00, 0x00, /* refmap_offset */
+    0x18, 0x00, 0x00, 0x00, /* tree_offset */
+    0x18, 0x00, 0x00, 0x00  /* file_size */
+  };
+  BulletMLParserBLB parser(kBadMagic, sizeof(kBadMagic));
+  mu_check(!parser.build());
+}
+
+#ifndef BULLETML_SKIP_CD_TESTS
 MU_TEST(test_bulletml_manifest_covered_and_equal)
 {
   mu_check(loadExpectedManifest());
@@ -393,10 +415,15 @@ MU_TEST(test_bulletml_manifest_covered_and_equal)
   mu_assert_int_eq(g_expectedCount, g_verified);
   mu_assert_int_eq(73, g_verified);
 }
+#endif /* BULLETML_SKIP_CD_TESTS */
 
 MU_TEST_SUITE(bulletml_sh2_suite)
 {
+  MU_RUN_TEST(test_parser_rejects_empty_buffer);
+  MU_RUN_TEST(test_parser_rejects_bad_magic);
+#ifndef BULLETML_SKIP_CD_TESTS
   MU_RUN_TEST(test_bulletml_manifest_covered_and_equal);
+#endif
 }
 
 } // namespace

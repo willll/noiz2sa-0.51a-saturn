@@ -6,5 +6,15 @@
 
 inline SRL::Sound::Pcm::WaveSound* createWaveSound(const char* fileName)
 {
-  return createObject<SRL::Sound::Pcm::WaveSound>(fileName);
+  return createPooledObject<SRL::Sound::Pcm::WaveSound>(fileName);
+}
+
+inline void destroyWaveSound(SRL::Sound::Pcm::WaveSound*& sound)
+{
+  destroyPooledObject(sound);
+}
+
+inline void releaseSoundFactoryPools()
+{
+  releasePooledObjectPool<SRL::Sound::Pcm::WaveSound>();
 }

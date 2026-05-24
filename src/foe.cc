@@ -22,6 +22,8 @@
 #include "degutil.h"
 #include "ship.h"
 #include "shot.h"
+#include "foecommand.h"
+#include "bulletml_binary/bulletml_alloc_latch.h"
 #include "frag.h"
 #include "bonus.h"
 #include "soundmanager.h"
@@ -77,11 +79,37 @@ int getLiveProjectileCount()
   return sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets;
 }
 
+int getActiveFoeCount()
+{
+  return foeActiveCount;
+}
+
+int getFoePoolCapacity()
+{
+  return FOE_MAX;
+}
+
+int getFoeCommandPoolCachedCount()
+{
+  return (int)getFoeCommandCachedCount();
+}
+
+void trimFoeCommandPoolCachedCount(int maxCached)
+{
+  if (maxCached < 0)
+  {
+    maxCached = 0;
+  }
+  trimFoeCommandPool((size_t)maxCached);
+}
+
+/** @brief Returns the array index for a foe pointer. */
 static inline int getFoeIndex(const Foe *fe)
 {
   return (int)(fe - foe);
 }
 
+/** @brief Marks a foe slot as active in the sparse active list. */
 static inline void markFoeSlotActive(const Foe *fe)
 {
   const int idx = getFoeIndex(fe);
@@ -94,6 +122,7 @@ static inline void markFoeSlotActive(const Foe *fe)
   foeActiveIndices[foeActiveCount++] = idx;
 }
 
+/** @brief Removes a foe slot from the sparse active list. */
 static void removeFoeSlotActive(const Foe *fe)
 {
   const int idx = getFoeIndex(fe);
@@ -111,6 +140,7 @@ static void removeFoeSlotActive(const Foe *fe)
   foeActiveCount = lastPos;
 }
 
+/** @brief Tests whether a bullet segment intersects the ship hit area. */
 static bool bulletHitsShip(const Foe *fe)
 {
   // Use closest-point distance to the swept segment [ppos, pos].
@@ -156,6 +186,7 @@ static bool bulletHitsShip(const Foe *fe)
   return distSq <= (long long)SHIP_HIT_WIDTH;
 }
 
+/** @brief Removes a foe slot without destroying its command object. */
 static void removeFoeForcedNoDeleteCmd(Foe *fe)
 {
   if (fe->spc == ACTIVE_BULLET)
@@ -183,23 +214,29 @@ static void removeFoeForcedNoDeleteCmd(Foe *fe)
   removeFoeSlotActive(fe);
 }
 
+/** @brief Removes a foe slot and destroys its command object if present. */
 static void removeFoeForced(Foe *fe)
 {
   removeFoeForcedNoDeleteCmd(fe);
   if (fe->cmd)
   {
-    delete fe->cmd;
-    fe->cmd = nullptr;
+    destroyFoeCommand(fe->cmd);
   }
 }
 
+/** @brief Removes a foe unless it is a boss entity. */
 void removeFoe(Foe *fe)
 {
   if (fe->type == BOSS_TYPE)
     return;
   removeFoeForcedNoDeleteCmd(fe);
+  if (fe->cmd)
+  {
+    destroyFoeCommand(fe->cmd);
+  }
 }
 
+/** @brief Initialises all foe pools and counters. */
 void initFoes()
 {
   int i;
@@ -224,6 +261,7 @@ void initFoes()
   sLiveBossActiveBullets = 0;
 }
 
+/** @brief Releases foe command resources. */
 void closeFoes()
 {
   int i;
@@ -231,12 +269,14 @@ void closeFoes()
   {
     Foe *fe = &(foe[foeActiveIndices[i]]);
     if (fe->cmd)
-      delete fe->cmd;
+      destroyFoeCommand(fe->cmd);
   }
+  releaseFoeCommandPool();
 }
 
 static int foeIdx = FOE_MAX;
 
+/** @brief Finds the next available foe slot, recycling if needed. */
 static Foe *getNextFoe()
 {
   int i;
@@ -248,9 +288,58 @@ static Foe *getNextFoe()
     if (foe[foeIdx].spc == NOT_EXIST)
       break;
   }
-  if (i >= FOE_MAX)
-    return nullptr;
-  return &(foe[foeIdx]);
+  if (i < FOE_MAX)
+    return &(foe[foeIdx]);
+
+  // Pool full: recycle least-valuable active slot.
+  // Priority (most expendable first): BULLET, ACTIVE_BULLET, BOSS_ACTIVE_BULLET.
+  static const int kRecyclePriority[3] = {BULLET, ACTIVE_BULLET, BOSS_ACTIVE_BULLET};
+  for (int p = 0; p < 3; p++)
+  {
+    for (int j = 0; j < FOE_MAX; j++)
+    {
+      if (foe[j].spc == kRecyclePriority[p])
+      {
+        removeFoeForced(&foe[j]);
+        return &foe[j];
+      }
+    }
+  }
+
+  // Option 1 behavior: recycle FOE entities too when pressure is extreme.
+  // Prefer non-boss foes first; if only bosses remain, recycle oldest boss.
+  int victim = -1;
+  int oldestCnt = -1;
+  for (int j = 0; j < FOE_MAX; j++)
+  {
+    if (foe[j].spc == FOE && foe[j].type != BOSS_TYPE && foe[j].cnt > oldestCnt)
+    {
+      oldestCnt = foe[j].cnt;
+      victim = j;
+    }
+  }
+  if (victim >= 0)
+  {
+    removeFoeForced(&foe[victim]);
+    return &foe[victim];
+  }
+
+  oldestCnt = -1;
+  for (int j = 0; j < FOE_MAX; j++)
+  {
+    if (foe[j].spc == FOE && foe[j].cnt > oldestCnt)
+    {
+      oldestCnt = foe[j].cnt;
+      victim = j;
+    }
+  }
+  if (victim >= 0)
+  {
+    removeFoeForced(&foe[victim]);
+    return &foe[victim];
+  }
+
+  return nullptr;
 }
 
 Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
@@ -321,7 +410,7 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
       totalProjectiles >= kMaxTotalProjectiles)
   {
     bulletSpawnFailed++;
-    delete state;
+    destroyBulletMlState(state);
     return;
   }
 
@@ -329,14 +418,14 @@ void addFoeActiveBullet(Vector *pos, Fxp rank,
   if (!fe)
   {
     bulletSpawnFailed++;
-    delete state;
+    destroyBulletMlState(state);
     return;
   }
   fe->cmd = createFoeCommand(state, fe);
   if (!fe->cmd)
   {
     bulletSpawnFailed++;
-    delete state;
+    destroyBulletMlState(state);
     return;
   }
   fe->spos = fe->ppos = fe->pos = *pos;
@@ -386,6 +475,7 @@ void addFoeNormalBullet(Vector *pos, Fxp rank, int d, int spd, int color)
 
 #define BULLET_WIPE_WIDTH 7200
 
+/** @brief Removes bullets in a rectangular wipe around the supplied position. */
 static void wipeBullets(Vector *pos, int width)
 {
   int i;
@@ -419,7 +509,6 @@ static int foeScanSize[] = {
 static int enemyScore[] = {500, 1000, 5000, 50000};
 
 int processSpeedDownBulletsNum = DEFAULT_SPEED_DOWN_BULLETS_NUM;
-int insanespeed = 0;
 int nowait = 0;
 static int sFoeUpdateCursor = 0;
 
@@ -498,18 +587,27 @@ void moveFoes()
       continue;
     }
 
+    if (fe->spc == FOE && !fe->cmd && fe->parser && !hasBulletMlAllocFailureLatched())
+    {
+      fe->cmd = createFoeCommand(fe->parser, fe);
+      if (!fe->cmd)
+      {
+        removeFoeForced(fe);
+        continue;
+      }
+    }
+
     if (fe->cmd)
     {
       if (fe->type == BOSS_TYPE)
       {
         if (hasBulletMlAllocFailureLatched())
         {
-          delete fe->cmd;
-          fe->cmd = nullptr;
+          destroyFoeCommand(fe->cmd);
         }
         else if (fe->cmd->isEnd())
         {
-          delete fe->cmd;
+          destroyFoeCommand(fe->cmd);
           fe->cmd = createFoeCommand(fe->parser, fe);
           if (!fe->cmd)
           {
@@ -517,6 +615,16 @@ void moveFoes()
             continue;
           }
           // fe->cmd->reset();
+        }
+      }
+      else if (fe->spc == FOE && !hasBulletMlAllocFailureLatched() && fe->cmd->isEnd())
+      {
+        destroyFoeCommand(fe->cmd);
+        fe->cmd = createFoeCommand(fe->parser, fe);
+        if (!fe->cmd)
+        {
+          removeFoeForced(fe);
+          continue;
         }
       }
       // Iter J: Skip BulletML step for ACTIVE_BULLET and BOSS_ACTIVE_BULLET on odd ticks.
@@ -536,8 +644,7 @@ void moveFoes()
           }
           if (fe->spc == FOE)
           {
-            delete fe->cmd;
-            fe->cmd = nullptr;
+            destroyFoeCommand(fe->cmd);
           }
         }
         else
@@ -561,8 +668,7 @@ void moveFoes()
       {
         if (fe->cmd)
         {
-          delete fe->cmd;
-          fe->cmd = nullptr;
+          destroyFoeCommand(fe->cmd);
         }
         continue;
       }
@@ -808,6 +914,7 @@ static int bulletColor[BULLET_COLOR_NUM][2] = {
 
 #define BULLET_WIDTH (6 / SCREEN_DIVISOR)
 
+/** @brief Draws a 3x3 debug box for foe and bullet markers. */
 static void drawBox3x3(int x, int y,
                        Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *target)
 {

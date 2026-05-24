@@ -105,6 +105,7 @@ cmake --build build
 | `SRL_MODE` | NTSC/PAL | NTSC | Video standard |
 | `SRL_FRAMERATE` | 0/1/2 | 0 | 0=auto, 1=30fps, 2=60fps |
 | `SRL_HIGH_RES` | ON/OFF | OFF | Enable high resolution mode |
+| `NOIZ2SA_ENABLE_SMOKE` | ON/OFF | ON | Enable smoke/afterimage distortion effect (currently **disabled** at runtime; see [doc/DRAWING_SYSTEM.md](DRAWING_SYSTEM.md#L98)) |
 
 ### Memory Settings
 

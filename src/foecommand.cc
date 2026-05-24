@@ -12,6 +12,7 @@
 #include "bulletml_binary/bulletmlparser_blb.hpp"
 #include "foe.h"
 #include <cstdint>
+#include "foecommand.h"
 #include <srl_log.hpp>
 #include <srl_memory.hpp>
 
@@ -19,10 +20,14 @@
 #include "noiz2sa.h"
 #include "degutil.h"
 #include "ship.h"
+#include "bulletml_binary/bulletml_alloc_latch.h"
 
-#define COMMAND_SCREEN_SPD_RATE (insanespeed ? 800 : (800 / 2))
-#define COMMAND_SCREEN_VEL_RATE (insanespeed ? 800 : (800 / 2))
+#include <new>
 
+#define COMMAND_SCREEN_SPD_RATE (800 / 2)
+#define COMMAND_SCREEN_VEL_RATE (800 / 2)
+
+/** @brief Converts fixed-point values to legacy signed integers with rounding. */
 static int fxpToLegacyInt(Fxp value)
 {
   int result = value.As<int>();
@@ -33,6 +38,7 @@ static int fxpToLegacyInt(Fxp value)
   return result;
 }
 
+/** @brief Converts a fixed-point value to a legacy integer scaled by the given factor. */
 static int fxpToLegacyScaledInt(Fxp value, int scale)
 {
   const int64_t scaledRaw = static_cast<int64_t>(value.RawValue()) * scale;
@@ -43,12 +49,14 @@ static int fxpToLegacyScaledInt(Fxp value, int scale)
   return -static_cast<int>(((-scaledRaw) + 0x8000) >> 16);
 }
 
+/** @brief Converts a fixed-point direction into the legacy signed direction index space. */
 static int fxpDirectionToLegacySigned(Fxp direction)
 {
   const int64_t scaledRaw = static_cast<int64_t>(direction.RawValue()) * DIV / 360;
   return static_cast<int>(scaledRaw / 65536);
 }
 
+/** @brief Converts a fixed-point direction into a wrapped legacy direction index. */
 static int fxpDirectionToLegacyWrapped(Fxp direction)
 {
   int d = fxpDirectionToLegacySigned(direction);
@@ -56,36 +64,155 @@ static int fxpDirectionToLegacyWrapped(Fxp direction)
   return d;
 }
 
+/** @brief Converts a legacy direction index back into fixed-point degrees. */
 static Fxp legacyDirectionIndexToFxpDegrees(int direction)
 {
   const int64_t raw = static_cast<int64_t>(direction) * 360 * 65536 / DIV;
   return Fxp::BuildRaw(static_cast<int32_t>(raw));
 }
 
+namespace
+{
+struct FoeCommandFreeNode
+{
+  FoeCommandFreeNode* next;
+};
+
+static FoeCommandFreeNode* sFoeCommandFreeList = nullptr;
+static std::size_t sFoeCommandFreeCount = 0;
+static std::size_t sMinPoolSize = 0;  ///< Minimum guaranteed pool size
+}
+
+template <typename... Args>
+/** @brief Allocates a FoeCommand from the recycled pool or high work RAM. */
+static FoeCommand* createFoeCommandFromPool(Args&&... args)
+{
+  if (sFoeCommandFreeList)
+  {
+    FoeCommandFreeNode* node = sFoeCommandFreeList;
+    sFoeCommandFreeList = node->next;
+    if (sFoeCommandFreeCount > 0)
+    {
+      sFoeCommandFreeCount--;
+    }
+    return new (node) FoeCommand(std::forward<Args>(args)...);
+  }
+  static std::size_t sFallbackAllocLogs = 0;
+  if (sFallbackAllocLogs < 12 || (sFallbackAllocLogs % 64) == 0)
+  {
+    SRL::Logger::LogInfo("[FOECMD_POOL] pool empty fallback alloc cached=%u min_pool=%u",
+               (unsigned int)sFoeCommandFreeCount,
+               (unsigned int)sMinPoolSize);
+  }
+  ++sFallbackAllocLogs;
+  return createBulletMlRuntimeObject<FoeCommand>(std::forward<Args>(args)...);
+}
 
 
+
+/** @brief Constructs a command runner bound to a BulletML parser. */
 FoeCommand::FoeCommand(BulletMLParserBLB *parser, Foe *f)
   : BulletMLRunner(parser) {
   foe = f;
 }
 
+/** @brief Constructs a command runner bound to an existing BulletML state. */
 FoeCommand::FoeCommand(BulletMLState *state, Foe *f)
   : BulletMLRunner(state) {
   foe = f;
 }
 
+/** @brief Destroys the command runner. */
 FoeCommand::~FoeCommand() {}
 
+/** @brief Creates a FoeCommand for a parser-backed foe. */
 FoeCommand* createFoeCommand(BulletMLParserBLB* parser, Foe* f) {
-  return createBulletMlRuntimeObject<FoeCommand>(parser, f);
+  return createFoeCommandFromPool(parser, f);
 }
 
+/** @brief Creates a FoeCommand for an existing BulletML state. */
 FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
   if (hasBulletMlAllocFailureLatched()) {
-    delete state;
+    destroyBulletMlState(state);
     return nullptr;
   }
-  return createBulletMlRuntimeObject<FoeCommand>(state, f);
+  return createFoeCommandFromPool(state, f);
+}
+
+/** @brief Returns a FoeCommand to the recycle pool and clears the pointer. */
+void destroyFoeCommand(FoeCommand*& cmd)
+{
+  if (!cmd)
+  {
+    return;
+  }
+
+  cmd->~FoeCommand();
+
+  FoeCommandFreeNode* node = reinterpret_cast<FoeCommandFreeNode*>(cmd);
+  node->next = sFoeCommandFreeList;
+  sFoeCommandFreeList = node;
+  sFoeCommandFreeCount++;
+
+  cmd = nullptr;
+}
+
+/** @brief Frees all pooled FoeCommand storage. */
+void releaseFoeCommandPool()
+{
+  while (sFoeCommandFreeList)
+  {
+    FoeCommandFreeNode* node = sFoeCommandFreeList;
+    sFoeCommandFreeList = node->next;
+    SRL::Memory::Free(node);
+    if (sFoeCommandFreeCount > 0)
+    {
+      sFoeCommandFreeCount--;
+    }
+  }
+  sFoeCommandFreeCount = 0;
+}
+
+std::size_t getFoeCommandCachedCount()
+{
+  return sFoeCommandFreeCount;
+}
+
+void trimFoeCommandPool(std::size_t maxCached)
+{
+  // Never trim below the minimum pool size
+  std::size_t trimLimit = (maxCached > sMinPoolSize) ? maxCached : sMinPoolSize;
+  while (sFoeCommandFreeCount > trimLimit && sFoeCommandFreeList)
+  {
+    FoeCommandFreeNode* node = sFoeCommandFreeList;
+    sFoeCommandFreeList = node->next;
+    SRL::Memory::Free(node);
+    sFoeCommandFreeCount--;
+  }
+}
+
+/** @brief Pre-allocates a guaranteed minimum pool of FoeCommand objects.
+ *  This prevents allocation failures during peak gameplay load.
+ */
+void preallocateFoeCommandPool(std::size_t count)
+{
+  sMinPoolSize = count;
+  for (std::size_t i = 0; i < count; ++i)
+  {
+    void* mem = SRL::Memory::HighWorkRam::Malloc(sizeof(FoeCommand));
+    if (!mem)
+    {
+      SRL::Logger::LogWarning("[FOECMD_POOL] Preallocation failed at index %u (wanted %u total)",
+              (unsigned int)i, (unsigned int)count);
+      break;
+    }
+    FoeCommandFreeNode* node = reinterpret_cast<FoeCommandFreeNode*>(mem);
+    node->next = sFoeCommandFreeList;
+    sFoeCommandFreeList = node;
+    sFoeCommandFreeCount++;
+  }
+  SRL::Logger::LogInfo("[FOECMD_POOL] Preallocated %u FoeCommand objects (min pool size=%u)",
+                       (unsigned int)sFoeCommandFreeCount, (unsigned int)sMinPoolSize);
 }
 
 Fxp FoeCommand::getBulletDirection() {
@@ -116,7 +243,7 @@ void FoeCommand::createSimpleBullet(Fxp direction, Fxp speed) {
 
 void FoeCommand::createBullet(BulletMLState* state, Fxp direction, Fxp speed) {
   if (hasBulletMlAllocFailureLatched()) {
-    delete state;
+    destroyBulletMlState(state);
     return;
   }
 

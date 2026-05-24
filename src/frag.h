@@ -18,12 +18,23 @@ typedef struct {
   int spc;
 } Frag;
 
-#define FRAG_MAX 64
+#define FRAG_MAX 192
 
+/** @brief Initialises the fragment pool. */
 void initFrags();
+/** @brief Advances all active fragments. */
 void moveFrags();
+/** @brief Draws all active fragments. */
 void drawFrags();
+/** @brief Spawns fragments for a shot impact. */
 void addShotFrag(Vector *pos);
+/** @brief Spawns fragments for an enemy explosion. */
 void addEnemyFrag(Vector *p, int mx, int my, int type);
+/** @brief Spawns fragments for the player's ship. */
 void addShipFrag(Vector *p);
+/** @brief Spawns fragments for a stage-clear effect. */
 void addClearFrag(Vector *p, Vector *v);
+/** @brief Returns the number of active fragments. */
+int getActiveFragCount();
+/** @brief Returns the total fragment pool capacity. */
+int getFragPoolCapacity();

@@ -37,6 +37,7 @@
 #include "loading_screen.h"
 #include "system_factory.h"
 #include "bulletml_binary/bulletmlrunner.hpp"
+#include "foecommand.h"
 
 
 static int noSound = 0;
@@ -45,13 +46,16 @@ static int noSound = 0;
 // (barragemanager.cc, screen.cpp).  All logic lives in LoadingScreen.
 void updateLoadingProgress(const char *step, int percent)
 {
+  SRL::Logger::LogInfo("[MAIN_TRACE] loading-progress begin step='%s' percent=%d", step ? step : "(null)", percent);
   g_loadingScreen.Update(step, percent);
+  SRL::Logger::LogInfo("[MAIN_TRACE] loading-progress end step='%s'", step ? step : "(null)");
 }
 
 // Global random number generator (using SRL::Math namespace which is aliased to SaturnMath)
 RandomGenerator *g_random = nullptr;
 
 // Initialize and load preference.
+/** @brief Performs one-time startup initialisation. */
 static void initFirst()
 {
   const char* steps[] = {
@@ -68,18 +72,26 @@ static void initFirst()
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
   loadPreference();
-  SRL::Logger::LogDebug("[INIT] Preferences loaded");
+  SRL::Logger::LogInfo("[INIT_TRACE] Preferences loaded");
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
 
   // Initialize random number generator with current time
+  SRL::Logger::LogInfo("[INIT_TRACE] before SDL_GetTicks seed");
   uint32_t seed = SDL_GetTicks();
+  SRL::Logger::LogInfo("[INIT_TRACE] before createRandomGenerator seed=%u", seed);
   g_random = createRandomGenerator(seed);
-  SRL::Logger::LogDebug("[INIT] Random generator initialized with seed: %u", seed);
+  SRL::Logger::LogInfo("[INIT_TRACE] after createRandomGenerator seed=%u ptr=%p", seed, g_random);
   stepIdx++;
+  SRL::Logger::LogInfo("[INIT_TRACE] before loading-progress 'Loading barrages'");
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
+  SRL::Logger::LogInfo("[INIT_TRACE] after loading-progress 'Loading barrages'");
 
+  SRL::Logger::LogInfo("[INIT-BARRIER] before-initBarragemanager hwfree=%lu",
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
   initBarragemanager();
+  SRL::Logger::LogInfo("[INIT-BARRIER] after-initBarragemanager hwfree=%lu",
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
   SRL::Logger::LogDebug("[INIT] Barrage manager initialized");
   stepIdx++;
   updateLoadingProgress(steps[stepIdx], (stepIdx + 1) * 100 / numSteps);
@@ -93,6 +105,7 @@ static void initFirst()
 }
 
 // Quit and save preference.
+/** @brief Runs shutdown cleanup and exits the program. */
 void quitLast()
 {
   SRL::Logger::LogInfo("[QUIT] Shutdown sequence starting");
@@ -109,7 +122,7 @@ void quitLast()
   closeBarragemanager();
   SRL::Logger::LogDebug("[QUIT] Barrage manager closed");
 
-  destroyObject(g_random);
+  destroyRandomGenerator(g_random);
   closeGamepad();
   SRL::Logger::LogInfo("[QUIT] Random generator cleaned up");
 
@@ -143,22 +156,16 @@ static StageParams stagePrm[STAGE_NUM + ENDLESS_STAGE_NUM + 1] = {
     {0, -1.0f, 0.0f},
 };
 
+/** @brief Initialises title-stage data for the supplied stage index. */
 void initTitleStage(int stg)
 {
   initFoes();
   initBarrages(stagePrm[stg].seed, stagePrm[stg].startLevel, stagePrm[stg].levelInc);
 }
 
+/** @brief Initialises the title scene. */
 void initTitle()
 {
-  static bool sTitleWasInitialized = false;
-
-  if (sTitleWasInitialized)
-  {
-    savePreference();
-  }
-  sTitleWasInitialized = true;
-
   SRL::Logger::LogInfo("[STATE] Entering TITLE screen");
 
   // Start each title/game flow with BulletML fail-safe cleared.
@@ -188,6 +195,7 @@ void initTitle()
   SRL::Logger::LogInfo("[STATE] TITLE screen ready");
 }
 
+/** @brief Initialises a gameplay session for the supplied stage. */
 void initGame(int stg)
 {
   SRL::Logger::LogInfo("[STATE] Entering IN_GAME (stage %d)", stg);
@@ -240,8 +248,16 @@ void initGame(int stg)
   SRL::Logger::LogInfo("[STATE] IN_GAME (stage %d) ready - Starting gameplay", stg);
 }
 
+/** @brief Initialises the game-over scene. */
 void initGameover()
 {
+#if HW_DEBUG
+  if (status == IN_GAME)
+  {
+    SRL::Logger::LogWarning("[HW_DEBUG] Suppressed transition IN_GAME -> GAMEOVER in initGameover()");
+    return;
+  }
+#endif
   SRL::Logger::LogInfo("[STATE] Entering GAMEOVER");
 
   status = GAMEOVER;
@@ -250,8 +266,16 @@ void initGameover()
   SRL::Logger::LogInfo("[STATE] GAMEOVER screen ready - Game Over!");
 }
 
+/** @brief Initialises the stage-clear scene. */
 void initStageClear()
 {
+#if HW_DEBUG
+  if (status == IN_GAME)
+  {
+    SRL::Logger::LogWarning("[HW_DEBUG] Suppressed transition IN_GAME -> STAGE_CLEAR in initStageClear()");
+    return;
+  }
+#endif
   SRL::Logger::LogInfo("[STATE] Entering STAGE_CLEAR");
 
   status = STAGE_CLEAR;
@@ -302,7 +326,158 @@ static uint32_t gMovePhaseFrameCount = 0;
 static DrawPhaseTimings gDrawPhaseTimings{};
 static uint32_t gDrawPhaseFrameCount = 0;
 
-#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+#if HW_DEBUG || NOIZ2SA_ENABLE_PERF_LOGS
+static inline uint32_t profileMicrosNow()
+{
+  return SDL_GetProfileMicros();
+}
+#else
+// Keep profiling callsites in code for debug readability, but compile them to zero
+// cost on default builds where sustained frame rate is critical.
+static inline uint32_t profileMicrosNow()
+{
+  return 0u;
+}
+#endif
+
+#undef SDL_GetProfileMicros
+#define SDL_GetProfileMicros() profileMicrosNow()
+
+static inline void synchronizeFrame()
+{
+#if HW_DEBUG
+  // Skip VBlank/SGL sync in HW_DEBUG: sprite data not loaded, SGL pipeline
+  // may never complete, causing slSynch() to block indefinitely.
+  // Match the same skip applied in loading_screen.cpp Render().
+  SRL::Input::Management::RefreshPeripherals();
+#elif defined(NOIZ2SA_ENABLE_GUN_SYNC) && NOIZ2SA_ENABLE_GUN_SYNC
+  SRL::Core::Synchronize();
+#else
+  // Avoid SRL::Input::Gun::Synchronize() per-frame slGetStatus() polling.
+  // noiz2sa does not use light-gun input.
+  slSynch();
+  SRL::Input::Management::RefreshPeripherals();
+#endif
+}
+
+static inline bool shouldThrottleSpawnsForLoad(int gameStatus, int liveProjectiles, uint32_t hwFree)
+{
+  if (gameStatus == TITLE)
+  {
+    // Title attract mode does not need full-density spawning.
+    return (liveProjectiles >= 96) || (hwFree > 0u && hwFree < 48000u);
+  }
+
+  // In gameplay states, start shedding new spawns before allocator pressure builds.
+  return (liveProjectiles >= 220) || (hwFree > 0u && hwFree < 24000u);
+}
+
+static inline bool shouldClearBulletMlAllocFailureLatch(uint32_t hwFree, int liveProjectiles)
+{
+  static uint32_t sLastAllocFailCount = 0u;
+  static int sRetryTick = 0;
+  static int sLatchedSinceTick = -1;
+  static int sLastLatchLogTick = -1000;
+
+  const uint32_t failCount = (uint32_t)getBulletMlAllocFailureCount();
+  if (failCount != sLastAllocFailCount)
+  {
+    // Back off retries after each new alloc failure to avoid immediate re-fail loops.
+    sLastAllocFailCount = failCount;
+    sRetryTick = tick + ((status == TITLE) ? 30 : 90);
+  }
+
+  if (!hasBulletMlAllocFailureLatched())
+  {
+    sLatchedSinceTick = -1;
+    sLastLatchLogTick = -1000;
+    return false;
+  }
+
+  if (sLatchedSinceTick < 0)
+  {
+    sLatchedSinceTick = tick;
+  }
+
+  const int latchAge = tick - sLatchedSinceTick;
+
+  // Forced recovery: checked BEFORE the backoff-retry gate so that
+  // repeated allocation failures (which keep pushing sRetryTick forward)
+  // cannot indefinitely delay recovery and cause a permanent no-shoot state.
+  //
+  // However, forced recovery requires a minimum hwFree to avoid allocating
+  // in a crash scenario. We use 8KB as the floor — below this, recovery
+  // would likely fail anyway, so we wait for the backoff/normal retry path.
+  const uint32_t MIN_HW_FOR_RECOVERY = 8192u;
+
+  if (status != TITLE && latchAge >= 300 && liveProjectiles <= 64)
+  {
+    if (hwFree > 0u && hwFree >= MIN_HW_FOR_RECOVERY)
+      return true;
+  }
+  if (status != TITLE && latchAge >= 900)
+  {
+    if (hwFree > 0u && hwFree >= MIN_HW_FOR_RECOVERY)
+      return true;
+  }
+
+  if (tick < sRetryTick)
+  {
+    return false;
+  }
+
+  uint32_t minFreeBeforeRetry = (status == TITLE) ? 28000u : 36000u;
+  // If latch persists for a while in gameplay, allow a lower-memory retry.
+  if (status != TITLE && latchAge >= 240)
+  {
+    minFreeBeforeRetry = 24000u;
+  }
+
+  // When latch has persisted for a long time and bullets are fully starved,
+  // allow a low-memory recovery attempt to avoid a permanent no-shoot state.
+  if (status != TITLE && latchAge >= 720 && liveProjectiles <= 8)
+  {
+    minFreeBeforeRetry = 4096u;
+  }
+
+#if HW_DEBUG
+  if ((tick - sLastLatchLogTick) >= 60)
+  {
+    const int retryInTicks = (sRetryTick > tick) ? (sRetryTick - tick) : 0;
+    SRL::Logger::LogInfo(
+        "[ALLOC-LATCH] age=%d hwfree=%u live=%d retry_in=%d min_retry=%u fails=%u",
+        (tick - sLatchedSinceTick),
+        (unsigned)hwFree,
+        liveProjectiles,
+        retryInTicks,
+        (unsigned)minFreeBeforeRetry,
+        (unsigned)failCount);
+    sLastLatchLogTick = tick;
+  }
+#endif
+
+  if (hwFree > 0u && hwFree < minFreeBeforeRetry)
+  {
+    return false;
+  }
+
+  return true;
+}
+
+static inline int getFoeCommandCacheBudget(uint32_t hwFree, int gameStatus)
+{
+  if (hwFree > 0u && hwFree < 20000u)
+  {
+    return 32;
+  }
+  if (hwFree > 0u && hwFree < 32000u)
+  {
+    return 96;
+  }
+  return (gameStatus == TITLE) ? 96 : 192;
+}
+
+#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
 static volatile uint8_t gDiagPhaseTag = 0u;
 static inline void setDiagPhase(uint8_t tag)
 {
@@ -317,10 +492,63 @@ static inline void setDiagPhase(uint8_t)
 static void move()
 {
   uint32_t phaseStart;
+  const int liveProjectiles = getLiveProjectileCount();
+  const uint32_t hwFree = (uint32_t)SRL::Memory::HighWorkRam::GetFreeSpace();
+  const int foeCmdCacheBudget = getFoeCommandCacheBudget(hwFree, status);
+  if (hasBulletMlAllocFailureLatched())
+  {
+    trimFoeCommandPoolCachedCount(0);
+    BulletMLRunnerImpl::ReleaseTaskBufferCache();
+  }
+  else
+  {
+    trimFoeCommandPoolCachedCount(foeCmdCacheBudget);
+    if (hwFree > 0u && hwFree < 20000u)
+    {
+      BulletMLRunnerImpl::ReleaseTaskBufferCache();
+    }
+  }
+  const bool throttleSpawns = shouldThrottleSpawnsForLoad(status, liveProjectiles, hwFree);
+  const int titleSpawnMask = (liveProjectiles >= 220) ? 31 : (throttleSpawns ? 15 : 3);
+  const bool allowAddBulletsThisTick = (status == TITLE)
+      ? ((tick & titleSpawnMask) == 0)
+      : (!throttleSpawns || ((tick & 1) == 0));
+
+#if HW_DEBUG
+  if ((tick % 60) == 0)
+  {
+    SRL::Logger::LogInfo("[FOECMD_POOL] cached=%d budget=%d task_cache=%u hwfree=%u",
+                         getFoeCommandPoolCachedCount(),
+                         foeCmdCacheBudget,
+                         (unsigned)BulletMLRunnerImpl::GetTaskBufferCacheCapacity(),
+                         (unsigned)hwFree);
+  }
+#endif
+
+  // BulletML allocations can fail transiently under pressure. Retry with a short
+  // cooldown and minimum free-memory guard to avoid allocation thrash.
+  if (shouldClearBulletMlAllocFailureLatch(hwFree, liveProjectiles))
+  {
+    clearBulletMlAllocFailureLatch();
+  }
   
   switch (status)
   {
   case TITLE:
+    // Keep title sim responsive under sustained attract-mode runtime.
+    setFoeBudgetLimit(NOIZ2SA_FOE_UPDATE_BUDGET / 3);
+    if (liveProjectiles >= 240 && (tick & 31) == 0)
+    {
+      // Attract mode can saturate with lingering projectiles; periodically reset
+      // combat objects to recover frame time and keep the title interactive.
+      clearFoes();
+    }
+    if (hwFree > 0u && hwFree < 12000u)
+    {
+      // Hard recovery path for title attract mode when allocator pressure spikes.
+      clearFoes();
+    }
+
     setDiagPhase(11u);
     phaseStart = SDL_GetProfileMicros();
     moveTitleMenu();
@@ -333,7 +561,10 @@ static void move()
     
     setDiagPhase(13u);
     phaseStart = SDL_GetProfileMicros();
-    addBullets();
+    if (allowAddBulletsThisTick)
+    {
+      addBullets();
+    }
     gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
     
     setDiagPhase(14u);
@@ -368,7 +599,10 @@ static void move()
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] pre-addBullets");
     #endif
-    addBullets();
+    if (allowAddBulletsThisTick)
+    {
+      addBullets();
+    }
     gMovePhaseTimings.addBullets += SDL_GetProfileMicros() - phaseStart;
     #if HW_DEBUG
     if (probeMove) SRL::Logger::LogInfo("[MOVE] post-addBullets");
@@ -720,6 +954,21 @@ static constexpr uint32_t kPerfTraceWindowFrames = 60u;
 static constexpr uint32_t kTargetFps = 30u;
 static constexpr uint32_t kTargetFrameBudgetUs = 1000000u / kTargetFps;
 
+static inline void setDebugHudColorRed()
+{
+  // Some runtime palette uploads can overwrite ASCII print colors.
+  // SRL::Debug::Print currently uses ASCII::Print, which reads glyph indices
+  // from the font tiles rather than slCurColor(). Reassert common foreground
+  // slots as red before drawing HUD text.
+  const uint16_t red = (uint16_t)SRL::Types::HighColor::Colors::Red;
+  SRL::ASCII::SetPalette(0);
+  SRL::ASCII::SetColor(red, 0);
+  SRL::ASCII::SetColor(red, 1);
+  SRL::ASCII::SetColor(red, 2);
+  SRL::ASCII::SetColor(red, 15);
+  SRL::Debug::PrintColorSet(2);
+}
+
 #if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
 static int gAutoStartTitleFrames = 0;
 static bool gAutoStartTriggered = false;
@@ -734,8 +983,68 @@ static void drawFpsCounter()
   const int32_t fpsWhole = (int32_t)(gFpsTimes100 / 100u);
   const int32_t fpsFrac = (int32_t)(gFpsTimes100 % 100u);
 
+  setDebugHudColorRed();
   SRL::Debug::PrintClearLine(2);
   SRL::Debug::Print(1, 2, "FPS: %d.%02d", (int)fpsWhole, (int)fpsFrac);
+  SRL::Debug::PrintColorRestore();
+}
+
+static void drawMemStats()
+{
+  setDebugHudColorRed();
+#if NOIZ2SA_SHOW_FREE_HWRAM
+  const uint32_t hwFree = (uint32_t)SRL::Memory::HighWorkRam::GetFreeSpace();
+  const uint32_t hwTotal = (uint32_t)SRL::Memory::HighWorkRam::GetSize();
+  SRL::Debug::PrintClearLine(3);
+  SRL::Debug::Print(1, 3, "HWRAM: %u/%u", (unsigned)hwFree, (unsigned)hwTotal);
+#endif
+#if NOIZ2SA_SHOW_FREE_LWRAM
+  const uint32_t lwFree = (uint32_t)SRL::Memory::LowWorkRam::GetFreeSpace();
+  const uint32_t lwTotal = (uint32_t)SRL::Memory::LowWorkRam::GetSize();
+  SRL::Debug::PrintClearLine(4);
+  SRL::Debug::Print(1, 4, "LWRAM: %u/%u", (unsigned)lwFree, (unsigned)lwTotal);
+#endif
+  SRL::Debug::PrintColorRestore();
+}
+
+static void drawPoolStats()
+{
+#if NOIZ2SA_SHOW_MEMORY_POOLS
+  setDebugHudColorRed();
+  int row = 5;
+
+#if NOIZ2SA_SHOW_MEMORY_POOL_FOE
+  const int foeTotal = getFoePoolCapacity();
+  const int foeActive = getActiveFoeCount();
+  SRL::Debug::PrintClearLine(row);
+  SRL::Debug::Print(1, row, "FOE: %d/%d", foeTotal - foeActive, foeTotal);
+  row++;
+#endif
+
+#if NOIZ2SA_SHOW_MEMORY_POOL_SHOT
+  const int shotTotal = getShotPoolCapacity();
+  const int shotActive = getActiveShotCount();
+  SRL::Debug::PrintClearLine(row);
+  SRL::Debug::Print(1, row, "SHOT: %d/%d", shotTotal - shotActive, shotTotal);
+  row++;
+#endif
+
+#if NOIZ2SA_SHOW_MEMORY_POOL_BONUS
+  const int bonusTotal = getBonusPoolCapacity();
+  const int bonusActive = getActiveBonusCount();
+  SRL::Debug::PrintClearLine(row);
+  SRL::Debug::Print(1, row, "BONUS: %d/%d", bonusTotal - bonusActive, bonusTotal);
+  row++;
+#endif
+
+#if NOIZ2SA_SHOW_MEMORY_POOL_FRAG
+  const int fragTotal = getFragPoolCapacity();
+  const int fragActive = getActiveFragCount();
+  SRL::Debug::PrintClearLine(row);
+  SRL::Debug::Print(1, row, "FRAG: %d/%d", fragTotal - fragActive, fragTotal);
+#endif
+  SRL::Debug::PrintColorRestore();
+#endif
 }
 
 static void logFpsToSerialIfDue()
@@ -962,6 +1271,7 @@ static void logPerfTraceWindowAndReset()
 int main()
 {
   SRL::Logger::LogInfo("[MAIN] Noiz2sa startup (v%d)", VERSION_NUM);
+  SRL::Logger::LogInfo("[MAIN_TRACE] main() entered");
 
   int done = 0;
   long prvTickCount = 0;
@@ -972,7 +1282,15 @@ int main()
 
   // Initialize the SRL core (graphics/video setup?)
   // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
+  SRL::Logger::LogInfo("[MAIN_TRACE] before SRL::Core::Initialize");
   SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
+  SRL::Logger::LogInfo("[MAIN_TRACE] after SRL::Core::Initialize");
+
+  // Pre-allocate FoeCommand pool to prevent allocation failures during peak gameplay.
+  // Peak bullet count is ~220, so allocate enough for sustained spawning.
+  SRL::Logger::LogInfo("[MAIN_TRACE] before preallocateFoeCommandPool(256)");
+  preallocateFoeCommandPool(256);
+  SRL::Logger::LogInfo("[MAIN_TRACE] after preallocateFoeCommandPool(256)");
 
   // Define loading steps for main()
   const char* mainSteps[] = {
@@ -985,36 +1303,47 @@ int main()
   const int mainNumSteps = sizeof(mainSteps) / sizeof(mainSteps[0]);
   int mainStepIdx = 0;
 
-  SRL::Logger::LogDebug("[MAIN] Initializing game config");
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initGameConfig begin");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initGameConfig();
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initGameConfig end");
   mainStepIdx++;
 
-  SRL::Logger::LogDebug("[MAIN] Initializing degree utilities");
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initDegutil begin");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initDegutil();
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initDegutil end");
   mainStepIdx++;
 
-  SRL::Logger::LogDebug("[MAIN] Initializing SDL");
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initSDL begin");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initSDL();
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initSDL end");
   mainStepIdx++;
 
+  SRL::Logger::LogInfo("[MAIN_TRACE] sound-branch decision noSound=%d", noSound);
   if (!noSound)
   {
-    SRL::Logger::LogDebug("[MAIN] Initializing sound");
+    SRL::Logger::LogInfo("[MAIN_TRACE] step: initSound begin");
+    SRL::Logger::LogInfo("[MAIN_TRACE] step: initSound loading-progress begin");
     updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
+    SRL::Logger::LogInfo("[MAIN_TRACE] step: initSound loading-progress end");
     initSound();
     loadSounds();
+    SRL::Logger::LogInfo("[MAIN_TRACE] step: initSound end");
   }
   else
   {
     SRL::Logger::LogInfo("[MAIN] Sound disabled");
+    SRL::Logger::LogInfo("[MAIN_TRACE] step: sound-disabled loading-progress begin");
     updateLoadingProgress("Sound disabled", (mainStepIdx + 1) * 100 / mainNumSteps);
+    SRL::Logger::LogInfo("[MAIN_TRACE] step: sound-disabled loading-progress end");
   }
   mainStepIdx++;
 
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initFirst begin");
   initFirst();
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initFirst end");
 #if HW_DEBUG
   updateLoadingProgress("Entering HW_DEBUG endless", (mainStepIdx + 1) * 100 / mainNumSteps);
   insane = 1;
@@ -1024,15 +1353,21 @@ int main()
     SRL::Logger::LogWarning("[HW_DEBUG] Requested stage %d is not endless; forcing stage %d", HW_DEBUG_ENDLESS_STAGE, hwDebugStage);
   }
   SRL::Logger::LogInfo("[HW_DEBUG] Skipping title/menu and booting directly into endless INSANE stage %d", hwDebugStage);
+  SRL::Logger::LogInfo("[HW_DEBUG] Entering initGame() for stage %d", hwDebugStage);
   initGame(hwDebugStage);
+  SRL::Logger::LogInfo("[HW_DEBUG] initGame() returned for stage %d", hwDebugStage);
 #else
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initTitle();
 #endif
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: g_loadingScreen.Clear begin");
   g_loadingScreen.Clear();
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: g_loadingScreen.Clear end");
 
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initGamepad begin");
   initGamepad();
-  SRL::Logger::LogDebug("[MAIN] Gamepad initialized");
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initGamepad end");
+  SRL::Logger::LogInfo("[MAIN] Gamepad initialized");
 
   SRL::Logger::LogInfo("[MAIN] Main game loop starting");
 
@@ -1043,16 +1378,14 @@ int main()
   gSyncCount = 0;
   gLastRenderSyncCount = 0;
 
-  //playMusic(7);
-
   while (!done)
   {
-#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
     static uint32_t sPhaseTraceCounter = 0u;
 #endif
 #if HW_DEBUG
     static uint32_t sPhaseProbeLoops = 0u;
-    const bool probePhase = (sPhaseProbeLoops < 8u);
+    const bool probePhase = false; // Disabled for sustained gameplay testing
     if (probePhase)
     {
       SRL::Logger::LogInfo("[PHASE] loop-start loop=%lu status=%d", (unsigned long)sPhaseProbeLoops, status);
@@ -1257,7 +1590,7 @@ int main()
 
     // Process game logic for calculated frames
     uint32_t phaseStartUs = SDL_GetProfileMicros();
-  #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+  #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
     setDiagPhase(1u); // move/update phase
   #endif
 #if HW_DEBUG
@@ -1310,7 +1643,7 @@ int main()
     ScreenVdpPerfStats frameVdpStats{};
     if (renderThisLoop)
     {
-    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(2u); // render phase
     #endif
 #if HW_DEBUG
@@ -1378,7 +1711,15 @@ int main()
         }
       }
 
+#if NOIZ2SA_SHOW_FPS
       drawFpsCounter();
+#endif
+#if NOIZ2SA_SHOW_FREE_HWRAM || NOIZ2SA_SHOW_FREE_LWRAM
+      drawMemStats();
+#endif
+#if NOIZ2SA_SHOW_MEMORY_POOLS
+  drawPoolStats();
+#endif
       logFpsToSerialIfDue();
     }
 
@@ -1392,9 +1733,9 @@ int main()
     // Fall back to non-blocking refresh only when ticks are stalled to avoid hard lockups.
     if (!gUseFixedFramePacing && nowTick > 0)
     {
-    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(3u); // pre-sync wait
-    #if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
+    #if NOIZ2SA_LOG_TO_DEV_CART && !HW_DEBUG
       if ((sPhaseTraceCounter % 120u) == 0u)
       {
         SRL::Logger::LogInfo("[PHASE] pre-sync tick=%lu status=%d phase=%u",
@@ -1410,11 +1751,11 @@ int main()
         SRL::Logger::LogInfo("[PHASE] pre-sync loop=%lu", (unsigned long)sPhaseProbeLoops);
       }
 #endif
-      SRL::Core::Synchronize();
+      synchronizeFrame();
       gSyncCount++;
-    #if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+    #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(4u); // post-sync
-    #if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
+    #if NOIZ2SA_LOG_TO_DEV_CART && !HW_DEBUG
       if ((sPhaseTraceCounter % 120u) == 0u)
       {
         SRL::Logger::LogInfo("[PHASE] post-sync tick=%lu status=%d phase=%u",
@@ -1434,7 +1775,7 @@ int main()
     }
     else
     {
-#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
   setDiagPhase(5u); // fixed-frame input refresh path
 #endif
       SRL::Input::Management::RefreshPeripherals();
@@ -1444,12 +1785,12 @@ int main()
   #endif
     uint32_t timeSyncUs = SDL_GetProfileMicros() - phaseStartUs;
 
-#if HW_DEBUG || NOIZ2SA_ENABLE_REAL_HW_LOGS
+#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
     {
       static uint32_t sLastHeartbeatMs = 0;
       const uint32_t hbNowMs = SDL_GetTicks();
-#if NOIZ2SA_ENABLE_REAL_HW_LOGS && !HW_DEBUG
-  const uint32_t heartbeatIntervalMs = 100u;
+#if NOIZ2SA_LOG_TO_DEV_CART && !HW_DEBUG
+  const uint32_t heartbeatIntervalMs = 250u;
 #else
   const uint32_t heartbeatIntervalMs = 1000u;
 #endif
@@ -1497,6 +1838,38 @@ int main()
         if (gDrawPhaseTimings.gameover > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.gameover; drawHotspotName = "drawGameover"; }
         if (gDrawPhaseTimings.stageClear > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.stageClear; drawHotspotName = "drawStageClear"; }
         if (gDrawPhaseTimings.pause > drawHotspotUs) { drawHotspotUs = gDrawPhaseTimings.pause; drawHotspotName = "drawPause"; }
+#if HW_DEBUG
+        SRL::Logger::LogInfo(
+          "[HEARTBEAT] ms=%lu tick=%lu status=%d fps=%u.%02u loops=%lu phase=%u trace=%lu sync=%lu bml=%u/%u hot=%s:%u/%s:%u perf(total=%u move=%u draw=%u sync=%u) worst(total=%u move=%u draw=%u sync=%u) entities(avg=%u peak=%u) bullets(avg=%u peak=%u live=%d)",
+          (unsigned long)hbNowMs,
+          (unsigned long)tick,
+          status,
+          (unsigned)(gFpsTimes100 / 100u),
+          (unsigned)(gFpsTimes100 % 100u),
+          (unsigned long)gPerfTraceWindow.loopCount,
+          (unsigned)gDiagPhaseTag,
+          (unsigned long)sPhaseTraceCounter,
+          (unsigned long)gSyncCount,
+          hasBulletMlAllocFailureLatched() ? 1u : 0u,
+          (unsigned)getBulletMlAllocFailureCount(),
+          moveHotspotName,
+          (unsigned)(moveHotspotUs / moveFrames),
+          drawHotspotName,
+          (unsigned)(drawHotspotUs / drawFrames),
+          (unsigned)avgTotalUs,
+          (unsigned)avgMoveUs,
+          (unsigned)avgDrawUs,
+          (unsigned)avgSyncUs,
+          (unsigned)gPerfTraceWindow.worstTotalUs,
+          (unsigned)gPerfTraceWindow.worstMoveUs,
+          (unsigned)gPerfTraceWindow.worstDrawUs,
+          (unsigned)gPerfTraceWindow.worstSyncUs,
+          (unsigned)avgFoeCount,
+          (unsigned)gPerfTraceWindow.peakFoeCount,
+          (unsigned)avgBulletCount,
+          (unsigned)gPerfTraceWindow.peakBulletCount,
+          getLiveProjectileCount());
+#else
         SRL::Logger::LogInfo("[HEARTBEAT] ms=%lu tick=%lu status=%d fps=%u.%02u loops=%lu",
                              (unsigned long)hbNowMs,
                              (unsigned long)tick,
@@ -1533,6 +1906,7 @@ int main()
                  (unsigned)avgBulletCount,
                  (unsigned)gPerfTraceWindow.peakBulletCount,
                  getLiveProjectileCount());
+#endif
       }
       sPhaseTraceCounter++;
     }

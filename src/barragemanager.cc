@@ -25,6 +25,7 @@
 #include <srl_log.hpp>
 #include <srl_system.hpp>
 #include <srl_cd.hpp>
+#include <srl_memory.hpp>
 #include <srl_string.hpp>
 
 #if HW_DEBUG
@@ -43,11 +44,16 @@ static const char *BARRAGE_DIR_NAME[] = {
   "ZAKO", "MIDDLE", "BOSS"
 };
 
+/** @brief Loads BulletML files for a barrage category from disc or embedded data. */
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 #if HW_DEBUG
   int i = 0;
   const HWDebugBulletML::EmbeddedPattern* patterns = nullptr;
   uint32_t patternCount = 0;
+
+  SRL::Logger::LogInfo("[INIT-BARRAGE] begin type=%s hwfree=%lu",
+                       dirPath,
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
 
   if (strcmp(dirPath, "ZAKO") == 0)
   {
@@ -73,15 +79,68 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
   for (uint32_t patternIndex = 0; patternIndex < patternCount && i < BARRAGE_PATTERN_MAX; ++patternIndex)
   {
+    const bool isBoss = (strcmp(dirPath, "BOSS") == 0);
+    const bool detailedTrace = isBoss && (patternIndex + 1u >= 14u);
+
+    SRL::Logger::LogInfo("[INIT-BARRAGE] parse-begin type=%s idx=%lu/%lu hwfree=%lu",
+                         dirPath,
+                         (unsigned long)(patternIndex + 1u),
+                         (unsigned long)patternCount,
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+
+    if (detailedTrace)
+    {
+      SRL::Logger::LogInfo("[INIT-BARRAGE] parser-create-begin type=%s idx=%lu name=%s size=%lu",
+                           dirPath,
+                           (unsigned long)(patternIndex + 1u),
+                           patterns[patternIndex].name,
+                           (unsigned long)patterns[patternIndex].size);
+    }
     brg[i].bulletml = createEmbeddedBulletMlParser(patterns[patternIndex].name, patterns[patternIndex].data, patterns[patternIndex].size);
+    if (detailedTrace)
+    {
+      SRL::Logger::LogInfo("[INIT-BARRAGE] parser-create-end type=%s idx=%lu ptr=%p hwfree=%lu",
+                           dirPath,
+                           (unsigned long)(patternIndex + 1u),
+                           brg[i].bulletml,
+                           (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+    }
+
+    if (detailedTrace)
+    {
+      SRL::Logger::LogInfo("[INIT-BARRAGE] build-begin type=%s idx=%lu name=%s",
+                           dirPath,
+                           (unsigned long)(patternIndex + 1u),
+                           patterns[patternIndex].name);
+    }
     if (!brg[i].bulletml->build())
     {
       SRL::Logger::LogFatal("[HW_DEBUG] Failed to parse embedded BulletML file: %s/%s", dirPath, patterns[patternIndex].name);
-      destroyObject(brg[i].bulletml);
+      destroyBulletMlParser(brg[i].bulletml);
       SRL::System::Exit(1);
     }
+    if (detailedTrace)
+    {
+      SRL::Logger::LogInfo("[INIT-BARRAGE] build-end type=%s idx=%lu name=%s hwfree=%lu",
+                           dirPath,
+                           (unsigned long)(patternIndex + 1u),
+                           patterns[patternIndex].name,
+                           (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+    }
+
+    SRL::Logger::LogInfo("[INIT-BARRAGE] parse-end type=%s idx=%lu/%lu name=%s hwfree=%lu",
+                         dirPath,
+                         (unsigned long)(patternIndex + 1u),
+                         (unsigned long)patternCount,
+                         patterns[patternIndex].name,
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
     i++;
   }
+
+  SRL::Logger::LogInfo("[INIT-BARRAGE] done type=%s loaded=%d hwfree=%lu",
+                       dirPath,
+                       i,
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
 
   return i;
 #else
@@ -184,7 +243,7 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
     if (!brg[i].bulletml->build()) {
       parseFailures++;
       SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
-      destroyObject(brg[i].bulletml);
+      destroyBulletMlParser(brg[i].bulletml);
       continue;
     }
     i++;
@@ -208,12 +267,22 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
 
 static unsigned int rnd;
 
+/** @brief Initialises the barrage manager and loads all barrage sets. */
 void initBarragemanager() {
   SRL::Logger::LogDebug("[BARRAGE] Initializing barrage manager");
   
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
+    SRL::Logger::LogInfo("[INIT-BARRAGE] type-begin idx=%d name=%s hwfree=%lu",
+                         i,
+                         BARRAGE_DIR_NAME[i],
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
     SRL::Logger::LogDebug("[BARRAGE] Loading barrage type %d: %s", i, BARRAGE_DIR_NAME[i]);
     barragePatternNum[i] = readBulletMLFiles(BARRAGE_DIR_NAME[i], barragePattern[i]);
+    SRL::Logger::LogInfo("[INIT-BARRAGE] type-end idx=%d name=%s loaded=%d hwfree=%lu",
+                         i,
+                         BARRAGE_DIR_NAME[i],
+                         barragePatternNum[i],
+                         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
     SRL::Logger::LogInfo("[BARRAGE] Type %d: Loaded %d patterns", i, barragePatternNum[i]);
     SRL::Logger::LogInfo("--------");
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
@@ -224,12 +293,13 @@ void initBarragemanager() {
   SRL::Logger::LogDebug("[BARRAGE] Barrage manager initialization complete");
 }
 
+/** @brief Releases barrage manager resources. */
 void closeBarragemanager() {
   SRL::Logger::LogDebug("[BARRAGE] Closing barrage manager");
   
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
     for ( int j=0 ; j<barragePatternNum[i] ; j++ ) {
-      destroyObject(barragePattern[i][j].bulletml);
+      destroyBulletMlParser(barragePattern[i][j].bulletml);
     }
   }
   
@@ -241,6 +311,7 @@ int endless, insane;
 static int sceneCnt;
 static Fxp level, levelInc;
 
+/** @brief Initialises the active barrage sequence for a stage. */
 void initBarrages(int seed, Fxp startLevel, Fxp li) {
   int n1, n2, rn;
 
@@ -294,6 +365,7 @@ void initBarrages(int seed, Fxp startLevel, Fxp li) {
 /**
  * Roll the barrage queue after the new barrage pattern is set.
  */
+/** @brief Shuffles the active barrage pattern queue. */
 static void rollBarragePattern(Barrage *br[], int brNum) {
   Barrage *tbr;
   int n = (Fxp::Convert(brNum) / (Fxp::Convert((int)(nextRandInt(&rnd) % 32)) / 32 + 1) + 0.5f).As<int>();

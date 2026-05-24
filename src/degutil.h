@@ -9,6 +9,10 @@
  *
  * @version $Revision: 1.1.1.1 $
  */
+#pragma once
+
+#include <cstdint>
+
 #define DIV 1024
 const int16_t TAN_TABLE_SIZE = 1024;
 const int16_t SIN_TABLE_SIZE = 256;
@@ -16,6 +20,23 @@ const int16_t SIN_TABLE_SIZE = 256;
 
 extern int sctbl[];
 
+/**
+ * @brief Initialises the degree lookup tables.
+ */
 void initDegutil();
+
+/**
+ * @brief Returns a legacy direction index for the given vector.
+ * @param x X component.
+ * @param y Y component.
+ * @return Direction index in the 0-1023 range.
+ */
 int getDeg(int x, int y);
+
+/**
+ * @brief Returns an integer distance between two coordinates.
+ * @param x X component.
+ * @param y Y component.
+ * @return Distance value.
+ */
 int getDistance(int x, int y);

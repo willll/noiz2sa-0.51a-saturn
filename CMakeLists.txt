@@ -100,10 +100,70 @@ set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 
 # Real-hardware logging is opt-in for non-HW_DEBUG builds so emulator runs keep
 # their console logs unless you explicitly want DevCart output.
-option(NOIZ2SA_ENABLE_REAL_HW_LOGS "Send logs to DEV_CART on non-HW_DEBUG builds" OFF)
+option(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE "Enable Saturn backup-device hi-score persistence" OFF)
+
+# FPS display option
+option(NOIZ2SA_SHOW_FPS "Display FPS counter on screen" ON)
+
+# Memory debug display options
+option(NOIZ2SA_SHOW_FREE_HWRAM "Display free High Work RAM on screen" ON)
+option(NOIZ2SA_SHOW_FREE_LWRAM "Display free Low Work RAM on screen" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOLS "Display pool free/total counters on screen" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOL_FOE "Display foe pool free/total" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOL_SHOT "Display shot pool free/total" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOL_BONUS "Display bonus pool free/total" ON)
+option(NOIZ2SA_SHOW_MEMORY_POOL_FRAG "Display frag pool free/total" ON)
 
 # Performance/Debug logging option
 option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
+if(NOIZ2SA_SHOW_FPS)
+    add_compile_definitions(NOIZ2SA_SHOW_FPS=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_FPS=0)
+endif()
+
+if(NOIZ2SA_SHOW_FREE_HWRAM)
+    add_compile_definitions(NOIZ2SA_SHOW_FREE_HWRAM=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_FREE_HWRAM=0)
+endif()
+
+if(NOIZ2SA_SHOW_FREE_LWRAM)
+    add_compile_definitions(NOIZ2SA_SHOW_FREE_LWRAM=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_FREE_LWRAM=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOLS)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOLS=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOLS=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOL_FOE)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FOE=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FOE=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOL_SHOT)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_SHOT=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_SHOT=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOL_BONUS)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_BONUS=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_BONUS=0)
+endif()
+
+if(NOIZ2SA_SHOW_MEMORY_POOL_FRAG)
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FRAG=1)
+else()
+    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FRAG=0)
+endif()
+
 if(NOIZ2SA_ENABLE_PERF_LOGS)
     add_compile_definitions(NOIZ2SA_ENABLE_PERF_LOGS=1)
 else()
@@ -134,6 +194,8 @@ option(NOIZ2SA_DEBUG_AUTOSTART_SMOKE "Debug-only: auto-start gameplay from title
 option(NOIZ2SA_PERF_MODE "Enable performance mode (disables non-essential draws for benchmarking)" OFF)
 option(NOIZ2SA_BLEND_SKIP "Skip alpha compositing in blendScreen (copy only) — measures FPS headroom without alpha cost" OFF)
 option(NOIZ2SA_DISABLE_BULLET_SLOWDOWN "Disable bullet slowdown when foe count is high" ON)
+option(NOIZ2SA_ENABLE_INVINCIBLE "Make player invincible (debug/testing)" OFF)
+option(NOIZ2SA_ENABLE_AUTO_SHOT "Automatically fire without button input (debug/testing)" OFF)
 set(NOIZ2SA_SPAWN_BUDGET_PER_TICK "2" CACHE STRING "Maximum new enemies spawned per tick")
 set(NOIZ2SA_FOE_UPDATE_BUDGET "160" CACHE STRING "Maximum foe updates processed per tick")
 option(HW_DEBUG "Hardware debug mode: run without CD-backed files or audio assets" OFF)
@@ -143,8 +205,12 @@ set_property(CACHE HW_DEBUG_ENDLESS_STAGE PROPERTY STRINGS 10 11 12 13)
 
 if(HW_DEBUG)
     set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
+    set(NOIZ2SA_SHOW_FREE_HWRAM ON CACHE BOOL "Display free High Work RAM on screen" FORCE)
+    set(NOIZ2SA_SHOW_FREE_LWRAM ON CACHE BOOL "Display free Low Work RAM on screen" FORCE)
     set(NOIZ2SA_ENABLE_SOUND OFF CACHE BOOL "Enable in-game sound (PCM SFX + CDDA BGM)" FORCE)
     set(NOIZ2SA_ENABLE_PCM_SFX OFF CACHE BOOL "Enable PCM SFX loading through Ponesound backend" FORCE)
+    set(NOIZ2SA_ENABLE_INVINCIBLE ON CACHE BOOL "Make player invincible (debug/testing)" FORCE)
+    set(NOIZ2SA_ENABLE_AUTO_SHOT ON CACHE BOOL "Automatically fire without button input (debug/testing)" FORCE)
 
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
     file(GLOB HW_DEBUG_ZAKO_BLB_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/noiz2sa_share/zako_blb/*.blb")
@@ -154,14 +220,10 @@ if(HW_DEBUG)
     include("${CMAKE_SOURCE_DIR}/cmake/generate_hw_debug_bulletml.cmake")
 endif()
 
-if(NOIZ2SA_ENABLE_REAL_HW_LOGS AND NOT HW_DEBUG)
-    set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
-endif()
-
-if(NOIZ2SA_ENABLE_REAL_HW_LOGS OR SRL_LOG_OUTPUT STREQUAL "DEV_CART")
-    add_compile_definitions(NOIZ2SA_ENABLE_REAL_HW_LOGS=1)
+if(SRL_LOG_OUTPUT STREQUAL "DEV_CART")
+    add_compile_definitions(NOIZ2SA_LOG_TO_DEV_CART=1)
 else()
-    add_compile_definitions(NOIZ2SA_ENABLE_REAL_HW_LOGS=0)
+    add_compile_definitions(NOIZ2SA_LOG_TO_DEV_CART=0)
 endif()
 
 # Background color after loading
@@ -304,6 +366,18 @@ else()
     add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=0)
 endif()
 
+if(NOIZ2SA_ENABLE_INVINCIBLE)
+    add_compile_definitions(NOIZ2SA_ENABLE_INVINCIBLE=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_INVINCIBLE=0)
+endif()
+
+if(NOIZ2SA_ENABLE_AUTO_SHOT)
+    add_compile_definitions(NOIZ2SA_ENABLE_AUTO_SHOT=1)
+else()
+    add_compile_definitions(NOIZ2SA_ENABLE_AUTO_SHOT=0)
+endif()
+
 if(HW_DEBUG)
     add_compile_definitions(HW_DEBUG=1)
 else()
@@ -386,8 +460,6 @@ set(SOURCES_NOIZ2SA
   src/gamepad.cpp
   src/rand.cpp
   src/attractmanager.cpp
-    src/hiscore_persistence.cpp
-        src/hiscore_persistence_format.cpp
   src/loading_screen.cpp
   src/soundmanager.cpp
   src/background.cpp
@@ -395,6 +467,13 @@ set(SOURCES_NOIZ2SA
   src/foecommand.cc
   src/barragemanager.cc
 )
+
+if(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE)
+        list(APPEND SOURCES_NOIZ2SA
+                src/hiscore_persistence.cpp
+                src/hiscore_persistence_format.cpp
+        )
+endif()
 
 # SGL Preloader - MUST be linked first (before all other object files)
 # Following shared.mk: PRELOADERSOURCES = $(SGLDIR)/SRC/preloader.cxx
@@ -538,7 +617,6 @@ target_include_directories(
     # SaturnRingLib headers (MUST come first to override system headers)
     ${SRL_INSTALL_ROOT}/saturnringlib
     ${CMAKE_BINARY_DIR}/generated
-    ${CMAKE_SOURCE_DIR}/src/backup/INC
     ${CMAKE_SOURCE_DIR}/src/ponesound/INC
     ${CMAKE_SOURCE_DIR}/src/decompression/INC
     ${CMAKE_SOURCE_DIR}/src/smpc/INC
@@ -553,6 +631,12 @@ target_include_directories(
     src/bulletml_binary
     )
 
+if(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE)
+    target_include_directories(${CD_NAME}.elf PUBLIC
+        ${CMAKE_SOURCE_DIR}/src/backup/INC
+    )
+endif()
+
 target_compile_definitions(${CD_NAME}.elf PUBLIC
     ${BULLETML_INCLUDE_DIRS}
     )
@@ -565,6 +649,12 @@ target_compile_definitions(${CD_NAME}.elf PUBLIC
     $<$<COMPILE_LANGUAGE:C>:true=1>
     $<$<COMPILE_LANGUAGE:C>:false=0>
 )
+
+if(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE)
+    target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_ENABLE_BACKUP_PERSISTENCE=1)
+else()
+    target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_ENABLE_BACKUP_PERSISTENCE=0)
+endif()
 
 if(NOIZ2SA_DEBUG_AUTOSTART_SMOKE)
     target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_DEBUG_AUTOSTART_SMOKE=1)
@@ -1082,6 +1172,7 @@ target_compile_definitions(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
     $<$<COMPILE_LANGUAGE:C>:bool=int>
     $<$<COMPILE_LANGUAGE:C>:true=1>
     $<$<COMPILE_LANGUAGE:C>:false=0>
+    BULLETML_SKIP_CD_TESTS
 )
 
 target_link_options(${BULLETML_SH2_TEST_CD_NAME}.elf PUBLIC
@@ -1137,46 +1228,307 @@ if(EXISTS "${ISO2RAW_EXECUTABLE}")
     )
 endif()
 
+set(FACTORY_SH2_TEST_CD_NAME "noiz2sa_factory_ut")
+set(FACTORY_SH2_TESTS_DIR "${CMAKE_SOURCE_DIR}/Tests")
+set(FACTORY_SH2_TEST_BUILD_DROP "${FACTORY_SH2_TESTS_DIR}/BuildDrop")
+set(FACTORY_SH2_TEST_ASSETS_DIR "${FACTORY_SH2_TESTS_DIR}/cd_factory/data")
+set(FACTORY_SH2_TEST_ELF "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.elf")
+set(FACTORY_SH2_TEST_ISO "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.iso")
+set(FACTORY_SH2_TEST_BIN "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.bin")
+set(FACTORY_SH2_TEST_CUE "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.cue")
+set(FACTORY_SH2_TEST_MAP "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_SH2_TEST_CD_NAME}.map")
+
+file(MAKE_DIRECTORY "${FACTORY_SH2_TEST_BUILD_DROP}")
+file(MAKE_DIRECTORY "${FACTORY_SH2_TEST_ASSETS_DIR}")
+file(WRITE "${FACTORY_SH2_TEST_ASSETS_DIR}/ABS.TXT" "NOT Abstracted by SEGA\n")
+file(WRITE "${FACTORY_SH2_TEST_ASSETS_DIR}/BIB.TXT" "NOT Bibliographiced by SEGA\n")
+file(WRITE "${FACTORY_SH2_TEST_ASSETS_DIR}/CPY.TXT" "")
+
+set(FACTORY_SH2_TEST_SOURCES
+    ${CMAKE_SOURCE_DIR}/Tests/src/factory_main.cxx
+)
+
+set(FACTORY_HEADERS_SH2_TEST_SOURCES
+    ${CMAKE_SOURCE_DIR}/Tests/src/factory_headers_compile.cxx
+)
+
+add_executable(${FACTORY_SH2_TEST_CD_NAME}.elf
+    "${SGL_PRELOADER_SOURCE}"
+    ${FACTORY_SH2_TEST_SOURCES}
+    ${SOURCES_SGL_SYSTEM}
+)
+
+set_target_properties(${FACTORY_SH2_TEST_CD_NAME}.elf PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${FACTORY_SH2_TEST_BUILD_DROP}"
+)
+
+target_include_directories(
+    ${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC
+    ${SRL_INSTALL_ROOT}/saturnringlib
+    ${CMAKE_SOURCE_DIR}/src/bulletml_binary
+    ${CMAKE_SOURCE_DIR}/src/SDL
+    ${SRL_INSTALL_ROOT}/modules/sgl/INC
+    ${SRL_INSTALL_ROOT}/modules/dummy
+    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+    ${SRL_INSTALL_ROOT}/modules/tlsf
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/Tests/src
+)
+
+target_compile_options(${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
+    $<$<COMPILE_LANGUAGE:C>:${c_flags}>
+)
+
+target_compile_definitions(${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:bool=int>
+    $<$<COMPILE_LANGUAGE:C>:true=1>
+    $<$<COMPILE_LANGUAGE:C>:false=0>
+)
+
+target_link_options(${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC
+    "SHELL:-m2"
+    "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+    "SHELL:-Xlinker -Map -Xlinker ${FACTORY_SH2_TEST_MAP}"
+    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+)
+
+if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+    target_link_options(${FACTORY_SH2_TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+endif()
+
+srl_link_target(${FACTORY_SH2_TEST_CD_NAME}.elf)
+
+add_custom_command(TARGET ${FACTORY_SH2_TEST_CD_NAME}.elf POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${FACTORY_SH2_TEST_CD_NAME}.elf>" "${FACTORY_SH2_TEST_ASSETS_DIR}/0.bin"
+    COMMENT "Converting factory test ELF to binary: ${FACTORY_SH2_TEST_ASSETS_DIR}/0.bin"
+    VERBATIM
+)
+
+if(XORRISOFS_EXECUTABLE)
+    add_custom_target(${FACTORY_SH2_TEST_CD_NAME}_iso
+        DEPENDS ${FACTORY_SH2_TEST_CD_NAME}.elf
+        COMMAND ${XORRISOFS_EXECUTABLE}
+            --norock -quiet
+            -sysid "SEGA SATURN"
+            -volid "${FACTORY_SH2_TEST_CD_NAME}"
+            -volset "${FACTORY_SH2_TEST_CD_NAME}"
+            -publisher "SEGA ENTERPRISES, LTD."
+            -preparer "SEGA ENTERPRISES, LTD."
+            -appid "${FACTORY_SH2_TEST_CD_NAME}"
+            -abstract "NOT Abstracted by SEGA"
+            -copyright ""
+            -biblio ""
+            -generic-boot "${IPFILE}"
+            -full-iso9660-filenames
+            -o "${FACTORY_SH2_TEST_ISO}"
+            "${FACTORY_SH2_TEST_ASSETS_DIR}"
+        COMMENT "Building factory test ISO: ${FACTORY_SH2_TEST_ISO}"
+        VERBATIM
+    )
+endif()
+
+if(EXISTS "${ISO2RAW_EXECUTABLE}")
+    add_custom_target(${FACTORY_SH2_TEST_CD_NAME}_bin_cue
+        DEPENDS ${FACTORY_SH2_TEST_CD_NAME}_iso
+        COMMAND "${ISO2RAW_EXECUTABLE}" "${FACTORY_SH2_TEST_ISO}"
+        COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${FACTORY_SH2_TEST_CUE}" "${FACTORY_SH2_TEST_CD_NAME}.bin"
+        COMMENT "Creating factory test BIN/CUE"
+        VERBATIM
+    )
+endif()
+
+set(FACTORY_HEADERS_SH2_TEST_CD_NAME "noiz2sa_factory_headers_ut")
+set(FACTORY_HEADERS_SH2_TEST_MAP "${FACTORY_SH2_TEST_BUILD_DROP}/${FACTORY_HEADERS_SH2_TEST_CD_NAME}.map")
+
+add_executable(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf
+    "${SGL_PRELOADER_SOURCE}"
+    ${FACTORY_HEADERS_SH2_TEST_SOURCES}
+    ${SOURCES_SGL_SYSTEM}
+)
+
+set_target_properties(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${FACTORY_SH2_TEST_BUILD_DROP}"
+)
+
+target_include_directories(
+    ${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC
+    ${SRL_INSTALL_ROOT}/saturnringlib
+    ${CMAKE_SOURCE_DIR}/src/bulletml_binary
+    ${CMAKE_SOURCE_DIR}/src/SDL
+    ${SRL_INSTALL_ROOT}/modules/sgl/INC
+    ${SRL_INSTALL_ROOT}/modules/dummy
+    ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+    ${SRL_INSTALL_ROOT}/modules/tlsf
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/Tests/src
+)
+
+target_compile_options(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>
+    $<$<COMPILE_LANGUAGE:C>:${c_flags}>
+)
+
+target_compile_definitions(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:bool=int>
+    $<$<COMPILE_LANGUAGE:C>:true=1>
+    $<$<COMPILE_LANGUAGE:C>:false=0>
+)
+
+target_link_options(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC
+    "SHELL:-m2"
+    "SHELL:-L${SRL_SGL_DIR}/LIB"
+    "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+    "SHELL:-Xlinker -Map -Xlinker ${FACTORY_HEADERS_SH2_TEST_MAP}"
+    "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+)
+
+if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+    target_link_options(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+endif()
+
+srl_link_target(${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf)
+
+add_custom_target(${FACTORY_HEADERS_SH2_TEST_CD_NAME}_build ALL
+    DEPENDS ${FACTORY_HEADERS_SH2_TEST_CD_NAME}.elf
+)
+
 enable_testing()
 
 # ============================================================================
-# BulletML Parity Test (compiled with native compiler, not Saturn toolchain)
+# Saturn-hosted logic/parity tests (no native host g++ unit tests)
 # ============================================================================
 
-set(BULLETML_TEST_NAME "bulletml_parity_ut")
-set(BULLETML_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_parity_tests.cpp")
-set(BULLETML_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${BULLETML_TEST_NAME}")
+function(add_sh2_logic_test TEST_CD_NAME TEST_SOURCE TEST_ASSET_SUBDIR)
+    set(TEST_BUILD_DROP "${CMAKE_SOURCE_DIR}/Tests/BuildDrop")
+    set(TEST_ASSETS_DIR "${CMAKE_SOURCE_DIR}/Tests/${TEST_ASSET_SUBDIR}/data")
+    set(TEST_MAP "${TEST_BUILD_DROP}/${TEST_CD_NAME}.map")
+    set(TEST_ISO "${TEST_BUILD_DROP}/${TEST_CD_NAME}.iso")
+    set(TEST_CUE "${TEST_BUILD_DROP}/${TEST_CD_NAME}.cue")
 
-set(HISCORE_TEST_NAME "hiscore_persistence_ut")
-set(HISCORE_TEST_SOURCE "${CMAKE_SOURCE_DIR}/Tests/hiscore/hiscore_persistence_unit_tests.cpp")
-set(HISCORE_TEST_SUPPORT_SOURCE "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.cpp")
-set(HISCORE_TEST_EXECUTABLE "${CMAKE_BINARY_DIR}/Tests/${HISCORE_TEST_NAME}")
+    file(MAKE_DIRECTORY "${TEST_BUILD_DROP}")
+    file(MAKE_DIRECTORY "${TEST_ASSETS_DIR}")
+    file(WRITE "${TEST_ASSETS_DIR}/ABS.TXT" "NOT Abstracted by SEGA\n")
+    file(WRITE "${TEST_ASSETS_DIR}/BIB.TXT" "NOT Bibliographiced by SEGA\n")
+    file(WRITE "${TEST_ASSETS_DIR}/CPY.TXT" "")
 
-# Build bulletml parity test with native compiler (not Saturn SH-ELF)
-add_custom_command(
-    OUTPUT "${BULLETML_TEST_EXECUTABLE}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/Tests"
-    COMMAND g++ -std=c++11 -Wall -Wextra -o "${BULLETML_TEST_EXECUTABLE}" "${BULLETML_TEST_SOURCE}"
-    DEPENDS "${BULLETML_TEST_SOURCE}"
-    COMMENT "Building bulletml parity test with native compiler"
-    VERBATIM
+    add_executable(${TEST_CD_NAME}.elf
+        "${SGL_PRELOADER_SOURCE}"
+        "${CMAKE_SOURCE_DIR}/Tests/src/logic_test_srl_main.cpp"
+        "${TEST_SOURCE}"
+        ${SOURCES_SGL_SYSTEM}
+        ${ARGN}
+    )
+
+    set_target_properties(${TEST_CD_NAME}.elf PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${TEST_BUILD_DROP}"
+    )
+
+    target_include_directories(${TEST_CD_NAME}.elf PUBLIC
+        ${SRL_INSTALL_ROOT}/saturnringlib
+        ${SRL_INSTALL_ROOT}/modules/sgl/INC
+        ${SRL_INSTALL_ROOT}/modules/SaturnMathPP
+        ${SRL_INSTALL_ROOT}/modules/tlsf
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/Tests/src
+    )
+
+    target_compile_options(${TEST_CD_NAME}.elf PUBLIC
+        $<$<COMPILE_LANGUAGE:CXX>:${cxx_flags} -include ${CMAKE_SOURCE_DIR}/Tests/src/logic_test_compat.h>
+        $<$<COMPILE_LANGUAGE:C>:${c_flags} -include ${CMAKE_SOURCE_DIR}/Tests/src/logic_test_compat.h>
+    )
+
+    target_compile_definitions(${TEST_CD_NAME}.elf PUBLIC
+        $<$<COMPILE_LANGUAGE:C>:bool=int>
+        $<$<COMPILE_LANGUAGE:C>:true=1>
+        $<$<COMPILE_LANGUAGE:C>:false=0>
+    )
+
+    target_link_options(${TEST_CD_NAME}.elf PUBLIC
+        "SHELL:-m2"
+        "SHELL:-L${SRL_SGL_DIR}/LIB"
+        "SHELL:-Xlinker -T${SRL_SGL_DIR}/sgl.linker"
+        "SHELL:-Xlinker -Map -Xlinker ${TEST_MAP}"
+        "SHELL:-Xlinker -e -Xlinker ___Start -nostartfiles"
+    )
+
+    if(CMAKE_C_COMPILER_VERSION MATCHES "^14\\.")
+        target_link_options(${TEST_CD_NAME}.elf PUBLIC "SHELL:-specs=nosys.specs")
+    endif()
+
+    srl_link_target(${TEST_CD_NAME}.elf)
+
+    add_custom_command(TARGET ${TEST_CD_NAME}.elf POST_BUILD
+        COMMAND ${CMAKE_OBJCOPY} -O binary "$<TARGET_FILE:${TEST_CD_NAME}.elf>" "${TEST_ASSETS_DIR}/0.bin"
+        COMMENT "Converting ${TEST_CD_NAME} ELF to binary: ${TEST_ASSETS_DIR}/0.bin"
+        VERBATIM
+    )
+
+    if(XORRISOFS_EXECUTABLE)
+        add_custom_target(${TEST_CD_NAME}_iso
+            DEPENDS ${TEST_CD_NAME}.elf
+            COMMAND ${XORRISOFS_EXECUTABLE}
+                --norock -quiet
+                -sysid "SEGA SATURN"
+                -volid "${TEST_CD_NAME}"
+                -volset "${TEST_CD_NAME}"
+                -publisher "SEGA ENTERPRISES, LTD."
+                -preparer "SEGA ENTERPRISES, LTD."
+                -appid "${TEST_CD_NAME}"
+                -abstract "NOT Abstracted by SEGA"
+                -copyright ""
+                -biblio ""
+                -generic-boot "${IPFILE}"
+                -full-iso9660-filenames
+                -o "${TEST_ISO}"
+                "${TEST_ASSETS_DIR}"
+            COMMENT "Building ${TEST_CD_NAME} ISO"
+            VERBATIM
+        )
+    endif()
+
+    if(EXISTS "${ISO2RAW_EXECUTABLE}")
+        add_custom_target(${TEST_CD_NAME}_bin_cue
+            DEPENDS ${TEST_CD_NAME}_iso
+            COMMAND "${ISO2RAW_EXECUTABLE}" "${TEST_ISO}"
+            COMMAND bash "${CMAKE_SOURCE_DIR}/tools/create_cue_header.sh" "${TEST_CUE}" "${TEST_CD_NAME}.bin"
+            COMMENT "Creating ${TEST_CD_NAME} BIN/CUE"
+            VERBATIM
+        )
+    endif()
+endfunction()
+
+add_sh2_logic_test(
+    "noiz2sa_bulletml_parity_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_parity_tests.cpp"
+    "cd_bulletml_parity"
 )
 
-add_custom_target(bulletml_parity_ut_build ALL
-    DEPENDS "${BULLETML_TEST_EXECUTABLE}"
+add_sh2_logic_test(
+    "noiz2sa_bulletml_latch_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/bulletml/bulletml_latch_recovery_tests.cpp"
+    "cd_bulletml_latch"
 )
 
-add_custom_command(
-    OUTPUT "${HISCORE_TEST_EXECUTABLE}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/Tests"
-    COMMAND g++ -std=c++11 -Wall -Wextra -I${CMAKE_SOURCE_DIR}/src -o "${HISCORE_TEST_EXECUTABLE}" "${HISCORE_TEST_SOURCE}" "${HISCORE_TEST_SUPPORT_SOURCE}"
-    DEPENDS "${HISCORE_TEST_SOURCE}" "${HISCORE_TEST_SUPPORT_SOURCE}" "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.h"
-    COMMENT "Building hi-score persistence unit test with native compiler"
-    VERBATIM
+add_sh2_logic_test(
+    "noiz2sa_foecommand_trim_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/bulletml/foecommand_trim_tests.cpp"
+    "cd_foecommand_trim"
 )
 
-add_custom_target(hiscore_persistence_ut_build ALL
-    DEPENDS "${HISCORE_TEST_EXECUTABLE}"
+add_sh2_logic_test(
+    "noiz2sa_memory_pressure_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/bulletml/memory_pressure_tests.cpp"
+    "cd_memory_pressure"
+)
+
+add_sh2_logic_test(
+    "noiz2sa_hiscore_persistence_ut"
+    "${CMAKE_SOURCE_DIR}/Tests/hiscore/hiscore_persistence_unit_tests.cpp"
+    "cd_hiscore"
+    "${CMAKE_SOURCE_DIR}/src/hiscore_persistence_format.cpp"
 )
 
 # ============================================================================
@@ -1196,16 +1548,60 @@ add_test(
 set_tests_properties(sh2_background_animation_campaign PROPERTIES TIMEOUT 700)
 
 add_test(
-    NAME bulletml_parity_test
-    COMMAND "${BULLETML_TEST_EXECUTABLE}"
+    NAME sh2_factory_campaign
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_factory_campaign.sh" --emulator mednafen --strict
 )
-set_tests_properties(bulletml_parity_test PROPERTIES TIMEOUT 60)
+set_tests_properties(sh2_factory_campaign PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME bulletml_parity_test
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_bulletml_parity_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_bulletml_parity.log"
+)
+set_tests_properties(bulletml_parity_test PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME bulletml_latch_recovery_test
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_bulletml_latch_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_bulletml_latch.log"
+)
+set_tests_properties(bulletml_latch_recovery_test PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME foecommand_trim_test
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_foecommand_trim_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_foecommand_trim.log"
+)
+set_tests_properties(foecommand_trim_test PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME memory_pressure_policy_test
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_memory_pressure_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_memory_pressure.log"
+)
+set_tests_properties(memory_pressure_policy_test PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME hiscore_persistence_test
-    COMMAND "${HISCORE_TEST_EXECUTABLE}"
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
+            --cd-name noiz2sa_hiscore_persistence_ut
+            --emulator mednafen
+            --strict
+            --log "${CMAKE_SOURCE_DIR}/Tests/uts_hiscore_persistence.log"
 )
-set_tests_properties(hiscore_persistence_test PROPERTIES TIMEOUT 60)
+set_tests_properties(hiscore_persistence_test PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME bulletml_all_xml_recursive_test

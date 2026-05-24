@@ -47,11 +47,13 @@ static constexpr uint16_t BACKGROUND_BASE_COLOR = 0xffff;
 static constexpr uint32_t BACKGROUND_HASH_OFFSET = 2166136261u;
 static constexpr uint32_t BACKGROUND_HASH_PRIME = 16777619u;
 
+/** @brief Mixes one byte into the background bitmap hash. */
 static inline uint32_t hashBackgroundByte(uint32_t hash, uint8_t value)
 {
   return (hash ^ value) * BACKGROUND_HASH_PRIME;
 }
 
+/** @brief Writes a solid horizontal span into the background buffer. */
 static void fillBackgroundSpan(uint16_t *dst, int count, uint16_t color)
 {
   for (int i = 0; i < count; i++)
@@ -60,6 +62,7 @@ static void fillBackgroundSpan(uint16_t *dst, int count, uint16_t color)
   }
 }
 
+/** @brief Rasterises one background board rectangle into the bitmap buffer. */
 static void rasterBackgroundRect(
     uint16_t *dst,
     int centerX,
@@ -110,6 +113,7 @@ static void rasterBackgroundRect(
   fillBackgroundSpan(&(dst[ptr]), width, borderColor);
 }
 
+/** @brief Renders the full background bitmap from the current board set. */
 static void renderBackgroundBitmap(
     const Board *srcBoard,
     int srcBoardRepx,
@@ -156,6 +160,7 @@ static void renderBackgroundBitmap(
 class BackgroundRenderTask : public SRL::Types::ITask
 {
 public:
+  /** @brief Captures the current board state for deferred background rendering. */
   void Prepare(
       const Board *srcBoard,
       int srcBoardRepx,
@@ -176,17 +181,20 @@ public:
     targetBufferIndex = bufferIndex;
   }
 
+  /** @brief Returns the generation counter for the prepared render. */
   uint32_t GetGeneration() const
   {
     return targetGeneration;
   }
 
+  /** @brief Returns which background buffer was targeted for the prepared render. */
   int GetBufferIndex() const
   {
     return targetBufferIndex;
   }
 
 protected:
+  /** @brief Executes the background render task. */
   void Do() override
   {
     if (targetBuffer == nullptr)
@@ -216,6 +224,7 @@ private:
 
 static BackgroundRenderTask backgroundRenderTask;
 
+/** @brief Uploads a rendered background bitmap into VDP2 VRAM. */
 static void uploadBackgroundBitmap(const uint16_t *src)
 {
   if (backgroundLayerVram == nullptr || src == nullptr)
@@ -251,6 +260,7 @@ static void uploadBackgroundBitmap(const uint16_t *src)
   }
 }
 
+/** @brief Allocates the VDP2 background layer if it is not already present. */
 static void ensureBackgroundLayer()
 {
   if (backgroundLayerVram != nullptr)
@@ -316,6 +326,7 @@ static void ensureBackgroundLayer()
   SRL::Logger::LogInfo("[BACKGROUND] NBG0 enabled priority=2 transparent=off base=0x%04x", (unsigned int)BACKGROUND_BASE_COLOR);
 }
 
+/** @brief Submits the current board state to the background render task. */
 static void submitBackgroundRender()
 {
   ensureBackgroundLayer();
@@ -350,6 +361,7 @@ static void submitBackgroundRender()
   SRL::Slave::ExecuteOnSlave(backgroundRenderTask);
 }
 
+/** @brief Presents any completed background render to VRAM. */
 static void presentCompletedBackground()
 {
   if (!backgroundRenderTask.IsDone())
@@ -366,6 +378,7 @@ static void presentCompletedBackground()
   backgroundUploadedGeneration = backgroundRenderTask.GetGeneration();
 }
 
+/** @brief Refreshes the background bitmap buffer when the board state changes. */
 static void refreshBackgroundBitmap()
 {
   ensureBackgroundLayer();
@@ -381,6 +394,7 @@ static void refreshBackgroundBitmap()
   backgroundUploadedGeneration = backgroundRequestedGeneration;
 }
 
+/** @brief Initialises the background system. */
 void initBackground()
 {
   int i;
@@ -390,6 +404,7 @@ void initBackground()
   }
 }
 
+/** @brief Adds one board element to the background layout. */
 static void addBoard(int x, int y, int z, int width, int height)
 {
   if (bdIdx >= BOARD_MAX)
@@ -403,6 +418,7 @@ static void addBoard(int x, int y, int z, int width, int height)
   bdIdx++;
 }
 
+/** @brief Selects the stage background for the given stage number. */
 void setStageBackground(int bn)
 {
   int i, j, k;
@@ -558,6 +574,7 @@ void setStageBackground(int bn)
   refreshBackgroundBitmap();
 }
 
+/** @brief Advances the background animation and update cadence. */
 void moveBackground()
 {
   int i;
@@ -583,11 +600,13 @@ void moveBackground()
   }
 }
 
+/** @brief Draws the current background state to the screen. */
 void drawBackground()
 {
   presentCompletedBackground();
 }
 
+/** @brief Returns a hash of the current background bitmap for debugging. */
 unsigned int getBackgroundDebugBitmapHash()
 {
   ensureBackgroundLayer();
@@ -613,6 +632,7 @@ unsigned int getBackgroundDebugBitmapHash()
   return hash;
 }
 
+/** @brief Returns the number of active boards in the background layout. */
 int getBackgroundDebugBoardCount()
 {
   return bdIdx;

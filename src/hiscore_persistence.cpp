@@ -17,16 +17,23 @@ unsigned char kBackupComment[11] = "HISCORE";
 static Device *gBackupDevice = nullptr;
 static bool gBackupInitFailed = false;
 
+/** @brief Returns whether the specified backup device is mounted. */
 static bool isDeviceMounted(const BupDevice device)
 {
   return Device::BupState[device].isMounted;
 }
 
-static Device *getBackupDevice()
+/** @brief Returns the singleton backup device wrapper, creating it on demand. */
+static Device *getBackupDevice(bool allowInitialize)
 {
   if (gBackupInitFailed)
   {
     return nullptr;
+  }
+
+  if (!allowInitialize)
+  {
+    return gBackupDevice;
   }
 
   if (gBackupDevice == nullptr)
@@ -43,6 +50,7 @@ static Device *getBackupDevice()
   return gBackupDevice;
 }
 
+/** @brief Attempts to load hi-score data from a specific backup device. */
 static HiScoreLoadStatus tryLoadFromDevice(Device *device, const BupDevice bupDevice, HiScore *outHiScore)
 {
   HiScoreBackupData data{};
@@ -67,6 +75,7 @@ static HiScoreLoadStatus tryLoadFromDevice(Device *device, const BupDevice bupDe
   return HiScoreLoadStatus::Loaded;
 }
 
+/** @brief Attempts to save hi-score data to a specific backup device. */
 static HiScoreSaveStatus trySaveToDevice(Device *device, const BupDevice bupDevice, const HiScore *hiScore)
 {
   HiScoreBackupData data{};
@@ -84,6 +93,7 @@ static HiScoreSaveStatus trySaveToDevice(Device *device, const BupDevice bupDevi
 }
 } // namespace
 
+/** @brief Loads the persistent hi-score record. */
 HiScoreLoadStatus loadHiScorePersistence(HiScore *outHiScore)
 {
   if (outHiScore == nullptr)
@@ -91,7 +101,8 @@ HiScoreLoadStatus loadHiScorePersistence(HiScore *outHiScore)
     return HiScoreLoadStatus::InvalidData;
   }
 
-  Device *device = getBackupDevice();
+  // Load can be the first persistence operation at boot, so allow lazy init.
+  Device *device = getBackupDevice(true);
   if (device == nullptr)
   {
     return HiScoreLoadStatus::BackendUnavailable;
@@ -133,6 +144,7 @@ HiScoreLoadStatus loadHiScorePersistence(HiScore *outHiScore)
   return sawNotFound ? HiScoreLoadStatus::NotFound : HiScoreLoadStatus::IoError;
 }
 
+/** @brief Saves the persistent hi-score record. */
 HiScoreSaveStatus saveHiScorePersistence(const HiScore *hiScore)
 {
   if (hiScore == nullptr)
@@ -140,7 +152,7 @@ HiScoreSaveStatus saveHiScorePersistence(const HiScore *hiScore)
     return HiScoreSaveStatus::IoError;
   }
 
-  Device *device = getBackupDevice();
+  Device *device = getBackupDevice(true);
   if (device == nullptr)
   {
     return HiScoreSaveStatus::BackendUnavailable;

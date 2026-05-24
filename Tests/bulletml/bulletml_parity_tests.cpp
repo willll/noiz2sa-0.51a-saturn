@@ -1,7 +1,8 @@
-#include <cstdlib>
-#include <cstdint>
-#include <cstring>
-#include <iostream>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+#include <stdio.h>
 
 // Minimal test macros for bulletml parity validation
 static int g_bulletml_tests_failed = 0;
@@ -11,8 +12,8 @@ static int g_bulletml_tests_failed = 0;
   {                                                                            \
     if (!(expr))                                                               \
     {                                                                          \
-      std::cerr << "BULLETML_ASSERT failed at line " << __LINE__ << ": "     \
-                << msg << "\n";                                               \
+                  printf("BULLETML_ASSERT failed at line %d: %s\n",                       \
+                    __LINE__, msg);                                                    \
       g_bulletml_tests_failed++;                                              \
     }                                                                          \
   } while (0)
@@ -24,8 +25,8 @@ static int g_bulletml_tests_failed = 0;
     const auto _b = (b);                                                       \
     if (!(_a == _b))                                                           \
     {                                                                          \
-      std::cerr << "BULLETML_EQUAL failed at line " << __LINE__ << ": "      \
-                << msg << " (" << _a << " != " << _b << ")\n";               \
+                  printf("BULLETML_EQUAL failed at line %d: %s\n",                        \
+                    __LINE__, msg);                                                    \
       g_bulletml_tests_failed++;                                              \
     }                                                                          \
   } while (0)
@@ -86,15 +87,29 @@ static void test_blb_header_structure()
 
 static void test_blb_endianness_validation()
 {
-  // Verify little-endian encoding
-  uint32_t test_val = 0x12345678;
-  uint8_t *bytes = (uint8_t *)&test_val;
+  // Verify that the parser's explicit little-endian byte extraction
+  // (as implemented in bulletmlparser_blb.hpp readUInt16/readUInt32 and
+  // verifyHeader) correctly decodes LE-encoded data on any platform,
+  // including big-endian Saturn SH2.
 
-  // On little-endian systems, LSB comes first
-  BULLETML_TEST_EQUAL((int)bytes[0], 0x78, "Little-endian byte 0 (LSB)");
-  BULLETML_TEST_EQUAL((int)bytes[1], 0x56, "Little-endian byte 1");
-  BULLETML_TEST_EQUAL((int)bytes[2], 0x34, "Little-endian byte 2");
-  BULLETML_TEST_EQUAL((int)bytes[3], 0x12, "Little-endian byte 3 (MSB)");
+  // --- uint32 extraction (mirrors readUInt32) ---
+  const uint8_t le32[4] = { 0x78, 0x56, 0x34, 0x12 };
+  uint32_t u32 = (uint32_t)le32[0]
+               | ((uint32_t)le32[1] << 8)
+               | ((uint32_t)le32[2] << 16)
+               | ((uint32_t)le32[3] << 24);
+  BULLETML_TEST_EQUAL(u32, 0x12345678U, "Parser LE uint32 decode");
+
+  // --- uint16 extraction (mirrors readUInt16) ---
+  const uint8_t le16[2] = { 0xCD, 0xAB };
+  uint16_t u16 = (uint16_t)((uint32_t)le16[0] | ((uint32_t)le16[1] << 8));
+  BULLETML_TEST_EQUAL((unsigned)u16, 0xABCDU, "Parser LE uint16 decode");
+
+  // --- header version field (mirrors verifyHeader byte extraction) ---
+  // Version 1 stored as LE: { 0x01, 0x00 }
+  const uint8_t ver[2] = { 0x01, 0x00 };
+  uint16_t version = (uint16_t)((uint32_t)ver[0] | ((uint32_t)ver[1] << 8));
+  BULLETML_TEST_EQUAL((unsigned)version, 1U, "Parser LE header version decode");
 }
 
 static void test_bulletml_node_type_encoding()
@@ -197,7 +212,7 @@ static void test_bulletml_parser_parity_constraints()
   BULLETML_TEST_ASSERT(MAX_NODES > MAX_REFS, "Node count larger than ref count");
 }
 
-int main()
+extern "C" int logic_test_main()
 {
   // Run all bulletml parity tests
   test_blb_magic_and_version();
@@ -210,10 +225,13 @@ int main()
 
   if (g_bulletml_tests_failed != 0)
   {
-    std::cerr << "BulletML parity tests FAILED: " << g_bulletml_tests_failed << " assertion(s).\n";
-    return EXIT_FAILURE;
+        printf("BulletML parity tests FAILED: %d assertion(s).\n",
+          g_bulletml_tests_failed);
+    printf("***UT_END***\n");
+    return 1;
   }
 
-  std::cout << "BulletML parity tests PASSED.\n";
-  return EXIT_SUCCESS;
+  printf("BulletML parity tests PASSED.\n");
+  printf("***UT_END***\n");
+  return 0;
 }

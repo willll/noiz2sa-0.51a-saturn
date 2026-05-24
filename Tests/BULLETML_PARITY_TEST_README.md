@@ -1,8 +1,28 @@
 # BulletML Parity Test Suite - Implementation Summary
 
 **Date**: April 7, 2026  
-**Status**: ✅ COMPLETE & VALIDATED  
-**All Tests Passing**: 15/15 (14 SH2 + 1 BulletML format)
+**Status**: ✅ COMPLETE & VALIDATED
+
+## Current Status (May 2026)
+
+This file is historical implementation context for the parity effort.
+For current day-to-day runs, use the test commands in the project `README.md`.
+
+Current registered CTest suites include:
+
+- `sh2_collision_campaign`
+- `sh2_background_animation_campaign`
+- `sh2_factory_campaign`
+- `bulletml_parity_test`
+- `bulletml_latch_recovery_test`
+- `hiscore_persistence_test`
+- `bulletml_all_xml_recursive_test`
+
+Current campaign emulator targets are:
+
+- `mednafen`
+- `kronos`
+- `USBGamers`
 
 ## Overview
 
@@ -158,11 +178,11 @@ ctest -R "bulletml" -V
 # Using Kronos emulator
 bash Tests/test_campaign.sh --emulator kronos
 
-# Using Yabause emulator
-bash Tests/test_campaign.sh --emulator yabause
-
 # Using Mednafen (default)
 bash Tests/test_campaign.sh --emulator mednafen
+
+# Using real hardware via USBGamers
+bash Tests/test_campaign.sh --emulator USBGamers --skip-build --strict
 ```
 
 ## Build Information
@@ -183,7 +203,7 @@ cmake --build /saturn/noiz2sa-0.51a-saturn/build --target noiz2sa_collision_ut_b
 2. SH2 ELF executable compiled with Saturn toolchain
 3. ISO/BIN/CUE disc image created with xorrisofs
 4. Audio tracks added with iso2raw + custom builder
-5. Disc loaded in emulator (Mednafen/Kronos/Yabause)
+5. Disc loaded in emulator or hardware backend (Mednafen/Kronos/USBGamers)
 6. Tests execute on SH2 hardware
 7. Output logged to `Tests/uts.log`
 8. CTest parses results and reports status

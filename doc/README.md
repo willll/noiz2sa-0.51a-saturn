@@ -1,155 +1,32 @@
-# noiz2sa-0.51a-saturn
+# Documentation Index
 
-Sega Saturn-focused port and modernization of Kenta Cho's abstract shoot-em-up **Noiz2sa**.
+This folder is a navigation page for the Saturn port docs. The main project overview lives in [../README.md](../README.md), and the detailed guides below cover the rest.
 
-## Project Description
+## Build and Packaging
 
-This repository contains the Saturn build of Noiz2sa with platform integrations for:
+- [BUILD_GUIDE.md](BUILD_GUIDE.md) - Toolchain, build options, and configuration reference
+- [CD_GENERATION_GUIDE.md](CD_GENERATION_GUIDE.md) - ISO, BIN/CUE, and audio generation flow
+- [CMAKE_ENHANCEMENTS.md](CMAKE_ENHANCEMENTS.md) - Summary of the CMake build-system integration
 
-- SDL and SDL_mixer Saturn submodules
-- SaturnRingLib integration
-- BulletML-based barrage pattern system
-- CMake-based cross-build flow for Saturn toolchains
+## Hardware and Testing
 
-Recent maintenance in this fork includes:
+- [HW_DEBUG_GUIDE.md](HW_DEBUG_GUIDE.md) - HW_DEBUG cartridge build and hardware upload flow
+- [REAL_HARDWARE_TESTING.md](REAL_HARDWARE_TESTING.md) - PSU REST API and end-to-end hardware testing
+- [../Tests/BULLETML_PARITY_TEST_README.md](../Tests/BULLETML_PARITY_TEST_README.md) - BulletML parity and campaign test notes
 
-- migration of the top-level game sources in `src/` from C to C++
-- a documented BulletML binary format (`.blb`)
-- XML-to-binary conversion tooling in `tools/`
-- Complete SaturnRingLib CMake integration with shared.mk feature parity
+## Runtime and Data Formats
 
-## Building
-
-The build system uses `/opt/saturn/CMake/sega_saturn.cmake` for toolchain configuration.
-
-### Quick Start
-
-```bash
-# Configure (toolchain auto-loaded)
-cmake -B build
-
-# Build (automatically creates .bin file and asset directories)
-cmake --build build
-```
-
-**Build Outputs:**
-- `BuildDrop/noiz2sa.elf` - Main executable
-- `BuildDrop/noiz2sa.bin` - Saturn binary format (CD image)
-- `BuildDrop/IP.BIN` - CD metadata and system information
-- `BuildDrop/noiz2sa.cue` - CUE sheet for CD emulators
-
-### Create ISO Image
-
-ISO images are generated automatically during the build if `xorrisofs` is available:
-
-```bash
-# Ensure you have xorrisofs installed
-apt-get install xorriso  # (Linux)
-brew install xorriso     # (macOS)
-
-# Build normally - ISO generation happens automatically
-cmake -B build
-cmake --build build
-
-# Outputs: BuildDrop/noiz2sa.iso, BuildDrop/noiz2sa.cue, etc.
-```
-
-For more details, see [CD_GENERATION_GUIDE.md](CD_GENERATION_GUIDE.md)
-
-### Documentation
-
-- [BUILD_GUIDE.md](BUILD_GUIDE.md) - Complete build instructions and configuration options
-- [BUILD_SYSTEM_SUMMARY.md](../BUILD_SYSTEM_SUMMARY.md) - SaturnRingLib and build system integration summary
-- [BINARY_PARSER_README.md](BINARY_PARSER_README.md) - BulletML binary parser integration guide
+- [DRAWING_SYSTEM.md](DRAWING_SYSTEM.md) - Rendering pipeline and buffer architecture
 - [BINARY_FORMAT.md](BINARY_FORMAT.md) - BulletML binary format specification
+- [../src/bulletml_binary/BINARY_PARSER_README.md](../src/bulletml_binary/BINARY_PARSER_README.md) - Header-only parser integration guide
 
-## Upstream / Legacy Readme
+## Tooling and Support Libraries
 
-The original README content from the classic PC release is preserved below for historical reference.
+- [../tools/README.md](../tools/README.md) - Emulator wrappers, converter usage, and performance tools
+- [../src/ponesound/Readme.md](../src/ponesound/Readme.md) - Ponesound-SRL wrapper notes
+- [../src/smpc/Readme.md](../src/smpc/Readme.md) - SMPC helper module notes
+- [../src/backup/Readme.md](../src/backup/Readme.md) - Backup module notes
 
-Noiz2sa  readme_e.txt
-for Windows98/2000/XP
-ver. 0.60
-(C) Kenta Cho
+## Historical Context
 
-Abstract shootem up game, 'Noiz2sa'.
-
-
-- How to install.
-
-Unpack noiz2sa0_51.zip, and execute 'noiz2sa.exe'.
-
-
-- How to play.
-
-Select the stage by a keyboard or a joystick.
-
- - Movement  Arrow key / Joystick
- - Fire      [Z]       / Trigger 1, Trigger 4
- - Slowdown  [X]       / Trigger 2, Trigger 3
- - Pause     [P]
-
-Press a fire key to start the game.
-
-Control your ship and avoid the barrage.
-A ship is not destroyed even if it contacts an enemy main body.
-A ship becomes slow while holding the slowdown key.
-
-A green star is the bonus item.
-A score of the item(displayed at the left-up corner) increases 
-if you get items continuously.
-
-When all ships are destroyed, the game is over.
-The ship extends 200,000 and every 500,000 points.
-
-These command line options are available:
- -nosound       Stop the sound.
- -window        Launch the game in the window, not use the full-screen.
- -reverse       Reverse the fire key and the slowdown key.
- -brightness n  Set the brightness of the sceen(n=0-256).
- -accframe      Use the alternative framerate management algorithm.
-                (If you have a problem with framerate, try this option.)
-
-- Add your original barrage patterns.
-
-You can add your own barrage patterns to Noiz2sa.
-In the 'noiz2sa' directory, there are 3 directories named
-'zako', 'middle' and 'boss'.
-In these directories, the barrage pattern files are placed.
-
-The barrage pattern files are written by BulletML.
-About BulletML, see the page:
-
-BulletML
-http://www.asahi-net.or.jp/~cs8k-cyu/bulletml/index_e.html
-
-A 'zako' directory is for the small enemies.
-A 'middle' directory is for the middle class enemies.
-A 'boss' directory is for the boss type enemies.
-
-You should adjust the difficulty of the barrage
-by using a $rank variable properly.
-A $rank variable is used to control the difficulty
-of each scene in Noiz2sa.
-
-
-- Comments
-
-If you have any comments, please mail to cs8k-cyu@asahi-net.or.jp.
-
-
-- Acknowledgement
-
-libBulletML is used to parse BulletML files.
- libBulletML
- http://user.ecc.u-tokyo.ac.jp/~s31552/wp/libbulletml/
- 
-Simple DirectMedia Layer is used for the display handling. 
- Simple DirectMedia Layer
- http://www.libsdl.org/
-
-SDL_mixer and Ogg Vorbis CODEC to play BGM/SE. 
- SDL_mixer 1.2
- http://www.libsdl.org/projects/SDL_mixer/
- Vorbis.com
- http://www.vorbis.com/
+The original upstream README is preserved in the top-level [../README.md](../README.md) as the historical section.

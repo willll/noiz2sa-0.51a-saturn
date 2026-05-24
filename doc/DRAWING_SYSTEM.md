@@ -80,6 +80,8 @@ Game Layer Drawing:
 
 After all game drawing is complete, **two rendering modes** handle layer composition:
 
+> **Note (May 2026):** The smoke/distortion effect (Mode B) is currently **disabled** in `smokeScreen()`. See [CMakeLists.txt](../CMakeLists.txt#L189) option `NOIZ2SA_ENABLE_SMOKE` — the function body is empty due to CPU performance constraints on Saturn hardware. The implementation remains documented below for historical reference and future hardware-accelerated restoration.
+
 #### Mode A: Standard Blending (`blendScreen()`)
 
 ```

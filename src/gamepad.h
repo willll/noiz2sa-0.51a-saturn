@@ -73,9 +73,17 @@ typedef enum
     SDL_CONTROLLER_AXIS_MAX
 } SDL_GameControllerAxis;
 
+/** @brief Initialises the gamepad subsystem. */
 bool initGamepad();
+/** @brief Shuts down the gamepad subsystem. */
 void closeGamepad();
 
+/**
+ * @brief Returns the current button state for a controller button.
+ * @param gamecontroller Controller handle.
+ * @param button Button identifier.
+ * @return Button state as an SDL-style byte value.
+ */
 Uint8 SDL_GameControllerGetButton(SRL::Input::Digital * gamecontroller, SDL_GameControllerButton button);
 
 #endif // GAMEPAD_H

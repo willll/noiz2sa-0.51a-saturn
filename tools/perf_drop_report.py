@@ -17,8 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 PERF_KV_RE = re.compile(r"([a-zA-Z_]+)=(-?\d+(?:\.\d+)?)")
-
-PERF_MOVE_RE = re.compile(r"([a-zA-Z_]+)=(-?\d+(?:\.\d+)?)")
+PERF_MOVE_RE = PERF_KV_RE
 
 BLIT_RE = re.compile(
     r"\[BLIT_US\]\s+"

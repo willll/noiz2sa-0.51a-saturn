@@ -15,7 +15,7 @@ Full options documented in [BUILD_GUIDE.md](BUILD_GUIDE.md). Key CMake flags:
 |------|---------|-------|
 | `SRL_MODE` | `NTSC` | `PAL` for PAL consoles |
 | `NOIZ2SA_SCREEN_DIVISOR` | `1` | `2`/`4` for lower resolution |
-| `NOIZ2SA_ENABLE_SMOKE` | OFF | Smoke/afterimage effects |
+| `NOIZ2SA_ENABLE_SMOKE` | ON | Smoke/afterimage effects (**currently disabled at runtime**; see [doc/DRAWING_SYSTEM.md](../doc/DRAWING_SYSTEM.md)) |
 | `DEBUG` | OFF | Debug logging |
 | `HW_DEBUG` | OFF | Hardware debug mode (no CD, embedded patterns) |
 
@@ -29,7 +29,7 @@ cmake --build build_hw_debug               # Compile for cartridge
 ./tools/run_on_saturn.bat                  # Upload via USBGamers (polyglot bash/batch script)
 
 # With optional ESP-SaturnPSU_Control for automated power control
-curl -X POST http://192.168.1.100/api/v1/on   # Power ON via REST API
+curl -X POST http://saturnpsu.local/api/v1/on   # Power ON via REST API
 ./tools/run_on_saturn.bat                      # Upload build
 ```
 

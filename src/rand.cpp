@@ -14,6 +14,7 @@
 static unsigned int multiplier = 8513;
 static unsigned int addend = 179;
 
+/** @brief Advances the pseudo-random generator and returns the next value. */
 unsigned int nextRandInt(unsigned int *v) {
   *v = *v * multiplier + addend;
   return *v;
