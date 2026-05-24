@@ -375,6 +375,9 @@ MU_TEST_SUITE(suite_bulletml_state_pool)
 
 int main()
 {
+  SRL::Memory::Initialize();
+  SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
+
   resetAllState();
 
   LogInfo("%s", strStart);
@@ -387,6 +390,12 @@ int main()
   MU_REPORT();
 
   LogInfo("%s", strEnd);
+
+  // Keep emulator alive long enough for log flush + marker detection.
+  for (;;)
+  {
+    SRL::Core::Synchronize();
+  }
 
   return MU_EXIT_CODE;
 }
