@@ -5,7 +5,7 @@
  */
 
 /**
- * Changing the cordinate into the angle.
+ * Changing the coordinate into the angle.
  *
  * @version $Revision: 1.1.1.1 $
  */
