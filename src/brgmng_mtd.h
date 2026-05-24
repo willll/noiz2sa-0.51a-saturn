@@ -10,6 +10,8 @@
  * @version $Revision: 1.2 $
  */
 
+#pragma once
+
 #include <srl.hpp>
 
 using SRL::Math::Types::Fxp;
@@ -27,6 +29,8 @@ void addBullets();
 /** @brief Spawns boss bullets for the current barrage state. */
 void addBossBullet();
 /** @brief Handles boss destruction cleanup and transitions. */
+void bossDestroyed();
+/** @brief Backward-compatible alias for bossDestroyed(). */
 void bossDestroied();
 
 extern int scene;
