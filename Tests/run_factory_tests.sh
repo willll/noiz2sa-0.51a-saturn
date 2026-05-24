@@ -7,9 +7,11 @@ if [[ $# -lt 1 ]]; then
 fi
 
 EMULATOR="$1"
-LOG="uts_factory.log"
+LOG="${UT_LOG_FILE:-uts_factory.log}"
 MATCH="***UT_END***"
 CUE="BuildDrop/noiz2sa_factory_ut.cue"
+
+mkdir -p "$(dirname "$LOG")"
 
 stop_emulator() {
   if [[ -n ${EMULATOR_PID:-} ]] && kill -0 "$EMULATOR_PID" 2>/dev/null; then
@@ -70,7 +72,7 @@ $CMD > >(tee "$LOG") 2>&1 &
 EMULATOR_PID=$!
 
 START=$(date +%s)
-LIMIT=300
+LIMIT="${UT_TIMEOUT_SECONDS:-300}"
 
 while sleep 1; do
   NOW=$(date +%s)

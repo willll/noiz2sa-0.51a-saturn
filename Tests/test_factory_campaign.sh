@@ -30,13 +30,14 @@ LOG_FILE="$ROOT_DIR/logs/uts_factory.log"
 mkdir -p "$ROOT_DIR/logs"
 
 ensure_emulator_log_output() {
+  local log_output="EMULATOR"
   if [[ "$EMULATOR" == "USBGamers" ]]; then
-    return
+    log_output="DEV_CART"
   fi
 
-  echo "[campaign] Configuring build for emulator-visible logs (SRL_LOG_OUTPUT=EMULATOR)"
+  echo "[campaign] Configuring build logs for $EMULATOR (SRL_LOG_OUTPUT=${log_output})"
   cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" \
-    -DSRL_LOG_OUTPUT=EMULATOR
+    -DSRL_LOG_OUTPUT="${log_output}"
 }
 
 run_usbgamers_preflight() {
@@ -45,6 +46,7 @@ run_usbgamers_preflight() {
   fi
 
   local settle_seconds="${USB_SETTLE_SECONDS:-2}"
+  local psu_settle_seconds="${USB_PSU_SETTLE_SECONDS:-2}"
 
   echo "[campaign] USBGamers preflight: verifying hardware link"
 
@@ -57,7 +59,7 @@ run_usbgamers_preflight() {
     sleep 2
     echo "[campaign] USBGamers preflight: PSU ON (${psu_base}/api/v1/on)"
     curl -fsS -m 5 -X POST "${psu_base}/api/v1/on" >/dev/null
-    sleep 10
+    sleep "$psu_settle_seconds"
   fi
 
   if ! command -v usbreset >/dev/null 2>&1; then
@@ -162,6 +164,7 @@ if [[ $SKIP_RUN -eq 0 ]]; then
   echo "[campaign] Running SH2 factory tests via emulator: $EMULATOR"
   (
     cd "$ROOT_DIR/Tests"
+    UT_LOG_FILE="$LOG_FILE" \
     MEDNAFEN_ALLOWMULTI="${MEDNAFEN_ALLOWMULTI:-1}" \
       bash "$ROOT_DIR/Tests/run_factory_tests.sh" "$EMULATOR"
   )
@@ -178,12 +181,22 @@ if [[ $STRICT -eq 1 ]]; then
 import re
 log_file = r'''$LOG_FILE'''
 failed = 0
+blocked_growth = 0
+alloc_fail = 0
 with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
     for line in f:
         if re.match(r"FATAL\s*:\s*.*\s+failed:", line):
             failed += 1
+        if "startup-only allocation policy blocked task growth" in line:
+            blocked_growth += 1
+        if "[BML-ALLOC] failed" in line:
+            alloc_fail += 1
 if failed:
     raise SystemExit(f"Strict mode: {failed} failures found in {log_file}")
+if blocked_growth:
+    raise SystemExit(f"Strict mode: detected {blocked_growth} startup-only policy growth violations in {log_file}")
+if alloc_fail:
+    raise SystemExit(f"Strict mode: detected {alloc_fail} BulletML allocation failures in {log_file}")
 print("Strict mode: 0 failures")
 PY
 fi
