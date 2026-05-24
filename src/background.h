@@ -5,10 +5,12 @@
  */
 
 /**
- * Backgournd graphics data.
+ * Background graphics data.
  *
  * @version $Revision: 1.1.1.1 $
  */
+#pragma once
+
 #include "vector.h"
 
 typedef struct {

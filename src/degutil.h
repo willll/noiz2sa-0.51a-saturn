@@ -9,6 +9,10 @@
  *
  * @version $Revision: 1.1.1.1 $
  */
+#pragma once
+
+#include <cstdint>
+
 #define DIV 1024
 const int16_t TAN_TABLE_SIZE = 1024;
 const int16_t SIN_TABLE_SIZE = 256;
