@@ -79,6 +79,16 @@ public:
     /** @brief Returns read-only access to the active layout. */
     const LoadingLayout &GetLayout() const { return _layout; }
 
+    /**
+     * @brief Enable or disable the per-update VDP frame sync.
+     *
+     * SRL::Core::Synchronize() deadlocks in Mednafen after VDP2 layers are
+     * configured by initSDL(). Call SetSyncEnabled(false) before initSDL()
+     * to skip the sync during the VDP-heavy loading phase while keeping all
+     * visual progress updates working via natural VBLank refresh.
+     */
+    void SetSyncEnabled(bool enabled) { _syncEnabled = enabled; }
+
 private:
     void PushHistory(const char *step);
     void Render(const char *step, int percent);
@@ -86,6 +96,7 @@ private:
     LoadingLayout _layout;
     int _historyCount;
     char _history[kMaxHistoryLines][kMaxStepText + 1];
+    bool _syncEnabled;
 };
 
 // Global loading screen instance; defined in loading_screen.cpp.

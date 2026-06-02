@@ -322,7 +322,7 @@ namespace SRL::Ponesound
 				const uint16_t slot17ev = *reinterpret_cast<volatile uint16_t*>(0x25B00236);
 				const uint16_t slot16ctl = *reinterpret_cast<volatile uint16_t*>(0x25B00200);
 				const uint16_t slot17ctl = *reinterpret_cast<volatile uint16_t*>(0x25B00220);
-				SRL::Logger::LogDebug("[CDC] vbl#%u e=%d st=0x%02x fl=0x%02x tno=%u fad=%d ctl16=0x%04x ctl17=0x%04x ev16=0x%04x ev17=0x%04x",
+				SRL::Logger::LogInfo("[CDC] vbl#%u e=%d st=0x%02x fl=0x%02x tno=%u fad=%d ctl16=0x%04x ctl17=0x%04x ev16=0x%04x ev17=0x%04x",
 					(uint32_t)sdrvTickCount,
 					(int32_t)e2,
 					(uint32_t)cst2.status,
@@ -982,6 +982,17 @@ namespace SRL::Ponesound
                 CDC_PLY_PMODE(&ply) = CDC_PM_DFL | (loop ? 0xf : 0); // 0xf = infinite repetitions
 
                 CDC_CdPlay(&ply);
+				CdcStat cst{};
+				const int32_t e = CDC_GetPeriStat(&cst);
+				SRL::Logger::LogInfo("[CDC] Play req from=%d to=%d loop=%d e=%d st=0x%02x fl=0x%02x tno=%u fad=%d",
+					(int32_t)fromTrack,
+					(int32_t)toTrack,
+					(int32_t)loop,
+					e,
+					(uint32_t)cst.status,
+					(uint32_t)cst.report.flgrep,
+					(uint32_t)cst.report.tno,
+					(int32_t)cst.report.fad);
 				// Enable periodic CDC status logging for next 10 vblanks
 				cdMonitorTicks = 10;
 			}
@@ -1001,6 +1012,14 @@ namespace SRL::Ponesound
 				CdcPos poswk;
 				poswk.ptype = CDC_PTYPE_DFL;
 				CDC_CdSeek(&poswk);
+				CdcStat cst{};
+				const int32_t e = CDC_GetPeriStat(&cst);
+				SRL::Logger::LogInfo("[CDC] Stop req e=%d st=0x%02x fl=0x%02x tno=%u fad=%d",
+					e,
+					(uint32_t)cst.status,
+					(uint32_t)cst.report.flgrep,
+					(uint32_t)cst.report.tno,
+					(int32_t)cst.report.fad);
 			}
 		};
 	};

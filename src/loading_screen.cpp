@@ -160,6 +160,7 @@ LoadingScreen::LoadingScreen()
     {
         _history[i][0] = '\0';
     }
+    _syncEnabled = true;
 }
 
 /** @brief Constructs the loading screen with a custom layout. */
@@ -171,6 +172,7 @@ LoadingScreen::LoadingScreen(const LoadingLayout &layout)
     {
         _history[i][0] = '\0';
     }
+    _syncEnabled = true;
 }
 
 /** @brief Adds a loading step to the on-screen history. */
@@ -213,7 +215,7 @@ void LoadingScreen::PushHistory(const char *step)
 /** @brief Updates the loading screen with a new step and percentage. */
 void LoadingScreen::Update(const char *step, int percent)
 {
-    SRL::Logger::LogInfo("[LOAD_TRACE] Update enter step='%s' percent=%d", step ? step : "(null)", percent);
+    SRL::Logger::LogDebug("[LOAD_TRACE] Update enter step='%s' percent=%d", step ? step : "(null)", percent);
     ensureRuntimeDefaults(_layout);
 
     const char *displayStep = (step != nullptr) ? step : "Loading";
@@ -222,9 +224,9 @@ void LoadingScreen::Update(const char *step, int percent)
     if (displayPercent < 0)   displayPercent = 0;
     if (displayPercent > 100) displayPercent = 100;
 
-    SRL::Logger::LogInfo("[LOAD_TRACE] Update calling Render step='%s' percent=%d", displayStep, displayPercent);
+    SRL::Logger::LogDebug("[LOAD_TRACE] Update calling Render step='%s' percent=%d", displayStep, displayPercent);
     Render(displayStep, displayPercent);
-    SRL::Logger::LogInfo("[LOAD_TRACE] Update exit step='%s'", displayStep);
+    SRL::Logger::LogDebug("[LOAD_TRACE] Update exit step='%s'", displayStep);
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +236,7 @@ void LoadingScreen::Update(const char *step, int percent)
 /** @brief Clears the loading screen overlay. */
 void LoadingScreen::Clear()
 {
-    SRL::Logger::LogInfo("[LOAD_TRACE] Clear enter");
+    SRL::Logger::LogDebug("[LOAD_TRACE] Clear enter");
     ensureRuntimeDefaults(_layout);
 
     SRL::Debug::PrintClearScreen();
@@ -243,7 +245,7 @@ void LoadingScreen::Clear()
     // Restore the gameplay background colour configured at compile time.
     SRL::VDP2::SetBackColor(
         SRL::Types::HighColor(_layout.postBgR, _layout.postBgG, _layout.postBgB));
-    SRL::Logger::LogInfo("[LOAD_TRACE] Clear exit");
+    SRL::Logger::LogDebug("[LOAD_TRACE] Clear exit");
 }
 
 // ---------------------------------------------------------------------------
@@ -253,10 +255,10 @@ void LoadingScreen::Clear()
 /** @brief Renders the loading screen text and progress bar. */
 void LoadingScreen::Render(const char *step, int percent)
 {
-    SRL::Logger::LogInfo("[LOAD_TRACE] Render enter step='%s' percent=%d", step ? step : "(null)", percent);
+    SRL::Logger::LogDebug("[LOAD_TRACE] Render enter step='%s' percent=%d", step ? step : "(null)", percent);
     ensureRuntimeDefaults(_layout);
 
-    SRL::Logger::LogInfo("[LOAD_TRACE] Render SetBackColor");
+    SRL::Logger::LogDebug("[LOAD_TRACE] Render SetBackColor");
     SRL::VDP2::SetBackColor(
         SRL::Types::HighColor(_layout.bgR, _layout.bgG, _layout.bgB));
 
@@ -290,11 +292,11 @@ void LoadingScreen::Render(const char *step, int percent)
         stepLine[0] = '\0';
     }
 
-    SRL::Logger::LogInfo("[LOAD_TRACE] Render PrintColorSet");
+    SRL::Logger::LogDebug("[LOAD_TRACE] Render PrintColorSet");
     SRL::Debug::PrintColorSet(1);
-    SRL::Logger::LogInfo("[LOAD_TRACE] Render PrintClearScreen");
+    SRL::Logger::LogDebug("[LOAD_TRACE] Render PrintClearScreen");
     SRL::Debug::PrintClearScreen();
-    SRL::Logger::LogInfo("[LOAD_TRACE] Render Print header/body");
+    SRL::Logger::LogDebug("[LOAD_TRACE] Render Print header/body");
     SRL::Debug::Print(_layout.colLeft, _layout.rowTitle,   "NOIZ2SA");
     SRL::Debug::Print(_layout.colLeft, _layout.rowPercent, percentLine);
     SRL::Debug::Print(_layout.colLeft, _layout.rowBar,     barLine);
@@ -311,16 +313,23 @@ void LoadingScreen::Render(const char *step, int percent)
         const int col = lineLen > 0 ? (kDebugScreenCols - lineLen) / 2 : 0;
         SRL::Debug::Print((uint8_t)col, (uint8_t)(creditsRowStart + i), kCreditLine0[i]);
     }
-    SRL::Logger::LogInfo("[LOAD_TRACE] Render Synchronize begin");
+    SRL::Logger::LogDebug("[LOAD_TRACE] Render Synchronize begin");
 #if HW_DEBUG
     // Debug-only workaround: Synchronize may stall during early loading on
     // some hardware sessions. Skip it to localize startup hangs.
     SRL::Logger::LogWarning("[LOAD_TRACE] Render Synchronize skipped in HW_DEBUG");
 #else
-    SRL::Core::Synchronize();
-    SRL::Logger::LogInfo("[LOAD_TRACE] Render Synchronize end");
+    if (_syncEnabled)
+    {
+        SRL::Core::Synchronize();
+        SRL::Logger::LogDebug("[LOAD_TRACE] Render Synchronize end");
+    }
+    else
+    {
+        SRL::Logger::LogDebug("[LOAD_TRACE] Render Synchronize skipped (sync disabled)");
+    }
 #endif
-    SRL::Logger::LogInfo("[LOAD_TRACE] Render exit");
+    SRL::Logger::LogDebug("[LOAD_TRACE] Render exit");
 }
 
 // ---------------------------------------------------------------------------
