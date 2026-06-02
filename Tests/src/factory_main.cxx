@@ -24,6 +24,7 @@
 #include "../../src/bulletml_binary/bulletml_alloc_latch.h"
 #include "../../src/bulletml_binary/bulletmlrunner.hpp"
 #include "../../src/bulletml_binary/bulletmlstate.hpp"
+#include "../../src/bulletml_binary/bulletml_runtime_alloc_policy.h"
 
 using namespace SRL::Logger;
 
@@ -52,6 +53,7 @@ static void resetAllState()
   resetBulletMlAllocFailureState();
   /* Drop any retained task-buffer cache */
   BulletMLRunnerImpl::ReleaseTaskBufferCache();
+  setBulletMlStartupOnlyAllocationPolicy(false);
   /* Drop any retained BulletMLState object and array pools */
   releaseBulletMlStatePools();
 }
@@ -222,10 +224,94 @@ MU_TEST(test_task_cache_release_is_idempotent)
   mu_assert_int_eq(0, (int)BulletMLRunnerImpl::GetTaskBufferCacheCapacity());
 }
 
+MU_TEST(test_task_cache_preallocate_sets_capacity)
+{
+  BulletMLRunnerImpl::ReleaseTaskBufferCache();
+  mu_check(BulletMLRunnerImpl::PreallocateTaskBufferCache(96));
+  mu_assert_int_eq(96, (int)BulletMLRunnerImpl::GetTaskBufferCacheCapacity());
+}
+
+MU_TEST(test_task_cache_preallocate_does_not_shrink)
+{
+  BulletMLRunnerImpl::ReleaseTaskBufferCache();
+  mu_check(BulletMLRunnerImpl::PreallocateTaskBufferCache(96));
+  mu_check(BulletMLRunnerImpl::PreallocateTaskBufferCache(32));
+  mu_assert_int_eq(96, (int)BulletMLRunnerImpl::GetTaskBufferCacheCapacity());
+}
+
+MU_TEST(test_task_cache_startup_only_policy_toggle)
+{
+  BulletMLRunnerImpl::EnableStartupOnlyAllocation(false);
+  mu_check(!BulletMLRunnerImpl::IsStartupOnlyAllocationEnabled());
+
+  BulletMLRunnerImpl::EnableStartupOnlyAllocation(true);
+  mu_check(BulletMLRunnerImpl::IsStartupOnlyAllocationEnabled());
+
+  BulletMLRunnerImpl::EnableStartupOnlyAllocation(false);
+  mu_check(!BulletMLRunnerImpl::IsStartupOnlyAllocationEnabled());
+}
+
 MU_TEST_SUITE(suite_task_buffer_cache)
 {
   MU_RUN_TEST(test_task_cache_starts_empty);
   MU_RUN_TEST(test_task_cache_release_is_idempotent);
+  MU_RUN_TEST(test_task_cache_preallocate_sets_capacity);
+  MU_RUN_TEST(test_task_cache_preallocate_does_not_shrink);
+  MU_RUN_TEST(test_task_cache_startup_only_policy_toggle);
+}
+
+/* =========================================================================
+ * Suite: BulletML runtime allocation policy wiring
+ * ========================================================================= */
+
+MU_TEST(test_runtime_policy_enable_sets_runner_and_state)
+{
+  setBulletMlStartupOnlyAllocationPolicy(false);
+  setBulletMlStartupOnlyAllocationPolicy(true);
+
+  BulletMlRuntimeAllocPolicySnapshot snapshot = getBulletMlRuntimeAllocPolicySnapshot();
+  mu_check(snapshot.runnerStartupOnly);
+  mu_check(snapshot.stateStartupOnly);
+  mu_check(!snapshot.runnerStartupPreallocation);
+  mu_check(!snapshot.stateStartupPreallocation);
+}
+
+MU_TEST(test_runtime_policy_disable_clears_runner_and_state)
+{
+  setBulletMlStartupOnlyAllocationPolicy(true);
+  setBulletMlStartupOnlyAllocationPolicy(false);
+
+  BulletMlRuntimeAllocPolicySnapshot snapshot = getBulletMlRuntimeAllocPolicySnapshot();
+  mu_check(!snapshot.runnerStartupOnly);
+  mu_check(!snapshot.stateStartupOnly);
+  mu_check(!snapshot.runnerStartupPreallocation);
+  mu_check(!snapshot.stateStartupPreallocation);
+}
+
+MU_TEST(test_runtime_policy_preallocation_phase_sync)
+{
+  setBulletMlStartupOnlyAllocationPolicy(true);
+  beginBulletMlStartupPreallocationPhase();
+
+  BulletMlRuntimeAllocPolicySnapshot snapshot = getBulletMlRuntimeAllocPolicySnapshot();
+  mu_check(snapshot.runnerStartupOnly);
+  mu_check(snapshot.stateStartupOnly);
+  mu_check(snapshot.runnerStartupPreallocation);
+  mu_check(snapshot.stateStartupPreallocation);
+
+  endBulletMlStartupPreallocationPhase();
+  snapshot = getBulletMlRuntimeAllocPolicySnapshot();
+  mu_check(!snapshot.runnerStartupPreallocation);
+  mu_check(!snapshot.stateStartupPreallocation);
+
+  setBulletMlStartupOnlyAllocationPolicy(false);
+}
+
+MU_TEST_SUITE(suite_runtime_alloc_policy)
+{
+  MU_RUN_TEST(test_runtime_policy_enable_sets_runner_and_state);
+  MU_RUN_TEST(test_runtime_policy_disable_clears_runner_and_state);
+  MU_RUN_TEST(test_runtime_policy_preallocation_phase_sync);
 }
 
 /* =========================================================================
@@ -360,6 +446,39 @@ MU_TEST(test_state_pool_large_arrays_not_cached)
   releaseBulletMlStatePools();
 }
 
+MU_TEST(test_state_pool_startup_only_blocks_runtime_create)
+{
+  releaseBulletMlStatePools();
+  enableBulletMlStateStartupOnlyAllocation(true);
+
+  BulletMLNode** nodes = createBulletMlStateNodeArray(1);
+  mu_check(nodes == nullptr);
+
+  enableBulletMlStateStartupOnlyAllocation(false);
+  releaseBulletMlStatePools();
+}
+
+MU_TEST(test_state_pool_preallocate_populates_caches)
+{
+  releaseBulletMlStatePools();
+  enableBulletMlStateStartupOnlyAllocation(true);
+
+  uint16_t nodeCounts[8] = {1, 0, 0, 0, 0, 0, 0, 0};
+  uint16_t paramCounts[8] = {2, 0, 0, 0, 0, 0, 0, 0};
+  mu_check(preallocateBulletMlStatePools(3, nodeCounts, paramCounts));
+
+  mu_assert_int_eq(3, (int)getBulletMlStateCachedCount());
+  mu_assert_int_eq(1, (int)getBulletMlStateNodeArrayCachedCount(4));
+  mu_assert_int_eq(2, (int)getBulletMlStateParameterArrayCachedCount(4));
+
+  BulletMLNode** nodes = createBulletMlStateNodeArray(1);
+  mu_check(nodes != nullptr);
+  destroyBulletMlStateNodeArray(nodes, 1);
+
+  enableBulletMlStateStartupOnlyAllocation(false);
+  releaseBulletMlStatePools();
+}
+
 MU_TEST_SUITE(suite_bulletml_state_pool)
 {
   MU_RUN_TEST(test_state_pool_recycles_state_object);
@@ -367,6 +486,8 @@ MU_TEST_SUITE(suite_bulletml_state_pool)
   MU_RUN_TEST(test_state_pool_cached_count_tracks_lifecycle);
   MU_RUN_TEST(test_state_pool_recycles_parameter_arrays);
   MU_RUN_TEST(test_state_pool_large_arrays_not_cached);
+  MU_RUN_TEST(test_state_pool_startup_only_blocks_runtime_create);
+  MU_RUN_TEST(test_state_pool_preallocate_populates_caches);
 }
 
 /* =========================================================================
@@ -385,6 +506,7 @@ int main()
   MU_RUN_SUITE(suite_pool_mechanics);
   MU_RUN_SUITE(suite_alloc_latch);
   MU_RUN_SUITE(suite_task_buffer_cache);
+  MU_RUN_SUITE(suite_runtime_alloc_policy);
   MU_RUN_SUITE(suite_bulletml_state_pool);
 
   MU_REPORT();
