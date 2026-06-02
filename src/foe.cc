@@ -65,10 +65,21 @@ void setFoeBudgetLimit(int limit)
 
 // Hard projectile budget for Saturn hardware stability.
 // This keeps moveFoes bounded so ship/foe updates stay responsive under stress.
+// HW_DEBUG caps are intentionally tight: each BOSS-pattern BulletML entity costs
+// ~5ms per tick (9 fire tasks × SH-2 trig, no FPU).  With 363 entities the
+// original 420-cap produced ~424ms/frame = 2 FPS.  Lowering caps here keeps
+// the worst-case moveFoes cost under ~60ms so the Saturn can sustain 15+ FPS.
+#if HW_DEBUG
+static constexpr int kMaxActiveBullets = 48;
+static constexpr int kMaxNormalBullets = 48;
+static constexpr int kMaxBossActiveBullets = 4;
+static constexpr int kMaxTotalProjectiles = 64;
+#else
 static constexpr int kMaxActiveBullets = 160;
 static constexpr int kMaxNormalBullets = 256;
 static constexpr int kMaxBossActiveBullets = 64;
 static constexpr int kMaxTotalProjectiles = 420;
+#endif
 
 static int sLiveActiveBullets = 0;
 static int sLiveNormalBullets = 0;
