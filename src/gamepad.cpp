@@ -18,9 +18,11 @@ static int g_joystick_initialized = 0;
 
 /** @brief Initialises the gamepad wrapper and verifies connectivity. */
 bool initGamepad() {
+    SRL::Logger::LogInfo("[GAMEPAD] create begin");
     gamepad = createDigitalGamepad(0);
+    SRL::Logger::LogInfo("[GAMEPAD] create end ptr=%p", gamepad);
     if(gamepad == nullptr) {
-        SRL::Logger::LogFatal("[GAMEPAD] Failed to initialize gamepad");
+        SRL::Logger::LogWarning("[GAMEPAD] Failed to initialize gamepad; continuing without controller");
         return false;
     } else {
         SRL::Logger::LogInfo("[GAMEPAD] Gamepad initialized successfully");
