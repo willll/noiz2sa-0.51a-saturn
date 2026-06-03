@@ -11,7 +11,7 @@ inline BulletMLParserBLB* createEmbeddedBulletMlParser(
     const uint8_t* data,
     std::size_t size)
 {
-  return createPooledObject<BulletMLParserBLB>(name, data, size);
+  return lwnew BulletMLParserBLB(name, data, size);
 }
 
 /** @brief Creates a BulletML parser from a file path. */

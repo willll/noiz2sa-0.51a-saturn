@@ -18,7 +18,7 @@ typedef struct {
   int spc;
 } Frag;
 
-#define FRAG_MAX 192
+#define FRAG_MAX 128
 
 /** @brief Initialises the fragment pool. */
 void initFrags();

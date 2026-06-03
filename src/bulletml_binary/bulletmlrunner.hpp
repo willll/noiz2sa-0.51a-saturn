@@ -2,11 +2,58 @@
 #define BULLETMLRUNNER_HPP_
 
 #include <cstdint>
+#include <cstddef>
 #include <srl.hpp>
 
 #include "bulletmlparser_blb.hpp"
 #include "bulletml_alloc_latch.h"
 #include <srl_log.hpp>
+
+namespace bulletml_runner_trace {
+struct RunnerAllocStats {
+    std::size_t objectAllocCalls = 0;
+    std::size_t objectFreeCalls = 0;
+    std::size_t arrayAllocCalls = 0;
+    std::size_t arrayFreeCalls = 0;
+    std::size_t objectLiveBytes = 0;
+    std::size_t arrayLiveBytes = 0;
+};
+
+inline RunnerAllocStats& stats() {
+    static RunnerAllocStats s{};
+    return s;
+}
+
+inline void noteAlloc(std::size_t bytes, bool arrayAlloc) {
+    RunnerAllocStats& s = stats();
+    if (arrayAlloc) {
+        s.arrayAllocCalls++;
+        s.arrayLiveBytes += bytes;
+    } else {
+        s.objectAllocCalls++;
+        s.objectLiveBytes += bytes;
+    }
+}
+
+inline void noteFree(std::size_t bytes, bool arrayFree) {
+    RunnerAllocStats& s = stats();
+    if (arrayFree) {
+        s.arrayFreeCalls++;
+        if (s.arrayLiveBytes >= bytes) {
+            s.arrayLiveBytes -= bytes;
+        } else {
+            s.arrayLiveBytes = 0;
+        }
+    } else {
+        s.objectFreeCalls++;
+        if (s.objectLiveBytes >= bytes) {
+            s.objectLiveBytes -= bytes;
+        } else {
+            s.objectLiveBytes = 0;
+        }
+    }
+}
+}
 
 /**
  * BulletML Task Stack Memory Optimization (Hardware Stress Test Hardening):
@@ -47,8 +94,10 @@ inline T* allocBulletMlArray(const char* tag, uint32_t count) {
     if (hasBulletMlAllocFailureLatched()) {
         return nullptr;
     }
-    T* ptr = hwnew T[count];
+    bulletml_runner_trace::noteAlloc(sizeof(T) * count, true);
+    T* ptr = lwnew T[count];
     if (!ptr) {
+        bulletml_runner_trace::noteFree(sizeof(T) * count, true);
         logBulletMlAllocFailure(tag, count);
     }
     return ptr;
@@ -59,11 +108,57 @@ inline T* allocBulletMlObject(const char* tag, Args... args) {
     if (hasBulletMlAllocFailureLatched()) {
         return nullptr;
     }
-    T* ptr = hwnew T(args...);
+    bulletml_runner_trace::noteAlloc(sizeof(T), false);
+    T* ptr = lwnew T(args...);
     if (!ptr) {
+        bulletml_runner_trace::noteFree(sizeof(T), false);
         logBulletMlAllocFailure(tag);
     }
     return ptr;
+}
+
+template <typename T>
+inline void freeBulletMlObject(T*& ptr) {
+    if (!ptr) {
+        return;
+    }
+    bulletml_runner_trace::noteFree(sizeof(T), false);
+    delete ptr;
+    ptr = nullptr;
+}
+
+template <typename T>
+inline void freeBulletMlArray(T*& ptr, uint32_t count) {
+    if (!ptr) {
+        return;
+    }
+    bulletml_runner_trace::noteFree(sizeof(T) * count, true);
+    delete[] ptr;
+    ptr = nullptr;
+}
+
+inline std::size_t getBulletMlRunnerObjectLiveBytes() {
+    return bulletml_runner_trace::stats().objectLiveBytes;
+}
+
+inline std::size_t getBulletMlRunnerArrayLiveBytes() {
+    return bulletml_runner_trace::stats().arrayLiveBytes;
+}
+
+inline std::size_t getBulletMlRunnerLiveBytes() {
+    return getBulletMlRunnerObjectLiveBytes() + getBulletMlRunnerArrayLiveBytes();
+}
+
+inline void getBulletMlRunnerObjectCallCounts(std::size_t& allocCalls, std::size_t& freeCalls) {
+    const bulletml_runner_trace::RunnerAllocStats& s = bulletml_runner_trace::stats();
+    allocCalls = s.objectAllocCalls;
+    freeCalls = s.objectFreeCalls;
+}
+
+inline void getBulletMlRunnerArrayCallCounts(std::size_t& allocCalls, std::size_t& freeCalls) {
+    const bulletml_runner_trace::RunnerAllocStats& s = bulletml_runner_trace::stats();
+    allocCalls = s.arrayAllocCalls;
+    freeCalls = s.arrayFreeCalls;
 }
 
 using SRL::Math::Types::Fxp;
@@ -135,6 +230,7 @@ protected:
     BulletMLState* state_;
     BulletMLRunnerImpl** impls_;
     uint16_t impl_count_;
+    uint16_t impl_capacity_;
 
 private:
     BulletMLRunner(const BulletMLRunner&);
@@ -148,8 +244,6 @@ public:
           runner_(runner),
           end_(false),
           wait_until_turn_(0),
-          nodes_(nullptr),
-          node_count_(0),
           tasks_(nullptr),
           task_count_(0),
           task_capacity_(0),
@@ -179,48 +273,47 @@ public:
             return;
         }
 
+        if (!isLikelySh2RamPointer(runner_)) {
+            SRL::Logger::LogWarning(
+                "[BML-RUNNER] invalid runner pointer in ctor this=%p runner=%p",
+                static_cast<void*>(this),
+                static_cast<void*>(runner_));
+            end_ = true;
+            freeBulletMlObject(state);
+            return;
+        }
+
         parser_ = state->getParser();
 
-        node_count_ = state->getNodeCount();
-        if (node_count_ > 0 && state->getNodes()) {
-            nodes_ = allocBulletMlArray<BulletMLNode*>("runner.nodes", node_count_);
-            if (!nodes_) {
-                end_ = true;
-                delete state;
-                return;
-            }
-            for (uint16_t i = 0; i < node_count_; ++i) {
-                nodes_[i] = state->getNodes()[i];
-            }
-        }
+        const uint16_t nc = static_cast<uint16_t>(state->getNodeCount());
+        BulletMLNode** const stateNodes = (nc > 0) ? state->getNodes() : nullptr;
 
         copyParameters(state->getParameters(), state->getParameterCount());
 
-        delete state;
-
-        if (!ensureTaskCapacity(static_cast<uint16_t>(node_count_ + 8))) {
+        if (!ensureTaskCapacity(static_cast<uint16_t>(nc + 8))) {
+            freeBulletMlObject(state);
             end_ = true;
             return;
         }
 
-        for (int i = static_cast<int>(node_count_) - 1; i >= 0; --i) {
-            pushNodeTask(nodes_[i]);
+        if (nc > 0 && stateNodes) {
+            for (int i = static_cast<int>(nc) - 1; i >= 0; --i) {
+                pushNodeTask(stateNodes[i]);
+            }
         }
+
+        freeBulletMlObject(state);
         wait_until_turn_ = runner_->getTurn();
     }
 
     ~BulletMLRunnerImpl() {
-        delete[] nodes_;
-        nodes_ = nullptr;
-        node_count_ = 0;
-
         recycleTaskBuffer(tasks_, task_capacity_);
         tasks_ = nullptr;
         task_count_ = 0;
         task_capacity_ = 0;
 
         if (owns_params_) {
-            delete[] params_;
+            bulletml_state_pool::recyclePooledArray(params_, bulletml_state_pool::getBucketedCapacity(param_count_));
         }
         params_ = nullptr;
         param_count_ = 0;
@@ -231,21 +324,118 @@ public:
 
     uint16_t getPeakTaskCount() const { return peak_task_count_; }
 
+    // Initialise the task-buffer slab pool.  Call once at startup after LWRAM
+    // is otherwise settled (background buffers allocated, BML parsers loaded).
+    // Returns true on success; false if the LWRAM allocation failed.
+    static bool InitTaskPool() {
+        const bool ok = getTaskPool().init();
+        if (ok) {
+            SRL::Logger::LogInfo(
+                "[BML-POOL] task-buffer pool ready: slots=%u slot_cap=%u lwram_bytes=%lu",
+                (unsigned)TaskBufferPool::kSlotCount,
+                (unsigned)TaskBufferPool::kSlotCapacity,
+                (unsigned long)(static_cast<uint32_t>(TaskBufferPool::kSlotCount) *
+                                TaskBufferPool::kSlotCapacity * sizeof(Task)));
+        } else {
+            SRL::Logger::LogWarning("[BML-POOL] task-buffer pool init FAILED (LWRAM exhausted?)");
+        }
+        return ok;
+    }
+
+    // Free the pool LWRAM block.  Only call during a full program restart;
+    // do NOT call during normal clearFoes/latch-recovery cycles.
+    static void DeinitTaskPool() {
+        getTaskPool().deinit();
+    }
+
+    // Number of pool slots currently available (for heartbeat diagnostics).
+    static uint16_t GetTaskPoolFreeSlots() {
+        return getTaskPool().availableSlots();
+    }
+
+    static uint32_t GetTaskPoolReservedBytes() {
+        return static_cast<uint32_t>(TaskBufferPool::kSlotCount) *
+               TaskBufferPool::kSlotCapacity * sizeof(Task);
+    }
+
+    static uint32_t GetTaskBufferCacheBytes() {
+        return static_cast<uint32_t>(getTaskBufferCache().capacity) * sizeof(Task);
+    }
+
     static void ReleaseTaskBufferCache() {
+        // Clear the single-slot cache used for grown (>kSlotCapacity) buffers.
+        // Pool slots are returned incrementally by impl destructors — no pool
+        // reset is needed here.
         TaskBufferCache& cache = getTaskBufferCache();
         if (cache.ptr) {
-            delete[] cache.ptr;
+            freeBulletMlArray(cache.ptr, cache.capacity);
             cache.ptr = nullptr;
             cache.capacity = 0;
         }
+    }
+
+    static bool PreallocateTaskBufferCache(uint16_t capacity) {
+        if (capacity == 0) {
+            return true;
+        }
+
+        TaskBufferCache& cache = getTaskBufferCache();
+        if (cache.ptr && cache.capacity >= capacity) {
+            return true;
+        }
+
+        Task* ptr = allocBulletMlArray<Task>("runner.tasks.prealloc", capacity);
+        if (!ptr) {
+            return false;
+        }
+
+        if (cache.ptr) {
+            freeBulletMlArray(cache.ptr, cache.capacity);
+        }
+
+        cache.ptr = ptr;
+        cache.capacity = capacity;
+        return true;
     }
 
     static uint16_t GetTaskBufferCacheCapacity() {
         return getTaskBufferCache().capacity;
     }
 
+    static void EnableStartupOnlyAllocation(bool enabled) {
+        isStartupOnlyAllocationEnabled() = enabled;
+    }
+
+    static bool IsStartupOnlyAllocationEnabled() {
+        return isStartupOnlyAllocationEnabled();
+    }
+
+    static void BeginStartupPreallocation() {
+        isStartupPreallocationPhase() = true;
+    }
+
+    static void EndStartupPreallocation() {
+        isStartupPreallocationPhase() = false;
+    }
+
+    static bool IsStartupPreallocationPhase() {
+        return isStartupPreallocationPhase();
+    }
+
     void run() {
         if (end_) return;
+        if (!isLikelySh2RamPointer(runner_) || safeRunnerTurn() < 0) {
+            if (capacity_fail_logs_ < 12) {
+                ++capacity_fail_logs_;
+                SRL::Logger::LogWarning(
+                    "[BML-RUNNER] invalid runner pointer in run this=%p runner=%p",
+                    static_cast<void*>(this),
+                    static_cast<void*>(runner_));
+            }
+            end_ = true;
+            task_count_ = 0;
+            return;
+        }
         if (hasBulletMlAllocFailureLatched()) {
             end_ = true;
             task_count_ = 0;
@@ -292,7 +482,7 @@ public:
                     break;
                 case TASK_POP_PARAMS:
                     if (owns_params_) {
-                        delete[] params_;
+                        bulletml_state_pool::recyclePooledArray(params_, bulletml_state_pool::getBucketedCapacity(param_count_));
                     }
                     params_ = task.saved_params;
                     param_count_ = task.saved_count;
@@ -356,18 +546,114 @@ private:
         uint16_t capacity;
     };
 
+    // Pre-allocated slab pool for standard-capacity (32-task) task buffers.
+    //
+    // All concurrent task buffers are served from a single contiguous LWRAM
+    // allocation (one lwnew at InitTaskPool() time, never freed during gameplay).
+    // acquire()/release() are O(1) HWRAM stack operations — zero LWRAM heap
+    // churn across clearFoes() cycles, eliminating the fragmentation that caused
+    // the entity-count degradation (186→64→28→9) observed on real hardware.
+    //
+    // kSlotCount=400 covers the observed peak of ~382 concurrent runners with a
+    // safety margin.  Pool memory: 400×32×24B = 307 200B (~300KB LWRAM).
+    struct TaskBufferPool {
+        static constexpr uint16_t kSlotCapacity = 32;
+        static constexpr uint16_t kSlotCount    = 400;
+
+        Task*    base;
+        uint16_t freeStack[kSlotCount];
+        uint16_t freeTop;
+
+        TaskBufferPool() : base(nullptr), freeTop(0) {
+            for (uint16_t i = 0; i < kSlotCount; ++i) {
+                freeStack[i] = 0;
+            }
+        }
+
+        bool init() {
+            if (base) return true;
+            base = lwnew Task[static_cast<uint32_t>(kSlotCount) * kSlotCapacity];
+            if (!base) return false;
+            bulletml_runner_trace::noteAlloc(
+                sizeof(Task) * static_cast<uint32_t>(kSlotCount) * kSlotCapacity,
+                true);
+            freeTop = kSlotCount;
+            for (uint16_t i = 0; i < kSlotCount; ++i) {
+                freeStack[i] = i;
+            }
+            return true;
+        }
+
+        void deinit() {
+            if (base) {
+                bulletml_runner_trace::noteFree(
+                    sizeof(Task) * static_cast<uint32_t>(kSlotCount) * kSlotCapacity,
+                    true);
+                delete[] base;
+            }
+            base     = nullptr;
+            freeTop  = 0;
+        }
+
+        bool isInitialized() const { return base != nullptr; }
+
+        Task* acquire(uint16_t& outCapacity) {
+            if (!base || freeTop == 0) {
+                outCapacity = 0;
+                return nullptr;
+            }
+            const uint16_t slot = freeStack[--freeTop];
+            outCapacity = kSlotCapacity;
+            return base + static_cast<uint32_t>(slot) * kSlotCapacity;
+        }
+
+        bool release(Task* ptr) {
+            if (!base || !ptr) return false;
+            const ptrdiff_t offset = ptr - base;
+            if (offset < 0 || static_cast<uint32_t>(offset) >=
+                    static_cast<uint32_t>(kSlotCount) * kSlotCapacity) return false;
+            if ((static_cast<uint32_t>(offset) % kSlotCapacity) != 0) return false;
+            if (freeTop >= kSlotCount) return false;
+            freeStack[freeTop++] = static_cast<uint16_t>(offset / kSlotCapacity);
+            return true;
+        }
+
+        uint16_t availableSlots() const { return freeTop; }
+    };
+
+    static TaskBufferPool& getTaskPool() {
+        static TaskBufferPool pool;
+        return pool;
+    }
+
     static TaskBufferCache& getTaskBufferCache() {
         static TaskBufferCache cache = {nullptr, 0};
         return cache;
     }
 
-    static Task* takeCachedTaskBuffer(uint16_t needed, uint16_t& outCapacity) {
-        TaskBufferCache& cache = getTaskBufferCache();
+    static bool& isStartupOnlyAllocationEnabled() {
+        static bool enabled = false;
+        return enabled;
+    }
 
+    static bool& isStartupPreallocationPhase() {
+        static bool prealloc = false;
+        return prealloc;
+    }
+
+    static Task* takeCachedTaskBuffer(uint16_t needed, uint16_t& outCapacity) {
+        // Serve standard-capacity requests from the pool (no LWRAM heap churn).
+        if (needed <= TaskBufferPool::kSlotCapacity) {
+            Task* t = getTaskPool().acquire(outCapacity);
+            if (t) return t;
+        }
+
+        // Fall back to the single-slot cache for grown (>kSlotCapacity) buffers.
+        TaskBufferCache& cache = getTaskBufferCache();
         if (cache.ptr && cache.capacity >= needed) {
-            Task* out = cache.ptr;
+            Task* out   = cache.ptr;
             outCapacity = cache.capacity;
-            cache.ptr = nullptr;
+            cache.ptr      = nullptr;
             cache.capacity = 0;
             return out;
         }
@@ -379,22 +665,54 @@ private:
     static void recycleTaskBuffer(Task* ptr, uint16_t capacity) {
         if (!ptr || capacity == 0) return;
 
+        // Return standard-capacity buffers to the pool.
+        if (capacity == TaskBufferPool::kSlotCapacity) {
+            if (getTaskPool().release(ptr)) {
+                return;
+            }
+        }
+
+        // Single-slot cache for grown (>kSlotCapacity) buffers.
         TaskBufferCache& cache = getTaskBufferCache();
 
         if (!cache.ptr) {
-            cache.ptr = ptr;
+            cache.ptr      = ptr;
             cache.capacity = capacity;
             return;
         }
 
         if (capacity > cache.capacity) {
-            delete[] cache.ptr;
-            cache.ptr = ptr;
+            freeBulletMlArray(cache.ptr, cache.capacity);
+            cache.ptr      = ptr;
             cache.capacity = capacity;
             return;
         }
 
-        delete[] ptr;
+        freeBulletMlArray(ptr, capacity);
+    }
+
+    static bool isLikelySh2RamPointer(const void* ptr) {
+        if (!ptr) {
+            return false;
+        }
+
+        const std::uintptr_t addr = reinterpret_cast<std::uintptr_t>(ptr);
+        const bool isUncachedSh2Ram = (addr >= 0x06000000u && addr < 0x06100000u);
+        const bool isCachedSh2Ram = (addr >= 0x26000000u && addr < 0x26100000u);
+        const bool isLowWorkRam = (addr >= 0x00200000u && addr < 0x00300000u);
+        if (!(isUncachedSh2Ram || isCachedSh2Ram || isLowWorkRam)) {
+            return false;
+        }
+
+        return (addr & 0x3u) == 0u;
+    }
+
+    int safeRunnerTurn() const {
+        if (!isLikelySh2RamPointer(runner_)) {
+            return -1;
+        }
+
+        return runner_->getTurn();
     }
 
     void setExpansionContext(BulletMLNode::Name name, uint32_t ref_id, uint32_t fanout, uint32_t child_count) {
@@ -407,12 +725,27 @@ private:
     bool ensureTaskCapacity(uint32_t needed) {
         if (needed <= task_capacity_) return true;
 
+        const int safeTurn = safeRunnerTurn();
+        if (safeTurn < 0 && capacity_fail_logs_ < 12) {
+            ++capacity_fail_logs_;
+            SRL::Logger::LogWarning(
+                "[BML-RUNNER] invalid runner pointer in ensureTaskCapacity this=%p runner=%p needed=%u cap=%u count=%u",
+                static_cast<void*>(this),
+                static_cast<void*>(runner_),
+                static_cast<unsigned>(needed),
+                static_cast<unsigned>(task_capacity_),
+                static_cast<unsigned>(task_count_));
+            end_ = true;
+            task_count_ = 0;
+            return false;
+        }
+
         if (capacity_fail_logs_ < 12) {
             SRL::Logger::LogInfo(
                 "[BML-RUNNER] task growth request needed=%u current=%u turn=%d wait=%d ctx_name=%u ctx_ref=%u ctx_fanout=%u ctx_children=%u",
                 static_cast<unsigned>(needed),
                 static_cast<unsigned>(task_capacity_),
-                runner_ ? runner_->getTurn() : -1,
+                safeTurn,
                 wait_until_turn_,
                 static_cast<unsigned>(expand_name_),
                 static_cast<unsigned>(expand_ref_id_),
@@ -429,7 +762,7 @@ private:
                     static_cast<unsigned>(kMaxTaskCapacity),
                     static_cast<unsigned>(task_count_),
                     static_cast<unsigned>(task_capacity_),
-                    runner_ ? runner_->getTurn() : -1,
+                    safeTurn,
                     wait_until_turn_,
                     static_cast<unsigned>(expand_name_),
                     static_cast<unsigned>(expand_ref_id_),
@@ -464,6 +797,17 @@ private:
         uint16_t cached_cap = 0;
         Task* t = takeCachedTaskBuffer(new_cap, cached_cap);
         if (!t) {
+            if (isStartupOnlyAllocationEnabled() && !isStartupPreallocationPhase()) {
+                if (capacity_fail_logs_ < 12) {
+                    ++capacity_fail_logs_;
+                    SRL::Logger::LogWarning(
+                        "[BML-RUNNER] startup-only allocation policy blocked task growth needed=%u current=%u turn=%d",
+                        static_cast<unsigned>(needed),
+                        static_cast<unsigned>(task_capacity_),
+                        safeTurn);
+                }
+                return false;
+            }
             if (capacity_fail_logs_ < 12) {
                 SRL::Logger::LogInfo("[BML-RUNNER] task buffer cache miss needed=%u new_cap=%u",
                                      static_cast<unsigned>(needed),
@@ -752,7 +1096,7 @@ private:
 
     void copyParameters(const Fxp* src, uint16_t count) {
         if (owns_params_) {
-            delete[] params_;
+            bulletml_state_pool::recyclePooledArray(params_, bulletml_state_pool::getBucketedCapacity(param_count_));
             owns_params_ = false;
         }
         params_ = nullptr;
@@ -760,7 +1104,8 @@ private:
 
         if (!src || count == 0) return;
 
-        Fxp* p = allocBulletMlArray<Fxp>("runner.params.copy", count);
+        uint16_t dummy_cap = 0;
+        Fxp* p = bulletml_state_pool::createPooledArray<Fxp>(count, dummy_cap);
         if (!p) return;
         for (uint16_t i = 0; i < count; ++i) {
             p[i] = src[i];
@@ -1013,7 +1358,8 @@ private:
         if (param_nodes == 0) return nullptr;
 
         const uint16_t total = static_cast<uint16_t>(param_nodes + 1);
-        Fxp* out = allocBulletMlArray<Fxp>("runner.params.collectRef", total);
+        uint16_t dummy_cap = 0;
+        Fxp* out = bulletml_state_pool::createPooledArray<Fxp>(total, dummy_cap);
         if (!out) return nullptr;
 
         out[0] = 0.0;  // 1-based parameters
@@ -1190,7 +1536,9 @@ private:
                 bool saved_owns = owns_params_;
 
                 if (!pushPopParamsTask(saved_params, saved_count, saved_owns)) {
-                    delete[] new_params;
+                    if (new_params) {
+                        bulletml_state_pool::recyclePooledArray(new_params, bulletml_state_pool::getBucketedCapacity(new_count));
+                    }
                     SRL::Logger::LogWarning("[BML-RUNNER] Failed to push param restore task for ref id=%u", id);
                     end_ = true;
                     return;
@@ -1205,7 +1553,7 @@ private:
                         --task_count_;
                     }
                     if (owns_params_) {
-                        delete[] params_;
+                        bulletml_state_pool::recyclePooledArray(params_, bulletml_state_pool::getBucketedCapacity(param_count_));
                     }
                     params_ = saved_params;
                     param_count_ = saved_count;
@@ -1283,9 +1631,6 @@ private:
     bool end_;
     int wait_until_turn_;
 
-    BulletMLNode** nodes_;
-    uint16_t node_count_;
-
     Task* tasks_;
     uint16_t task_count_;
     uint16_t task_capacity_;
@@ -1324,7 +1669,7 @@ private:
 };
 
 inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
-    : parser_(parser), state_(nullptr), impls_(nullptr), impl_count_(0) {
+    : parser_(parser), state_(nullptr), impls_(nullptr), impl_count_(0), impl_capacity_(0) {
     if (!parser_) return;
 
     uint32_t top_count_u32 = 0;
@@ -1334,6 +1679,7 @@ inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
     uint16_t top_count = (top_count_u32 > 65535U) ? 65535U : static_cast<uint16_t>(top_count_u32);
     impls_ = allocBulletMlArray<BulletMLRunnerImpl*>("runner.impls.top", top_count);
     if (!impls_) return;
+    impl_capacity_ = top_count;
 
     for (uint16_t i = 0; i < top_count; ++i) impls_[i] = nullptr;
 
@@ -1359,16 +1705,17 @@ inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
 }
 
 inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
-    : parser_(nullptr), state_(state), impls_(nullptr), impl_count_(0) {
+    : parser_(nullptr), state_(state), impls_(nullptr), impl_count_(0), impl_capacity_(0) {
     if (!state_) return;
 
     parser_ = state_->getParser();
     impls_ = allocBulletMlArray<BulletMLRunnerImpl*>("runner.impls.single", 1);
     if (!impls_) return;
+    impl_capacity_ = 1;
 
     impls_[0] = allocBulletMlObject<BulletMLRunnerImpl>("runner.impl.single", state_, this);
     if (!impls_[0]) {
-        delete[] impls_;
+        freeBulletMlArray(impls_, 1);
         impls_ = nullptr;
         return;
     }
@@ -1379,12 +1726,11 @@ inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
 
 inline BulletMLRunner::~BulletMLRunner() {
     for (uint16_t i = 0; i < impl_count_; ++i) {
-        delete impls_[i];
-        impls_[i] = nullptr;
+        freeBulletMlObject(impls_[i]);
     }
-    delete[] impls_;
-    impls_ = nullptr;
+    freeBulletMlArray(impls_, impl_capacity_ > 0 ? impl_capacity_ : 1);
     impl_count_ = 0;
+    impl_capacity_ = 0;
 
     destroyBulletMlState(state_);
     state_ = nullptr;

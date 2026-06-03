@@ -248,7 +248,6 @@ public:
     {
         allocateMetadataBuffers();
         setFilename(filename);
-        if (filename_) filename_[0] = '\0';
     }
     
     /// Constructor from memory buffer (unnamed)
@@ -274,7 +273,6 @@ public:
     {
         allocateMetadataBuffers();
         setFilename("(memory)");
-        if (filename_) filename_[0] = '\0';
     }
 
     /// Constructor from filename (file-loaded parse path)
