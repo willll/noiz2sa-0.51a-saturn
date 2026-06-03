@@ -37,10 +37,33 @@
 #include "loading_screen.h"
 #include "system_factory.h"
 #include "bulletml_binary/bulletmlrunner.hpp"
+#include "bulletml_binary/bulletml_runtime_alloc_policy.h"
+#include "bulletml_runtime_factory.h"
 #include "foecommand.h"
 
 
 static int noSound = 0;
+
+#if defined(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY) && (NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY != 0)
+static constexpr bool kEnableGameplayStartupOnlyAllocationPolicy = true;
+#else
+static constexpr bool kEnableGameplayStartupOnlyAllocationPolicy = false;
+#endif
+
+/** @brief Applies the BulletML runtime allocation policy and logs the resulting state. */
+static void applyBulletMlRuntimeAllocPolicy(bool enabled, const char* phase)
+{
+  setBulletMlStartupOnlyAllocationPolicy(enabled);
+  const BulletMlRuntimeAllocPolicySnapshot snapshot = getBulletMlRuntimeAllocPolicySnapshot();
+  SRL::Logger::LogInfo(
+      "[BML-POLICY] phase=%s enabled=%d runner_startup_only=%d runner_prealloc=%d state_startup_only=%d state_prealloc=%d",
+      phase ? phase : "(null)",
+      enabled ? 1 : 0,
+      snapshot.runnerStartupOnly ? 1 : 0,
+      snapshot.runnerStartupPreallocation ? 1 : 0,
+      snapshot.stateStartupOnly ? 1 : 0,
+      snapshot.stateStartupPreallocation ? 1 : 0);
+}
 
 // Thin wrapper kept for compatibility with callers in other translation units
 // (barragemanager.cc, screen.cpp).  All logic lives in LoadingScreen.
@@ -168,6 +191,9 @@ void initTitle()
 {
   SRL::Logger::LogInfo("[STATE] Entering TITLE screen");
 
+  // Title/setup phases are allowed to perform runtime allocations.
+  applyBulletMlRuntimeAllocPolicy(false, "TITLE_ENTER");
+
   // Start each title/game flow with BulletML fail-safe cleared.
   // This prevents a previous run's alloc latch from suppressing bullets forever.
   resetBulletMlAllocFailureState();
@@ -187,6 +213,7 @@ void initTitle()
 
   setStageBackground(1);
   SRL::Logger::LogDebug("[CDDA] TITLE: forcing menu BGM playMusic(0)");
+  preloadChunksNow();
   playMusic(0);
   initTitleStage(stg);
   showScore();
@@ -199,6 +226,9 @@ void initTitle()
 void initGame(int stg)
 {
   SRL::Logger::LogInfo("[STATE] Entering IN_GAME (stage %d)", stg);
+
+  // Stage/gameplay setup can still allocate before the runtime policy lock is applied.
+  applyBulletMlRuntimeAllocPolicy(false, "INGAME_SETUP_BEGIN");
 
   // Clear any previous BulletML alloc-failure latch before new gameplay init.
   resetBulletMlAllocFailureState();
@@ -223,6 +253,7 @@ void initGame(int stg)
 
   if (stg < STAGE_NUM)
   {
+    preloadChunksNow();
     setStageBackground(stg % 5 + 1);
     SRL::Logger::LogDebug("[CDDA] IN_GAME: playMusic(%d) for stage=%d", stg % 5 + 1, stg);
     playMusic(stg % 5 + 1);
@@ -232,18 +263,24 @@ void initGame(int stg)
   {
     if (!insane)
     {
+      preloadChunksNow();
       setStageBackground(0);
       SRL::Logger::LogDebug("[CDDA] IN_GAME endless-normal: playMusic(0)");
       playMusic(0);
     }
     else
     {
+      preloadChunksNow();
       setStageBackground(6);
       SRL::Logger::LogDebug("[CDDA] IN_GAME endless-insane: playMusic(6)");
       playMusic(6);
       SRL::Logger::LogDebug("[GAME] Endless stage: INSANE mode activated");
     }
   }
+
+  // Step 1 wiring: production transition point for startup-only policy.
+  // This is default-off until subsequent steps complete full startup preallocation.
+  applyBulletMlRuntimeAllocPolicy(kEnableGameplayStartupOnlyAllocationPolicy, "INGAME_READY");
 
   SRL::Logger::LogInfo("[STATE] IN_GAME (stage %d) ready - Starting gameplay", stg);
 }
@@ -345,7 +382,22 @@ static inline uint32_t profileMicrosNow()
 
 static inline void synchronizeFrame()
 {
-#if HW_DEBUG
+#if defined(NOIZ2SA_REFRESH_ONLY_SYNC) && (NOIZ2SA_REFRESH_ONLY_SYNC != 0)
+  // Diagnostic mode: bypass SGL/SRL synchronize path to isolate SlaveControl
+  // null-jump crashes while keeping input updates alive.
+  static uint32_t sRefreshOnlySyncCalls = 0u;
+  ++sRefreshOnlySyncCalls;
+  if (sRefreshOnlySyncCalls <= 8u || (sRefreshOnlySyncCalls % 120u) == 0u)
+  {
+    SRL::Logger::LogDebug(
+        "[SYNC_TRACE] refresh-only sync call=%lu status=%d tick=%d hwfree=%lu",
+        (unsigned long)sRefreshOnlySyncCalls,
+        status,
+        tick,
+        (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+  }
+  SRL::Input::Management::RefreshPeripherals();
+#elif HW_DEBUG
   // Skip VBlank/SGL sync in HW_DEBUG: sprite data not loaded, SGL pipeline
   // may never complete, causing slSynch() to block indefinitely.
   // Match the same skip applied in loading_screen.cpp Render().
@@ -499,6 +551,14 @@ static void move()
   {
     trimFoeCommandPoolCachedCount(0);
     BulletMLRunnerImpl::ReleaseTaskBufferCache();
+    if (status == TITLE)
+    {
+      // Attract mode LWRAM recovery: destroy all active foes to free their LWRAM
+      // task buffer allocations. trimFoeCommandPoolCachedCount(0) above reclaims
+      // pooled FoeCommand nodes on subsequent ticks. Once the latch clears (~30
+      // ticks), new task buffer allocations succeed and attract mode resumes.
+      clearFoes();
+    }
   }
   else
   {
@@ -1017,7 +1077,7 @@ static void drawPoolStats()
   const int foeTotal = getFoePoolCapacity();
   const int foeActive = getActiveFoeCount();
   SRL::Debug::PrintClearLine(row);
-  SRL::Debug::Print(1, row, "FOE: %d/%d", foeTotal - foeActive, foeTotal);
+  SRL::Debug::Print(1, row, "FOE: %d/%d", foeActive, foeTotal);
   row++;
 #endif
 
@@ -1025,7 +1085,7 @@ static void drawPoolStats()
   const int shotTotal = getShotPoolCapacity();
   const int shotActive = getActiveShotCount();
   SRL::Debug::PrintClearLine(row);
-  SRL::Debug::Print(1, row, "SHOT: %d/%d", shotTotal - shotActive, shotTotal);
+  SRL::Debug::Print(1, row, "SHOT: %d/%d", shotActive, shotTotal);
   row++;
 #endif
 
@@ -1033,7 +1093,7 @@ static void drawPoolStats()
   const int bonusTotal = getBonusPoolCapacity();
   const int bonusActive = getActiveBonusCount();
   SRL::Debug::PrintClearLine(row);
-  SRL::Debug::Print(1, row, "BONUS: %d/%d", bonusTotal - bonusActive, bonusTotal);
+  SRL::Debug::Print(1, row, "BONUS: %d/%d", bonusActive, bonusTotal);
   row++;
 #endif
 
@@ -1041,7 +1101,7 @@ static void drawPoolStats()
   const int fragTotal = getFragPoolCapacity();
   const int fragActive = getActiveFragCount();
   SRL::Debug::PrintClearLine(row);
-  SRL::Debug::Print(1, row, "FRAG: %d/%d", fragTotal - fragActive, fragTotal);
+  SRL::Debug::Print(1, row, "FRAG: %d/%d", fragActive, fragTotal);
 #endif
   SRL::Debug::PrintColorRestore();
 #endif
@@ -1238,6 +1298,26 @@ static void logPerfTraceWindowAndReset()
       (unsigned int)avgFoeBudget);
 
     SRL::Logger::LogInfo(
+      "[BML-POOL-STAT] states=%lu na4=%lu na8=%lu na12=%lu na16=%lu na20=%lu na24=%lu na28=%lu na32=%lu pa4=%lu pa8=%lu pa12=%lu pa16=%lu pa20=%lu pa24=%lu pa28=%lu pa32=%lu",
+      (unsigned long)getBulletMlStateCachedCount(),
+      (unsigned long)getBulletMlStateNodeArrayCachedCount(4),
+      (unsigned long)getBulletMlStateNodeArrayCachedCount(8),
+      (unsigned long)getBulletMlStateNodeArrayCachedCount(12),
+      (unsigned long)getBulletMlStateNodeArrayCachedCount(16),
+      (unsigned long)getBulletMlStateNodeArrayCachedCount(20),
+      (unsigned long)getBulletMlStateNodeArrayCachedCount(24),
+      (unsigned long)getBulletMlStateNodeArrayCachedCount(28),
+      (unsigned long)getBulletMlStateNodeArrayCachedCount(32),
+      (unsigned long)getBulletMlStateParameterArrayCachedCount(4),
+      (unsigned long)getBulletMlStateParameterArrayCachedCount(8),
+      (unsigned long)getBulletMlStateParameterArrayCachedCount(12),
+      (unsigned long)getBulletMlStateParameterArrayCachedCount(16),
+      (unsigned long)getBulletMlStateParameterArrayCachedCount(20),
+      (unsigned long)getBulletMlStateParameterArrayCachedCount(24),
+      (unsigned long)getBulletMlStateParameterArrayCachedCount(28),
+      (unsigned long)getBulletMlStateParameterArrayCachedCount(32));
+
+    SRL::Logger::LogInfo(
       "[PERF_CULL] drawn=%u culled=%u cull_pct=%u%%",
       (unsigned int)avgDrawnBullets,
       (unsigned int)avgCulledBullets,
@@ -1286,12 +1366,6 @@ int main()
   SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
   SRL::Logger::LogInfo("[MAIN_TRACE] after SRL::Core::Initialize");
 
-  // Pre-allocate FoeCommand pool to prevent allocation failures during peak gameplay.
-  // Peak bullet count is ~220, so allocate enough for sustained spawning.
-  SRL::Logger::LogInfo("[MAIN_TRACE] before preallocateFoeCommandPool(256)");
-  preallocateFoeCommandPool(256);
-  SRL::Logger::LogInfo("[MAIN_TRACE] after preallocateFoeCommandPool(256)");
-
   // Define loading steps for main()
   const char* mainSteps[] = {
     "Initializing game config",
@@ -1317,6 +1391,12 @@ int main()
 
   SRL::Logger::LogInfo("[MAIN_TRACE] step: initSDL begin");
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
+  // SRL::Core::Synchronize() deadlocks in Mednafen after initSDL() reconfigures
+  // VDP2 layers (NBG1 scroll enable / VRAM cycle pattern changes).  Disable the
+  // per-frame sync inside LoadingScreen::Render() for the VDP-heavy loading phase;
+  // debug text still appears via natural VBLank refresh.
+  g_loadingScreen.SetSyncEnabled(false);
+  SRL::Logger::LogInfo("[MAIN_TRACE] initSDL: sync disabled for loading phase");
   initSDL();
   SRL::Logger::LogInfo("[MAIN_TRACE] step: initSDL end");
   mainStepIdx++;
@@ -1344,15 +1424,68 @@ int main()
   SRL::Logger::LogInfo("[MAIN_TRACE] step: initFirst begin");
   initFirst();
   SRL::Logger::LogInfo("[MAIN_TRACE] step: initFirst end");
+
+  // Pre-allocate FoeCommand pool after startup initialization has configured
+  // memory systems and loaded startup assets. Doing this too early allows
+  // later init paths to stomp the free-list metadata.
+#if defined(NOIZ2SA_DISABLE_FOECMD_PREALLOC) && (NOIZ2SA_DISABLE_FOECMD_PREALLOC != 0)
+  SRL::Logger::LogInfo("[MAIN_TRACE] preallocateFoeCommandPool disabled by NOIZ2SA_DISABLE_FOECMD_PREALLOC");
+  preallocateFoeCommandPool(0);
+#else
+  SRL::Logger::LogInfo("[MAIN_TRACE] before preallocateFoeCommandPool(256)");
+  preallocateFoeCommandPool(256);
+  SRL::Logger::LogInfo("[MAIN_TRACE] after preallocateFoeCommandPool(256)");
+#endif
+
+  // Initialise the BulletMLRunnerImpl task-buffer slab pool.
+  // One contiguous LWRAM allocation (400×32×24B = 307KB) serves all task
+  // buffers for the entire session — no per-buffer lwnew/delete, zero
+  // LWRAM fragmentation across clearFoes() recovery cycles.
+  {
+    const bool poolOk = BulletMLRunnerImpl::InitTaskPool();
+    SRL::Logger::LogInfo("[TASK_POOL] init %s free_slots=%u lwfree=%lu",
+                         poolOk ? "OK" : "FAILED",
+                         (unsigned)BulletMLRunnerImpl::GetTaskPoolFreeSlots(),
+                         (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+    if (!poolOk) {
+      SRL::Logger::LogWarning("[TASK_POOL] pool FAILED - task bufs fall back to per-alloc lwnew");
+    }
+  }
+
+  // Pre-populate BulletML state + small-array pools during startup so gameplay
+  // can run with startup-only allocation policy enabled.
+  {
+    const uint16_t statePreallocCount = 32u;
+    const uint16_t nodeArrayPreallocCounts[8] = {32u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    const uint16_t parameterArrayPreallocCounts[8] = {32u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+
+    const bool preallocOk = preallocateBulletMlStatePools(statePreallocCount,
+                                                           nodeArrayPreallocCounts,
+                                                           parameterArrayPreallocCounts);
+    SRL::Logger::LogInfo(
+        "[BML-PREALLOC] state=%u na4=%u pa4=%u ok=%d cached_state=%lu cached_na4=%lu cached_pa4=%lu lwfree=%lu",
+        (unsigned)statePreallocCount,
+        (unsigned)nodeArrayPreallocCounts[0],
+        (unsigned)parameterArrayPreallocCounts[0],
+        preallocOk ? 1 : 0,
+        (unsigned long)getBulletMlStateCachedCount(),
+        (unsigned long)getBulletMlStateNodeArrayCachedCount(4),
+        (unsigned long)getBulletMlStateParameterArrayCachedCount(4),
+        (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+
+    if (!preallocOk) {
+      SRL::Logger::LogWarning("[BML-PREALLOC] FAILED - startup pool targets not fully populated");
+    }
+  }
+
 #if HW_DEBUG
   updateLoadingProgress("Entering HW_DEBUG endless", (mainStepIdx + 1) * 100 / mainNumSteps);
-  insane = 1;
   const int hwDebugStage = (HW_DEBUG_ENDLESS_STAGE < STAGE_NUM) ? STAGE_NUM : HW_DEBUG_ENDLESS_STAGE;
   if (hwDebugStage != HW_DEBUG_ENDLESS_STAGE)
   {
     SRL::Logger::LogWarning("[HW_DEBUG] Requested stage %d is not endless; forcing stage %d", HW_DEBUG_ENDLESS_STAGE, hwDebugStage);
   }
-  SRL::Logger::LogInfo("[HW_DEBUG] Skipping title/menu and booting directly into endless INSANE stage %d", hwDebugStage);
+  SRL::Logger::LogInfo("[HW_DEBUG] Skipping title/menu and booting directly into endless stage %d", hwDebugStage);
   SRL::Logger::LogInfo("[HW_DEBUG] Entering initGame() for stage %d", hwDebugStage);
   initGame(hwDebugStage);
   SRL::Logger::LogInfo("[HW_DEBUG] initGame() returned for stage %d", hwDebugStage);
@@ -1771,7 +1904,31 @@ int main()
         SRL::Logger::LogInfo("[PHASE] post-sync loop=%lu", (unsigned long)sPhaseProbeLoops);
       }
 #endif
+    #if defined(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK) && (NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK != 0)
+      static uint32_t sRefreshOnlySoundTickCalls = 0u;
+      ++sRefreshOnlySoundTickCalls;
+      if (sRefreshOnlySoundTickCalls <= 8u || (sRefreshOnlySoundTickCalls % 120u) == 0u)
+      {
+        SRL::Logger::LogDebug(
+        "[SYNC_TRACE] refresh-only soundTick skipped call=%lu status=%d tick=%d hwfree=%lu",
+        (unsigned long)sRefreshOnlySoundTickCalls,
+        status,
+        tick,
+        (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+      }
+    #else
+      SRL::Logger::LogDebug(
+          "[SYNC_TRACE] before soundTick status=%d tick=%d hwfree=%lu",
+          status,
+          tick,
+          (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
       soundTick(); // Pump M68K driver every frame
+      SRL::Logger::LogDebug(
+          "[SYNC_TRACE] after soundTick status=%d tick=%d hwfree=%lu",
+          status,
+          tick,
+          (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+    #endif
     }
     else
     {
@@ -1779,8 +1936,32 @@ int main()
   setDiagPhase(5u); // fixed-frame input refresh path
 #endif
       SRL::Input::Management::RefreshPeripherals();
+    #if defined(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK) && (NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK != 0)
+      static uint32_t sRefreshOnlySoundTickCallsFixed = 0u;
+      ++sRefreshOnlySoundTickCallsFixed;
+      if (sRefreshOnlySoundTickCallsFixed <= 8u || (sRefreshOnlySoundTickCallsFixed % 120u) == 0u)
+      {
+        SRL::Logger::LogDebug(
+        "[SYNC_TRACE] fixed-frame soundTick skipped call=%lu status=%d tick=%d hwfree=%lu",
+        (unsigned long)sRefreshOnlySoundTickCallsFixed,
+        status,
+        tick,
+        (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+      }
+    #else
       // Keep Ponesound command pump alive when synchronized vblank is bypassed.
+      SRL::Logger::LogDebug(
+          "[SYNC_TRACE] before fixed-frame soundTick status=%d tick=%d hwfree=%lu",
+          status,
+          tick,
+          (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
       soundTick();
+      SRL::Logger::LogDebug(
+          "[SYNC_TRACE] after fixed-frame soundTick status=%d tick=%d hwfree=%lu",
+          status,
+          tick,
+          (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
+    #endif
     }
   #endif
     uint32_t timeSyncUs = SDL_GetProfileMicros() - phaseStartUs;
@@ -1869,6 +2050,72 @@ int main()
           (unsigned)avgBulletCount,
           (unsigned)gPerfTraceWindow.peakBulletCount,
           getLiveProjectileCount());
+        static uint32_t sMemLogSampleCounter = 0;
+        const bool emitMemSample = ((sMemLogSampleCounter++ % 10u) == 0u);
+        if (emitMemSample) {
+          SRL::Logger::LogWarning("[MEM] lwfree=%lu", (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+          const SRL::Memory::Report lwReport = SRL::Memory::LowWorkRam::GetReport();
+          SRL::Logger::LogWarning(
+            "[MEM_ALLOC] free_blocks=%lu used_blocks=%lu headers=%lu free=%lu total=%lu",
+            (unsigned long)lwReport.FreeBlocks,
+            (unsigned long)lwReport.UsedBlocks,
+            (unsigned long)lwReport.AllocationHeaders,
+            (unsigned long)lwReport.FreeSize,
+            (unsigned long)lwReport.TotalSize);
+          std::size_t bmlObjectAllocCalls = 0;
+          std::size_t bmlObjectFreeCalls = 0;
+          std::size_t bmlArrayAllocCalls = 0;
+          std::size_t bmlArrayFreeCalls = 0;
+          std::size_t bmlRunnerObjectAllocCalls = 0;
+          std::size_t bmlRunnerObjectFreeCalls = 0;
+          std::size_t bmlRunnerArrayAllocCalls = 0;
+          std::size_t bmlRunnerArrayFreeCalls = 0;
+          getBulletMlRuntimeObjectCallCounts(bmlObjectAllocCalls, bmlObjectFreeCalls);
+          getBulletMlRuntimeArrayCallCounts(bmlArrayAllocCalls, bmlArrayFreeCalls);
+          getBulletMlRunnerObjectCallCounts(bmlRunnerObjectAllocCalls, bmlRunnerObjectFreeCalls);
+          getBulletMlRunnerArrayCallCounts(bmlRunnerArrayAllocCalls, bmlRunnerArrayFreeCalls);
+          const uint32_t bmlRunnerPoolBytes = BulletMLRunnerImpl::GetTaskPoolReservedBytes();
+          const uint32_t bmlRunnerCacheBytes = BulletMLRunnerImpl::GetTaskBufferCacheBytes();
+          const std::size_t bmlRunnerArrayLiveBytes = getBulletMlRunnerArrayLiveBytes();
+          const std::size_t bmlRunnerDynamicArrayBytes =
+            (bmlRunnerArrayLiveBytes > bmlRunnerPoolBytes)
+              ? (bmlRunnerArrayLiveBytes - bmlRunnerPoolBytes)
+              : 0;
+          SRL::Logger::LogWarning(
+            "[MEM_SRC] bml_live=%lu obj_live=%lu arr_live=%lu obj_calls=%lu/%lu arr_calls=%lu/%lu",
+            (unsigned long)getBulletMlRuntimeLiveBytes(),
+            (unsigned long)getBulletMlRuntimeObjectLiveBytes(),
+            (unsigned long)getBulletMlRuntimeArrayLiveBytes(),
+            (unsigned long)bmlObjectAllocCalls,
+            (unsigned long)bmlObjectFreeCalls,
+            (unsigned long)bmlArrayAllocCalls,
+            (unsigned long)bmlArrayFreeCalls);
+          SRL::Logger::LogWarning(
+            "[MEM_SRC_RUN] bmlr_live=%lu obj_live=%lu arr_live=%lu arr_dyn=%lu pool_resv=%lu pool_free=%u cache=%lu obj_calls=%lu/%lu arr_calls=%lu/%lu",
+            (unsigned long)getBulletMlRunnerLiveBytes(),
+            (unsigned long)getBulletMlRunnerObjectLiveBytes(),
+            (unsigned long)bmlRunnerArrayLiveBytes,
+            (unsigned long)bmlRunnerDynamicArrayBytes,
+            (unsigned long)bmlRunnerPoolBytes,
+            (unsigned)BulletMLRunnerImpl::GetTaskPoolFreeSlots(),
+            (unsigned long)bmlRunnerCacheBytes,
+            (unsigned long)bmlRunnerObjectAllocCalls,
+            (unsigned long)bmlRunnerObjectFreeCalls,
+            (unsigned long)bmlRunnerArrayAllocCalls,
+            (unsigned long)bmlRunnerArrayFreeCalls);
+          SRL::Logger::LogWarning(
+            "[MEM_ENT] foe=%d/%d shot=%d/%d bonus=%d/%d frag=%d/%d cmd_cache=%d live_bullets=%d",
+            getActiveFoeCount(),
+            getFoePoolCapacity(),
+            getActiveShotCount(),
+            getShotPoolCapacity(),
+            getActiveBonusCount(),
+            getBonusPoolCapacity(),
+            getActiveFragCount(),
+            getFragPoolCapacity(),
+            getFoeCommandPoolCachedCount(),
+            getLiveProjectileCount());
+        }
 #else
         SRL::Logger::LogInfo("[HEARTBEAT] ms=%lu tick=%lu status=%d fps=%u.%02u loops=%lu",
                              (unsigned long)hbNowMs,
