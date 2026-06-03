@@ -20,6 +20,8 @@ void loadSounds();
  * @param idx Track index.
  */
 void playMusic(int idx);
+/** @brief Preloads deferred PCM chunks immediately to avoid CDDA interruption by runtime CD data reads. */
+void preloadChunksNow();
 /** @brief Fades out the currently playing music. */
 void fadeMusic();
 /** @brief Stops the currently playing music immediately. */
