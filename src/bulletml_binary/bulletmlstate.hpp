@@ -22,6 +22,8 @@ struct StateFreeNode {
 struct StatePoolState {
     static inline StateFreeNode* freeList = nullptr;
     static inline std::size_t cachedCount = 0;
+    static inline bool startupOnlyAllocation = false;
+    static inline bool startupPreallocationPhase = false;
 };
 
 template <typename T>
@@ -60,7 +62,16 @@ inline T* createPooledArray(uint16_t count, uint16_t& outCapacity) {
             return reinterpret_cast<T*>(node);
         }
 
+        if (StatePoolState::startupOnlyAllocation && !StatePoolState::startupPreallocationPhase) {
+            return nullptr;
+        }
+
         return createBulletMlRuntimeArray<T>(outCapacity);
+    }
+
+    if (StatePoolState::startupOnlyAllocation && !StatePoolState::startupPreallocationPhase) {
+        outCapacity = count;
+        return nullptr;
     }
 
     outCapacity = count;
@@ -84,8 +95,7 @@ inline void recyclePooledArray(T*& ptr, uint16_t capacity) {
         return;
     }
 
-    delete[] ptr;
-    ptr = nullptr;
+    destroyBulletMlRuntimeArray(ptr, capacity);
 }
 
 template <typename T>
@@ -94,7 +104,9 @@ inline void releaseArrayPool() {
         ArrayFreeNode<T>* node = ArrayPoolState<T>::freeLists[bucketIndex];
         while (node) {
             ArrayFreeNode<T>* next = node->next;
-            delete[] reinterpret_cast<T*>(node);
+            T* ptr = reinterpret_cast<T*>(node);
+            const uint16_t capacity = static_cast<uint16_t>((bucketIndex + 1u) * 4u);
+            destroyBulletMlRuntimeArray(ptr, capacity);
             node = next;
         }
         ArrayPoolState<T>::freeLists[bucketIndex] = nullptr;
@@ -222,6 +234,10 @@ inline BulletMLState* createBulletMlState(BulletMLParserBLB* parser,
         return new (node) BulletMLState(parser, nodes, node_count, parameters, parameter_count);
     }
 
+    if (StatePoolState::startupOnlyAllocation && !StatePoolState::startupPreallocationPhase) {
+        return nullptr;
+    }
+
     return createBulletMlRuntimeObject<BulletMLState>(parser, nodes, node_count, parameters, parameter_count);
 }
 
@@ -250,12 +266,96 @@ inline void releaseBulletMlStatePools()
     while (StatePoolState::freeList) {
         StateFreeNode* node = StatePoolState::freeList;
         StatePoolState::freeList = node->next;
-        SRL::Memory::Free(node);
+        freeBulletMlRuntimeRaw(node, sizeof(BulletMLState), false);
     }
     StatePoolState::cachedCount = 0;
+    StatePoolState::startupPreallocationPhase = false;
 
     bulletml_state_pool::releaseArrayPool<BulletMLNode*>();
     bulletml_state_pool::releaseArrayPool<Fxp>();
+}
+
+inline void enableBulletMlStateStartupOnlyAllocation(bool enabled)
+{
+    bulletml_state_pool::StatePoolState::startupOnlyAllocation = enabled;
+}
+
+inline bool isBulletMlStateStartupOnlyAllocationEnabled()
+{
+    return bulletml_state_pool::StatePoolState::startupOnlyAllocation;
+}
+
+inline void beginBulletMlStateStartupPreallocation()
+{
+    bulletml_state_pool::StatePoolState::startupPreallocationPhase = true;
+}
+
+inline void endBulletMlStateStartupPreallocation()
+{
+    bulletml_state_pool::StatePoolState::startupPreallocationPhase = false;
+}
+
+inline bool isBulletMlStateStartupPreallocationPhase()
+{
+    return bulletml_state_pool::StatePoolState::startupPreallocationPhase;
+}
+
+inline bool preallocateBulletMlStatePools(uint16_t stateCount,
+                                          const uint16_t* nodeArrayCounts,
+                                          const uint16_t* parameterArrayCounts)
+{
+    using bulletml_state_pool::StateFreeNode;
+    using bulletml_state_pool::StatePoolState;
+
+    beginBulletMlStateStartupPreallocation();
+
+    for (uint16_t i = 0; i < stateCount; ++i) {
+        BulletMLState* state = createBulletMlRuntimeObject<BulletMLState>(nullptr);
+        if (!state) {
+            endBulletMlStateStartupPreallocation();
+            return false;
+        }
+
+        StateFreeNode* node = reinterpret_cast<StateFreeNode*>(state);
+        node->next = StatePoolState::freeList;
+        StatePoolState::freeList = node;
+        StatePoolState::cachedCount++;
+    }
+
+    for (uint16_t bucketIndex = 0; bucketIndex < 8u; ++bucketIndex) {
+        const uint16_t capacity = static_cast<uint16_t>((bucketIndex + 1u) * 4u);
+        const uint16_t nodeCount = nodeArrayCounts ? nodeArrayCounts[bucketIndex] : 0u;
+        const uint16_t paramCount = parameterArrayCounts ? parameterArrayCounts[bucketIndex] : 0u;
+
+        for (uint16_t i = 0; i < nodeCount; ++i) {
+            BulletMLNode** ptr = createBulletMlRuntimeArray<BulletMLNode*>(capacity);
+            if (!ptr) {
+                endBulletMlStateStartupPreallocation();
+                return false;
+            }
+
+            auto* node = reinterpret_cast<bulletml_state_pool::ArrayFreeNode<BulletMLNode*>*>(ptr);
+            node->next = bulletml_state_pool::ArrayPoolState<BulletMLNode*>::freeLists[bucketIndex];
+            bulletml_state_pool::ArrayPoolState<BulletMLNode*>::freeLists[bucketIndex] = node;
+            bulletml_state_pool::ArrayPoolState<BulletMLNode*>::cachedCounts[bucketIndex]++;
+        }
+
+        for (uint16_t i = 0; i < paramCount; ++i) {
+            Fxp* ptr = createBulletMlRuntimeArray<Fxp>(capacity);
+            if (!ptr) {
+                endBulletMlStateStartupPreallocation();
+                return false;
+            }
+
+            auto* node = reinterpret_cast<bulletml_state_pool::ArrayFreeNode<Fxp>*>(ptr);
+            node->next = bulletml_state_pool::ArrayPoolState<Fxp>::freeLists[bucketIndex];
+            bulletml_state_pool::ArrayPoolState<Fxp>::freeLists[bucketIndex] = node;
+            bulletml_state_pool::ArrayPoolState<Fxp>::cachedCounts[bucketIndex]++;
+        }
+    }
+
+    endBulletMlStateStartupPreallocation();
+    return true;
 }
 
 inline std::size_t getBulletMlStateCachedCount()
