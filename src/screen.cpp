@@ -556,9 +556,12 @@ static void loadSprites()
   SRL::Bitmap::TGA *tga = nullptr;
 
   // Navigate to IMAGES directory on CD first
-  SRL::Logger::LogDebug("[SPRITE] Changing to IMAGES directory on CD");
+  SRL::Logger::LogInfo("[SPRITE_TRACE] ChangeDir root begin");
   SRL::Cd::ChangeDir((char *)nullptr);
+  SRL::Logger::LogInfo("[SPRITE_TRACE] ChangeDir root end");
+  SRL::Logger::LogInfo("[SPRITE_TRACE] ChangeDir IMAGES begin");
   SRL::Cd::ChangeDir("IMAGES");
+  SRL::Logger::LogInfo("[SPRITE_TRACE] ChangeDir IMAGES end");
   SRL::Logger::LogDebug("[SPRITE] Successfully navigated to IMAGES directory");
 
   for (i = 0; i < SPRITE_NUM; i++)
@@ -573,7 +576,9 @@ static void loadSprites()
     strcpy(name, spriteFile[i]);
 
     // Load TGA file using SRL bitmap loader
+    SRL::Logger::LogInfo("[SPRITE_TRACE] TGA load begin sprite=%d file=%s", i, name);
     tga = createBitmapTga(name);
+    SRL::Logger::LogInfo("[SPRITE_TRACE] TGA load end sprite=%d tga=%p", i, (void*)tga);
 
     if (tga == nullptr || tga->GetData() == nullptr)
     {
@@ -593,7 +598,9 @@ static void loadSprites()
     int32_t textureIndex = -1;
 
     // Always convert title TGAs to RGB555 so each image keeps its own palette colors.
+    SRL::Logger::LogInfo("[SPRITE_TRACE] texture upload begin sprite=%d w=%d h=%d", i, info.Width, info.Height);
     textureIndex = loadSpriteTextureRGB555(info, (const uint8_t *)tga->GetData());
+    SRL::Logger::LogInfo("[SPRITE_TRACE] texture upload end sprite=%d idx=%d", i, textureIndex);
 
     if (textureIndex < 0)
     {
@@ -834,16 +841,20 @@ void initSDL()
 
   const int32_t mainPaletteBank = Palette::initPalette();
   SDL_SetBlitPaletteBank((int16_t)mainPaletteBank);
+  SRL::Logger::LogInfo("[INIT_TRACE] initSDL: palette done");
 
   // The software gameplay layer and title sprites are drawn through VDP1.
   // Raise the default RGB sprite bank above NBG0 so center-layer UI is not hidden by the background.
   SRL::VDP2::SpriteLayer::SetPriority(SRL::VDP2::Priority::Layer7);
+  SRL::Logger::LogInfo("[INIT_TRACE] initSDL: SpriteLayer priority set");
 
   initPanelLayer((int16_t)mainPaletteBank);
+  SRL::Logger::LogInfo("[INIT_TRACE] initSDL: initPanelLayer done");
   makeSmokeBuf();
   clearLPanel();
   clearRPanel();
   refreshPanelLayer();
+  SRL::Logger::LogInfo("[INIT_TRACE] initSDL: panels/smoke done");
 
 #if HW_DEBUG
   SRL::Logger::LogInfo("[HW_DEBUG] Skipping CD-backed sprite loading");
@@ -1509,7 +1520,7 @@ int getButtonState()
 #else
   int btn = 0;
   int fireBtn1 = 0, fireBtn2 = 0, slowBtn1 = 0, slowBtn2 = 0;
-  if (gamepad->IsConnected())
+  if (gamepad && gamepad->IsConnected())
   {
     fireBtn1 = gamepad->IsHeld(Digital::Button::A);
     fireBtn2 = gamepad->IsHeld(Digital::Button::B);
