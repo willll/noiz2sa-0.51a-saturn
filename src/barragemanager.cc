@@ -27,6 +27,7 @@
 #include <srl_cd.hpp>
 #include <srl_memory.hpp>
 #include <srl_string.hpp>
+#include <ctype.h>
 
 #if HW_DEBUG
 #include "hw_debug_bulletml_embedded.hpp"
@@ -42,6 +43,88 @@ static Barrage *barrage[BARRAGE_MAX];
 
 static const char *BARRAGE_DIR_NAME[] = {
   "ZAKO", "MIDDLE", "BOSS"
+};
+
+static const char *const kZakoBlbNames[] = {
+  "248SHOT.BLB",
+  "3WAYCH.BLB",
+  "6GT.BLB",
+  "ACCEL.BLB",
+  "ACCUM.BLB",
+  "BAR.BLB",
+  "BEE.BLB",
+  "BITMOVE.BLB",
+  "IKAR5VR.BLB",
+  "KETR1BI.BLB",
+  "NWAY.BLB",
+  "RNDWAY.BLB",
+  "SLOWDWN.BLB",
+  "SPREAD.BLB",
+  "STAY.BLB",
+  "THRUST.BLB",
+  "TWIN.BLB",
+  "TWITEXT.BLB",
+};
+
+static const char *const kMiddleBlbNames[] = {
+  "1TONWAY.BLB",
+  "22WAY.BLB",
+  "23ACCEL.BLB",
+  "2ROUND.BLB",
+  "4WACCEL.BLB",
+  "4WAY.BLB",
+  "ACCEL16.BLB",
+  "DAIRBS2.BLB",
+  "DAIRBS3.BLB",
+  "GROW.BLB",
+  "GROWRND.BLB",
+  "IKAR3MD.BLB",
+  "IKARFL.BLB",
+  "KETR25W.BLB",
+  "KETR4LR.BLB",
+  "MNWAY.BLB",
+  "NWROLL.BLB",
+  "SHOTGUN.BLB",
+  "SPRE2BL.BLB",
+  "SPREABF.BLB",
+  "SPREADN.BLB",
+  "VRTLAS.BLB",
+  "XFIRE.BLB",
+};
+
+static const char *const kBossBlbNames[] = {
+  "57WAY.BLB",
+  "88WAY.BLB",
+  "BEEWND.BLB",
+  "BIT.BLB",
+  "DAIHIB2B.BLB",
+  "DAIHIB2R.BLB",
+  "DAIRBS1.BLB",
+  "DAIRBS4.BLB",
+  "DAIRBS5.BLB",
+  "DAIRBSL.BLB",
+  "DBLROL.BLB",
+  "FWD3WAY.BLB",
+  "GUWB2CF.BLB",
+  "GUWB3F3.BLB",
+  "GUWB4EB.BLB",
+  "IKADRC2.BLB",
+  "IKAR1MD.BLB",
+  "KETR2RK.BLB",
+  "KETR3FS.BLB",
+  "KETR4RB.BLB",
+  "KETR5AC.BLB",
+  "KETR5MS.BLB",
+  "PROGR1G.BLB",
+  "PROGR2S.BLB",
+  "PROGR3B.BLB",
+  "PROGR3W.BLB",
+  "PROGR5R.BLB",
+  "PROGR5W.BLB",
+  "PSYXABO.BLB",
+  "ROLL3PS.BLB",
+  "ROLLBAR.BLB",
+  "SIDCRK.BLB",
 };
 
 /** @brief Loads BulletML files for a barrage category from disc or embedded data. */
@@ -145,113 +228,149 @@ static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
   return i;
 #else
   int i = 0;
-  int listEntries = 0;
   int parseFailures = 0;
-  char fileName[256];
-  const char * listPath = "LIST.TXT";
-  char line[32];
+  const char *const *knownNames = nullptr;
+  int knownNameCount = 0;
 
   SRL::Logger::LogDebug("[BARRAGE] Reading BulletML files from directory: %s", dirPath);
 
-  // Change to the specified directory on CD
+  if (strcmp(dirPath, "ZAKO") == 0) {
+    knownNames = kZakoBlbNames;
+    knownNameCount = (int)(sizeof(kZakoBlbNames) / sizeof(kZakoBlbNames[0]));
+  } else if (strcmp(dirPath, "MIDDLE") == 0) {
+    knownNames = kMiddleBlbNames;
+    knownNameCount = (int)(sizeof(kMiddleBlbNames) / sizeof(kMiddleBlbNames[0]));
+  } else if (strcmp(dirPath, "BOSS") == 0) {
+    knownNames = kBossBlbNames;
+    knownNameCount = (int)(sizeof(kBossBlbNames) / sizeof(kBossBlbNames[0]));
+  }
+
+  if (knownNames == nullptr || knownNameCount <= 0) {
+    SRL::Logger::LogFatal("[BARRAGE] Unknown barrage directory: %s", dirPath);
+    SRL::System::Exit(1);
+  }
+
+  int phaseBase = 35;
+  int phaseSpan = 20;
+  if (strcmp(dirPath, "MIDDLE") == 0) {
+    phaseBase = 55;
+  } else if (strcmp(dirPath, "BOSS") == 0) {
+    phaseBase = 75;
+  }
+
+  SRL::Logger::LogInfo("[BARRAGE] ChangeDir root begin: %s", dirPath);
   SRL::Cd::ChangeDir((char *)nullptr);
   int32_t code = SRL::Cd::ChangeDir(dirPath);
-  
+  SRL::Logger::LogInfo("[BARRAGE] ChangeDir target end: %s code=%d", dirPath, code);
   if (code < 0) {
     SRL::Logger::LogFatal("[BARRAGE] Can't open directory: %s (error code: %d)", dirPath, code);
     SRL::System::Exit(1);
   }
-  
-  SRL::Logger::LogDebug("[BARRAGE] Opening list file: %s", listPath);
-  SRL::Cd::File listFile(listPath);
+  SRL::Logger::LogInfo("[BARRAGE] Directory ready: %s", dirPath);
 
-  if (!listFile.Exists()) {
-    SRL::Logger::LogFatal("[BARRAGE] LIST file does not exist: %s", listPath);
-    SRL::System::Exit(1);
-  }
-  
-  SRL::Logger::LogDebug("[BARRAGE] LIST file size: %d bytes", listFile.Size.Bytes);
-
-  // Read the LIST file line by line
-  int32_t bytesRead = 0;
-  uint8_t buffer[2048];
-  int32_t bytesToRead = (int32_t)listFile.Size.Bytes;
-  if (bytesToRead > (int32_t)sizeof(buffer)) {
-    bytesToRead = (int32_t)sizeof(buffer);
-  }
-  int32_t bufferSize = listFile.LoadBytes(0, bytesToRead, buffer);
-  
-  if (bufferSize <= 0) {
-    SRL::Logger::LogFatal("[BARRAGE] Failed to read LIST file or file is empty (bytes read: %d)", bufferSize);
-    SRL::System::Exit(1);
-  }
-    
-  while (bytesRead < bufferSize && i < BARRAGE_PATTERN_MAX) {
-    int lineLen = 0;
-    // Extract one line (ensure we stay within buffer bounds)
-    while (bytesRead < bufferSize && buffer[bytesRead] != '\n' && buffer[bytesRead] != '\r' && lineLen < 31) {
-      if (buffer[bytesRead] < 0x20 || buffer[bytesRead] > 0x7E) {
-        SRL::Logger::LogTrace("[BARRAGE] Encountered non-printable character 0x%02X at offset %d, stopping line extraction", buffer[bytesRead], bytesRead);
-        bytesRead++;
-        break;
-      }
-      line[lineLen++] = buffer[bytesRead++];
-    }
-    line[lineLen] = '\0';
-    while (bytesRead < bufferSize && (buffer[bytesRead] == '\n' || buffer[bytesRead] == '\r')) {
-      bytesRead++;
-    }
-    while (lineLen > 0 && (line[lineLen-1] == ' ' || line[lineLen-1] == '\t')) {
-      lineLen--;
-      line[lineLen] = '\0';
-    }
-    if (lineLen == 0) {
-      continue;
-    }
-    bool hasContent = false;
-    for (int j = 0; j < lineLen; j++) {
-      if ((line[j] >= 'A' && line[j] <= 'Z') || (line[j] >= 'a' && line[j] <= 'z') || (line[j] >= '0' && line[j] <= '9')) {
-        hasContent = true;
-        break;
-      }
-    }
-    if (!hasContent) {
-      SRL::Logger::LogTrace("[BARRAGE] Skipping invalid line from LIST (no alphanumeric characters)");
-      continue;
-    }
-    listEntries++;
-
-    int phaseBase = 35;
-    int phaseSpan = 60;
-    if (strcmp(dirPath, "ZAKO") == 0) {
-      phaseBase = 35;
-      phaseSpan = 20;
-    } else if (strcmp(dirPath, "MIDDLE") == 0) {
-      phaseBase = 55;
-      phaseSpan = 20;
-    } else if (strcmp(dirPath, "BOSS") == 0) {
-      phaseBase = 75;
-      phaseSpan = 20;
-    }
+  for (int entryIndex = 0; entryIndex < knownNameCount && i < BARRAGE_PATTERN_MAX; ++entryIndex) {
+    const char *resolvedName = knownNames[entryIndex];
     char step[64];
-    snprintf(step, sizeof(step), "Loading %s %d/%d", dirPath, listEntries, BARRAGE_PATTERN_MAX);
-    updateLoadingProgress(step, phaseBase + (listEntries * phaseSpan) / BARRAGE_PATTERN_MAX);
+    snprintf(step, sizeof(step), "Loading %s %d/%d", dirPath, entryIndex + 1, knownNameCount);
+    updateLoadingProgress(step, phaseBase + ((entryIndex + 1) * phaseSpan) / knownNameCount);
 
-    SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s/%s", dirPath, line);
+    if (entryIndex >= 13) {
+      SRL::Logger::LogInfo("[BARRAGE] Loading late entry: %s/%s (%d/%d)", dirPath, resolvedName, entryIndex + 1, knownNameCount);
+    }
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry begin: %s/%s", dirPath, resolvedName);
+    }
 
-    brg[i].bulletml = createFileBulletMlParser(line);
+    SRL::Cd::File patternFile(resolvedName);
+    if (entryIndex >= 13) {
+      SRL::Logger::LogInfo("[BARRAGE] Late entry exists check begin: %s/%s", dirPath, resolvedName);
+    }
+    if (!patternFile.Exists()) {
+      SRL::Logger::LogWarning("[BARRAGE] Missing pattern on disc: %s/%s", dirPath, resolvedName);
+      continue;
+    }
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry exists ok: %s/%s", dirPath, resolvedName);
+    }
+    if (entryIndex >= 13) {
+      SRL::Logger::LogInfo("[BARRAGE] Late entry exists check end: %s/%s", dirPath, resolvedName);
+    }
+
+    int32_t patternSize = (int32_t)patternFile.Size.Bytes;
+    if (patternSize <= 0) {
+      SRL::Logger::LogWarning("[BARRAGE] Empty pattern on disc: %s/%s", dirPath, resolvedName);
+      continue;
+    }
+
+    const int32_t sectorCount = (int32_t)patternFile.Size.Sectors;
+    const int32_t sectorBytes = (int32_t)patternFile.Size.SectorSize * sectorCount;
+
+    uint8_t *patternData = lwnew uint8_t[sectorBytes];
+    if (patternData == nullptr) {
+      SRL::Logger::LogFatal("[BARRAGE] Failed to allocate %d bytes for %s/%s", sectorBytes, dirPath, resolvedName);
+      SRL::System::Exit(1);
+    }
+
+    if (!patternFile.Open()) {
+      SRL::Logger::LogWarning("[BARRAGE] Failed to open pattern file: %s/%s", dirPath, resolvedName);
+      delete[] patternData;
+      continue;
+    }
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry open ok: %s/%s", dirPath, resolvedName);
+    }
+    if (entryIndex >= 13) {
+      SRL::Logger::LogInfo("[BARRAGE] Late entry open end: %s/%s", dirPath, resolvedName);
+    }
+
+    if (entryIndex >= 13) {
+      SRL::Logger::LogInfo("[BARRAGE] Late entry read begin: %s/%s sectors=%d", dirPath, resolvedName, sectorCount);
+    }
+    int32_t bytesRead = patternFile.ReadSectors(sectorCount, patternData);
+    if (entryIndex >= 13) {
+      SRL::Logger::LogInfo("[BARRAGE] Late entry read end: %s/%s bytes=%d", dirPath, resolvedName, bytesRead);
+    }
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry read ok: %s/%s bytes=%d", dirPath, resolvedName, bytesRead);
+    }
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry close begin: %s/%s", dirPath, resolvedName);
+    }
+    patternFile.Close();
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry close end: %s/%s", dirPath, resolvedName);
+    }
+    if (bytesRead <= 0) {
+      SRL::Logger::LogWarning("[BARRAGE] Failed to read pattern bytes: %s/%s", dirPath, resolvedName);
+      delete[] patternData;
+      continue;
+    }
+
+    SRL::Logger::LogDebug("[BARRAGE] Loading BulletML file: %s/%s", dirPath, resolvedName);
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry parser create begin: %s/%s", dirPath, resolvedName);
+    }
+    brg[i].bulletml = createEmbeddedBulletMlParser(resolvedName, patternData, (std::size_t)bytesRead);
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry parser create end: %s/%s", dirPath, resolvedName);
+      SRL::Logger::LogInfo("[BARRAGE] First entry build begin: %s/%s", dirPath, resolvedName);
+    }
     if (!brg[i].bulletml->build()) {
       parseFailures++;
-      SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, line);
+      SRL::Logger::LogFatal("[BARRAGE] Failed to parse BulletML file: %s/%s", dirPath, resolvedName);
       destroyBulletMlParser(brg[i].bulletml);
+      delete[] patternData;
       continue;
     }
+    if (entryIndex == 0) {
+      SRL::Logger::LogInfo("[BARRAGE] First entry build ok: %s/%s", dirPath, resolvedName);
+    }
+    if (entryIndex >= 13) {
+      SRL::Logger::LogInfo("[BARRAGE] Built late entry: %s/%s (%d/%d)", dirPath, resolvedName, entryIndex + 1, knownNameCount);
+    }
+    delete[] patternData;
     i++;
   }
-  
-  // Change back to root directory after loading all files
-  //SRL::Logger::LogTrace("[BARRAGE] Changing back to root directory");
-  SRL::Cd::ChangeDir((char *)nullptr);
 
   if (i <= 0) {
     SRL::Logger::LogFatal("[BARRAGE] No valid BLB patterns loaded from %s; aborting startup", dirPath);
@@ -478,7 +597,14 @@ void addBullets() {
     if ( scene >= 0 && !endless ) setClearScore();
     if ( scene%10 == 8 ) {
       sceneCnt = 999999;
+      // In HW_DEBUG, suppress all zako spawning during boss fights so entity
+      // pressure stays bounded regardless of how high the level has grown.
+      // Only the boss entity fires bullets, keeping total entities manageable.
+#if HW_DEBUG
+      zakoAppCnt = 0;
+#else
       zakoAppCnt = ZAKO_APP_TERM;
+#endif
       setBarrages(level, true, false);
       addBossBullet();
     } else {
@@ -509,6 +635,11 @@ void addBullets() {
       if ( i > 0 ) break;
       if ( zakoAppCnt <= 0 ) break;
       zakoAppCnt--;
+#if HW_DEBUG
+      // Suppress new zako spawning when entity pressure is already high.
+      // Prevents runaway accumulation that collapses FPS on real hardware.
+      if ( getActiveFoeCount() >= 150 ) continue;
+#endif
     }
     type = barrage[i]->type;
     // An additional enemy appears when there is no enemy of the same type.
@@ -536,7 +667,7 @@ void addBullets() {
   }
 }
 
-void bossDestroied() {
+void bossDestroyed() {
   if ( !endless ) {
     setClearScore();
     addLeftBonus();
@@ -552,7 +683,14 @@ void bossDestroied() {
 void addBossBullet() {
   Foe *bl;
   bossBullet = nullptr;
-
+#if HW_DEBUG
+  // At high level (cycle 4+), setBarrages() produces 5-6 boss-active bullets
+  // each running expensive 9-task BOSS BulletML.  That fills kMaxTotalProjectiles
+  // within 60 frames, driving moveFoes to ~424ms/frame on the SH-2.  Limit to
+  // one boss-active bullet in HW_DEBUG to keep the entity cascade manageable.
+  static constexpr int kHwDebugMaxBossActive = 1;
+  int hwDebugBossActiveCount = 0;
+#endif
   for ( int i=0 ; i<barrageNum ; i++ ) {
     if ( barrage[i]->type != 2 ) continue;
     if ( bossBullet == nullptr ) {
@@ -560,6 +698,10 @@ void addBossBullet() {
 		  BOSS_TYPE, BOSS_SHIELD, barrage[i]->bulletml);
       bossBullet = bl;
     } else {
+#if HW_DEBUG
+      if (hwDebugBossActiveCount >= kHwDebugMaxBossActive) continue;
+      ++hwDebugBossActiveCount;
+#endif
       bl = addFoeBossActiveBullet(SCAN_WIDTH_8/2, SCAN_HEIGHT_8/5, barrage[i]->rank, 512, 0,
 				  barrage[i]->bulletml);
     }
