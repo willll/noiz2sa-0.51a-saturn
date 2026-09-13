@@ -9,25 +9,31 @@
  *
  * @version $Revision: 1.4 $
  */
-#ifndef NOIZ2SA_H_
-#define NOIZ2SA_H_
+#pragma once
 
 #include <stdint.h>
 
 // Forward declarations
-namespace SRL { namespace Math { template<typename T> class Random; } }
+namespace SRL
+{
+    namespace Math
+    {
+        template <typename T>
+        class Random;
+    }
+}
 
 // Type alias for random generator (avoids macro conflicts)
 typedef SRL::Math::Random<unsigned int> RandomGenerator;
 
 // Global random number generator (initialized in initFirst)
-extern RandomGenerator* g_random;
+extern RandomGenerator *g_random;
 
 // Random number generation macros
 #define randN(N) (((N) > 0) ? (int)g_random->GetNumber(0u, (unsigned int)((N) - 1)) : 0)
 #define randNS(N) (((N) > 0) ? ((int)g_random->GetNumber(0u, (unsigned int)((N) * 2 - 1)) - (N)) : 0)
 #define randNS2(N) ((randNS((N)) + randNS((N))))
-#define absN(a) ((a) < 0 ? - (a) : (a))
+//#define absN(a) ((a) < 0 ? -(a) : (a))
 
 #define INTERVAL_BASE 16
 
@@ -85,4 +91,4 @@ void initStageClear();
  */
 void updateLoadingProgress(const char *step, int percent);
 
-#endif // NOIZ2SA_H_
+
