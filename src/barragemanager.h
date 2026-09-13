@@ -9,8 +9,7 @@
  *
  * @version $Revision: 1.2 $
  */
-#ifndef BARRAGEMANAGER_H_
-#define BARRAGEMANAGER_H_
+#pragma once
 
 #include <srl.hpp>
 #include "bulletml_binary/bulletmlparser_blb.hpp"
@@ -30,4 +29,4 @@ typedef struct {
 } Barrage;
 
 #include "brgmng_mtd.h"
-#endif
+

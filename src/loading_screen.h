@@ -11,8 +11,7 @@
  * touching any other game code.
  */
 
-#ifndef NOIZ2SA_LOADING_SCREEN_H_
-#define NOIZ2SA_LOADING_SCREEN_H_
+#pragma once
 
 #include <stdint.h>
 
@@ -102,4 +101,4 @@ private:
 // Global loading screen instance; defined in loading_screen.cpp.
 extern LoadingScreen g_loadingScreen;
 
-#endif // NOIZ2SA_LOADING_SCREEN_H_
+

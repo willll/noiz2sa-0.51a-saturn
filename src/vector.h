@@ -9,8 +9,7 @@
  *
  * @version $Revision: 1.1.1.1 $
  */
-#ifndef DEF_VECTOR
-#define DEF_VECTOR
+#pragma once
 
 #include <srl.hpp>
 
@@ -90,5 +89,3 @@ int vctSize(Vector *v);
  * @return Distance between the vectors.
  */
 int vctDist(Vector *v1, Vector *v2);
-
-#endif

@@ -9,8 +9,7 @@
  *
  * @version $Revision: 1.2 $
  */
-#ifndef FOE_H_
-#define FOE_H_
+#pragma once
 
 class FoeCommand;  // Forward declaration to avoid circular includes
 
@@ -98,4 +97,4 @@ void addFoeNormalBullet(Vector *pos, Fxp rank, int d, int spd, int color);
  * @param fe Foe instance to remove.
  */
 void removeFoe(Foe *fe);
-#endif
+
