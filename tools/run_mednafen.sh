@@ -35,6 +35,9 @@ echo "Launching Mednafen with: $CUE_FILE"
 echo "Emulator: Sega Saturn"
 echo ""
 
+# Default to audible output for manual runs; override with MEDNAFEN_SOUND=0 when needed.
+MEDNAFEN_SOUND="${MEDNAFEN_SOUND:-1}"
+
 # Run mednafen - will auto-detect system from CUE format
 # Note: Settings like -ss.bios_jp should be configured in mednafen.cfg
-exec mednafen -sound 0 -ss.cart debug -force_module ss "$CUE_FILE"
+exec mednafen -sound "$MEDNAFEN_SOUND" -ss.cart debug -force_module ss "$CUE_FILE"

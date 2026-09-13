@@ -30,7 +30,10 @@ mkdir -p "$ROOT_DIR/logs"
 
 ensure_emulator_log_output() {
   echo "[smoke] Configuring build for emulator-visible logs (SRL_LOG_OUTPUT=EMULATOR)"
-  cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" -DSRL_LOG_OUTPUT=EMULATOR
+  # SRL_LOG_LEVEL=INFO is required: this harness waits for the LogInfo-level
+  # "[STATE] TITLE screen ready" marker, which the production default
+  # (WARNING) compiles out.
+  cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" -DSRL_LOG_OUTPUT=EMULATOR -DSRL_LOG_LEVEL=INFO
 }
 
 while [[ $# -gt 0 ]]; do

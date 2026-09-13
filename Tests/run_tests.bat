@@ -58,7 +58,12 @@
 
   if [ "$1" = "mednafen" ]; then
     prepare_mednafen_test_files
-    command="mednafen -sound 0 -ss.cart debug -force_module ss $cue_path"
+    # stdbuf -oL forces line buffering: mednafen's stdout is a pipe here (not a
+    # tty), so glibc defaults to full buffering, which can leave the
+    # ***UT_END*** completion marker sitting in mednafen's internal buffer
+    # until process exit - the polling loop below would never see it in time
+    # and would time out even though the test actually passed.
+    command="stdbuf -oL mednafen -sound 0 -ss.cart debug -force_module ss $cue_path"
   elif [ "$1" = "kronos" ]; then
     command="kronos -a -ns -i $cue_path"
   elif [ "$1" = "USBGamers" ]; then
