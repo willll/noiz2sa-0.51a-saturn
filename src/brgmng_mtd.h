@@ -28,10 +28,8 @@ void setBarrages(Fxp level, int bm, int midMode);
 void addBullets();
 /** @brief Spawns boss bullets for the current barrage state. */
 void addBossBullet();
-/** @brief Handles boss destruction cleanup and transitions. */
-void bossDestroyed();
 /** @brief Backward-compatible alias for bossDestroyed(). */
-void bossDestroied();
+void bossDestroyed();
 
 extern int scene;
 extern int endless, insane;
