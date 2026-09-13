@@ -93,7 +93,16 @@ set(SRL_MAX_TEXTURES "75" CACHE STRING "Maximum textures")
 
 # Debug configuration
 option(DEBUG "Enable debug mode" OFF)
-set(SRL_LOG_LEVEL "INFO" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
+# LogInfo/LogWarning calls always pay their full snprintf formatting cost
+# whenever the compile-time level check passes, regardless of SRL_LOG_OUTPUT
+# (LogPrint's `if constexpr (lvl >= MinLevel)` gate is the only zero-cost
+# path - see SaturnRingLib/saturnringlib/srl_log.hpp). With ~480 LogInfo call
+# sites across this codebase, defaulting to INFO here meant every one of them
+# ran its formatting on every invocation in ordinary builds, not just
+# diagnostic ones. WARNING matches what HW_DEBUG already forces below.
+# No FORCE here (unlike before) so `-DSRL_LOG_LEVEL=INFO` still works for
+# local debugging, same as the existing SRL_LOG_OUTPUT override pattern.
+set(SRL_LOG_LEVEL "WARNING" CACHE STRING "Log level (0-4, empty = disabled)")
 set(SRL_LOG_OUTPUT "NONE" CACHE STRING "Log output method (EMULATOR, DEV_CART, NONE)")
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
@@ -171,29 +180,24 @@ else()
 endif()
 
 # Sound configuration
-option(SRL_USE_SGL_SOUND_DRIVER "Use SGL sound driver" OFF)
 option(SRL_ENABLE_FREQ_ANALYSIS "Enable frequency analysis" OFF)
 set(MATH_PERFORMANCE_MODE "TURBO" CACHE STRING "Math precision: ACCURATE, FAST, or TURBO")
 option(NOIZ2SA_ENABLE_SOUND "Enable in-game sound (PCM SFX + CDDA BGM)" ON)
 option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound backend" ON)
-
-# SRL SGL sound driver path uses WAV playback. Ponesound path uses PCM playback.
-# Keep these backend toggles mutually exclusive to avoid mixed configuration ambiguity.
-if(SRL_USE_SGL_SOUND_DRIVER AND NOIZ2SA_ENABLE_PCM_SFX)
-    message(FATAL_ERROR
-        "Invalid sound configuration: SRL_USE_SGL_SOUND_DRIVER=ON and NOIZ2SA_ENABLE_PCM_SFX=ON are mutually exclusive. "
-        "Use SGL driver for WAV SFX, or disable SGL and enable NOIZ2SA_ENABLE_PCM_SFX for Ponesound PCM SFX.")
-endif()
 
 # Gameplay performance toggles
 option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" ON)
 set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=half, 4=quarter)")
 set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
 option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
+option(NOIZ2SA_REFRESH_ONLY_SYNC "Use input-refresh-only frame sync path (bypass slSynch/SRL sync calls)" OFF)
 option(NOIZ2SA_DEBUG_AUTOSTART_SMOKE "Debug-only: auto-start gameplay from title for deterministic smoke runs" OFF)
 option(NOIZ2SA_PERF_MODE "Enable performance mode (disables non-essential draws for benchmarking)" OFF)
 option(NOIZ2SA_BLEND_SKIP "Skip alpha compositing in blendScreen (copy only) — measures FPS headroom without alpha cost" OFF)
 option(NOIZ2SA_DISABLE_BULLET_SLOWDOWN "Disable bullet slowdown when foe count is high" ON)
+option(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY "Enable startup-only BulletML runtime allocation policy" OFF)
+option(NOIZ2SA_DISABLE_FOECMD_PREALLOC "Disable startup FoeCommand pool preallocation (debug corruption mitigation)" OFF)
+option(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK "Skip per-frame soundTick() in refresh-only sync builds" OFF)
 option(NOIZ2SA_ENABLE_INVINCIBLE "Make player invincible (debug/testing)" OFF)
 option(NOIZ2SA_ENABLE_AUTO_SHOT "Automatically fire without button input (debug/testing)" OFF)
 set(NOIZ2SA_SPAWN_BUDGET_PER_TICK "2" CACHE STRING "Maximum new enemies spawned per tick")
@@ -205,6 +209,13 @@ set_property(CACHE HW_DEBUG_ENDLESS_STAGE PROPERTY STRINGS 10 11 12 13)
 
 if(HW_DEBUG)
     set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
+    # INFO, not WARNING: the hardware test harness (test_hardware_full.sh)
+    # detects liveness/completion purely by grepping LogInfo-level markers
+    # ("[HW_DEBUG] Entering initGame()", "IN_GAME (stage N) ready", etc.) on
+    # the DEV_CART console - none of its other candidate markers exist in the
+    # source. HW_DEBUG is the diagnostic build, so paying LogInfo's
+    # formatting cost here is expected, unlike the production default above.
+    set(SRL_LOG_LEVEL "INFO" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
     set(NOIZ2SA_SHOW_FREE_HWRAM ON CACHE BOOL "Display free High Work RAM on screen" FORCE)
     set(NOIZ2SA_SHOW_FREE_LWRAM ON CACHE BOOL "Display free Low Work RAM on screen" FORCE)
     set(NOIZ2SA_ENABLE_SOUND OFF CACHE BOOL "Enable in-game sound (PCM SFX + CDDA BGM)" FORCE)
@@ -220,7 +231,12 @@ if(HW_DEBUG)
     include("${CMAKE_SOURCE_DIR}/cmake/generate_hw_debug_bulletml.cmake")
 endif()
 
-if(SRL_LOG_OUTPUT STREQUAL "DEV_CART")
+# Despite the name, this also covers EMULATOR output: the verbose
+# HEARTBEAT/[PERF] breakdown logging it gates is equally useful read from
+# mednafen's console (SRL_LOG_OUTPUT=EMULATOR) as from a real DEV_CART, and
+# gating it to DEV_CART only meant this telemetry was unreachable from the
+# emulator entirely, forcing real hardware cycles for routine perf profiling.
+if(SRL_LOG_OUTPUT STREQUAL "DEV_CART" OR SRL_LOG_OUTPUT STREQUAL "EMULATOR")
     add_compile_definitions(NOIZ2SA_LOG_TO_DEV_CART=1)
 else()
     add_compile_definitions(NOIZ2SA_LOG_TO_DEV_CART=0)
@@ -235,6 +251,7 @@ set(SGL_MAX_VERTICES "1800" CACHE STRING "Maximum vertices")
 set(SGL_MAX_POLYGONS "1200" CACHE STRING "Maximum polygons")
 set(SGL_MAX_EVENTS "64" CACHE STRING "Maximum events")
 set(SGL_MAX_WORKS "256" CACHE STRING "Maximum work units")
+set(SGL_SLAVE_BUF_SIZE "71680" CACHE STRING "Slave buffer size")
 
 # Memory allocator
 set(SRL_MALLOC_METHOD "TLSF" CACHE STRING "Memory allocator method (TLSF or empty)")
@@ -313,14 +330,6 @@ elseif(NOIZ2SA_POST_LOAD_BG_COLOR STREQUAL "BLACK")
     )
 endif()
 
-# Sound
-if(SRL_USE_SGL_SOUND_DRIVER)
-    add_compile_definitions(SRL_USE_SGL_SOUND_DRIVER=1)
-    if(SRL_ENABLE_FREQ_ANALYSIS)
-        add_compile_definitions(SRL_ENABLE_FREQ_ANALYSIS=1)
-    endif()
-endif()
-
 if(NOIZ2SA_ENABLE_SOUND)
     add_compile_definitions(NOIZ2SA_ENABLE_SOUND=1)
 else()
@@ -348,6 +357,12 @@ else()
     add_compile_definitions(NOIZ2SA_DISABLE_DOUBLE_BUFFER=0)
 endif()
 
+if(NOIZ2SA_REFRESH_ONLY_SYNC)
+    add_compile_definitions(NOIZ2SA_REFRESH_ONLY_SYNC=1)
+else()
+    add_compile_definitions(NOIZ2SA_REFRESH_ONLY_SYNC=0)
+endif()
+
 if(NOIZ2SA_PERF_MODE)
     add_compile_definitions(NOIZ2SA_PERF_MODE=1)
 else()
@@ -364,6 +379,24 @@ if(NOIZ2SA_DISABLE_BULLET_SLOWDOWN)
     add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=1)
 else()
     add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=0)
+endif()
+
+if(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY)
+    add_compile_definitions(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY=1)
+else()
+    add_compile_definitions(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY=0)
+endif()
+
+if(NOIZ2SA_DISABLE_FOECMD_PREALLOC)
+    add_compile_definitions(NOIZ2SA_DISABLE_FOECMD_PREALLOC=1)
+else()
+    add_compile_definitions(NOIZ2SA_DISABLE_FOECMD_PREALLOC=0)
+endif()
+
+if(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK)
+    add_compile_definitions(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK=1)
+else()
+    add_compile_definitions(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK=0)
 endif()
 
 if(NOIZ2SA_ENABLE_INVINCIBLE)
@@ -397,6 +430,7 @@ add_compile_definitions(
     SGL_MAX_POLYGONS=${SGL_MAX_POLYGONS}
     SGL_MAX_EVENTS=${SGL_MAX_EVENTS}
     SGL_MAX_WORKS=${SGL_MAX_WORKS}
+    SGL_SLAVE_BUF_SIZE=${SGL_SLAVE_BUF_SIZE}
 )
 
 # TLSF Allocator
@@ -744,32 +778,6 @@ add_custom_command(TARGET ${CD_NAME}.elf POST_BUILD
     VERBATIM
 )
 
-# Copy sound driver files when SRL_USE_SGL_SOUND_DRIVER is enabled
-if(SRL_USE_SGL_SOUND_DRIVER)
-    set(SGL_DRV_DIR "${SRL_ROOT}/modules/sgl/DRV")
-    if(EXISTS "${SGL_DRV_DIR}")
-        add_custom_command(TARGET noiz2sa.elf POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${SGL_DRV_DIR}" "${CMAKE_BINARY_DIR}/cd/data"
-            COMMENT "Copying SGL sound driver files to cd/data"
-        )
-    else()
-        message(WARNING "SGL_USE_SGL_SOUND_DRIVER enabled but DRV directory not found: ${SGL_DRV_DIR}")
-    endif()
-    
-    # Copy frequency analysis DSP file if enabled
-    if(SRL_ENABLE_FREQ_ANALYSIS)
-        set(SGL_DSP_FILE "${SRL_ROOT}/modules/sgl/DSP/3BANDANA.EXB")
-        if(EXISTS "${SGL_DSP_FILE}")
-            add_custom_command(TARGET noiz2sa.elf POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy "${SGL_DSP_FILE}" "${CMAKE_BINARY_DIR}/cd/data/3BANDANA.EXB"
-                COMMENT "Copying frequency analysis DSP file"
-            )
-        else()
-            message(WARNING "SRL_ENABLE_FREQ_ANALYSIS enabled but 3BANDANA.EXB not found: ${SGL_DSP_FILE}")
-        endif()
-    endif()
-endif()
-
 # ============================================================================
 # CD Image Generation Targets (following shared.mk build_bin_cue pattern)
 # ============================================================================
@@ -872,10 +880,7 @@ else()
     message(STATUS "Log output method: NONE")
 endif()
 message(STATUS "Maximum log length: ${SRL_DEBUG_MAX_LOG_LENGTH}")
-message(STATUS "SGL sound driver: ${SRL_USE_SGL_SOUND_DRIVER}")
-if(SRL_USE_SGL_SOUND_DRIVER)
-    message(STATUS "Frequency analysis: ${SRL_ENABLE_FREQ_ANALYSIS}")
-endif()
+
 if(SRL_MALLOC_METHOD STREQUAL "TLSF")
     message(STATUS "Memory allocator: TLSF")
 else()
@@ -1592,6 +1597,14 @@ add_test(
             --log "${CMAKE_SOURCE_DIR}/Tests/uts_memory_pressure.log"
 )
 set_tests_properties(memory_pressure_policy_test PROPERTIES TIMEOUT 700)
+
+add_test(
+    NAME title_menu_smoke_test
+    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_title_smoke_campaign.sh"
+            --emulator mednafen
+            --strict
+)
+set_tests_properties(title_menu_smoke_test PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME hiscore_persistence_test
