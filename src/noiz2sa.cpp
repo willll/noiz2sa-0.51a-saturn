@@ -9,6 +9,9 @@
  *
  * @version $Revision: 1.8 $
  */
+// TEMP: forces the cross-CPU cache-coherency probe below; remove with the probe.
+#define NOIZ2SA_CACHE_COHERENCY_PROBE 1
+
 #include "SDL.h"
 #include <stdio.h>
 #include <srl.hpp> // for malloc/free, atoi
@@ -16,6 +19,8 @@
 #include <srl_timer.hpp>
 #include <srl_log.hpp>    // for logging
 #include <srl_system.hpp> // for exit
+#include <srl_slave.hpp>  // TEMP: cross-CPU cache-coherency probe
+#include "memory_factory.h" // TEMP: cross-CPU cache-coherency probe (allocateLowWorkRamItems)
 
 // Include Random class (must be AFTER SRL headers to avoid macro conflicts)
 #include <impl/random.hpp>
@@ -547,21 +552,28 @@ static void move()
   const int liveProjectiles = getLiveProjectileCount();
   const uint32_t hwFree = (uint32_t)SRL::Memory::HighWorkRam::GetFreeSpace();
   const int foeCmdCacheBudget = getFoeCommandCacheBudget(hwFree, status);
+  static bool sTitleLatchRecoveryCleared = false;
   if (hasBulletMlAllocFailureLatched())
   {
     trimFoeCommandPoolCachedCount(0);
     BulletMLRunnerImpl::ReleaseTaskBufferCache();
-    if (status == TITLE)
+    if (status == TITLE && !sTitleLatchRecoveryCleared)
     {
-      // Attract mode LWRAM recovery: destroy all active foes to free their LWRAM
-      // task buffer allocations. trimFoeCommandPoolCachedCount(0) above reclaims
-      // pooled FoeCommand nodes on subsequent ticks. Once the latch clears (~30
-      // ticks), new task buffer allocations succeed and attract mode resumes.
+      // Attract mode LWRAM recovery: destroy all active foes once to free
+      // their LWRAM task buffer allocations. trimFoeCommandPoolCachedCount(0)
+      // above reclaims pooled FoeCommand nodes on subsequent ticks. Once the
+      // latch clears (~30 ticks), new task buffer allocations succeed and
+      // attract mode resumes. Only clear once per latch episode - repeating
+      // it every tick for the full ~30-tick duration just makes every enemy
+      // on screen flicker away and back for no additional recovery benefit,
+      // since no new foe gets a command while the latch is held anyway.
       clearFoes();
+      sTitleLatchRecoveryCleared = true;
     }
   }
   else
   {
+    sTitleLatchRecoveryCleared = false;
     trimFoeCommandPoolCachedCount(foeCmdCacheBudget);
     if (hwFree > 0u && hwFree < 20000u)
     {
@@ -1348,6 +1360,194 @@ static void logPerfTraceWindowAndReset()
   gDrawPhaseFrameCount = 0;
 }
 
+// TEMP DIAGNOSTIC: cross-CPU (master/slave SH2) shared-memory cache-coherency
+// probe. Dispatches a task to the slave that stamps a distinctive, changing
+// pattern into a buffer; the master immediately polls IsDone() and verifies
+// every word against the expected pattern, in both HWRAM (plain static,
+// normally cached) and LWRAM (allocateLowWorkRamItems, matching
+// BackgroundRenderTask's buffer placement) to determine whether either
+// placement exhibits stale reads across the master/slave boundary. Answers
+// the open question of whether offloading real per-frame work (e.g.
+// drawBullets) to the slave needs explicit cache handling, before building
+// that feature on an unverified assumption. Remove after use.
+#if NOIZ2SA_CACHE_COHERENCY_PROBE
+namespace {
+
+constexpr int kProbeBufWords = 256;
+constexpr uint32_t kProbeMultiplier = 1000003u;
+
+static uint32_t sProbeHwramBuf[kProbeBufWords];
+
+// Canary: a SEPARATE HWRAM buffer the MASTER itself writes (normal cached
+// store) immediately before each dispatch, to directly test whether purging
+// the master's cache (to see the slave's fresh writes) also discards the
+// master's OWN not-yet-evicted dirty writes elsewhere in shared memory -
+// exactly the risk a blind purge-before-flipScreen() would carry for the
+// real drawBullets design (background/foes/ship also write into `buf`
+// earlier in the same frame via normal cached access).
+static uint32_t sMasterCanaryBuf[kProbeBufWords];
+constexpr uint32_t kCanaryMultiplier = 2000003u;
+
+// Cache Control Register purge, same register/bit srl_slave.hpp already uses
+// to purge the SLAVE's own instruction cache. SH-2 has a unified I/D cache,
+// so this purges data too; used here on the MASTER to force a fresh read.
+static inline void purgeMasterCache()
+{
+  *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
+  asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop" ::: "memory");
+}
+
+class CoherencyProbeTask : public SRL::Types::ITask
+{
+public:
+  uint32_t generation = 0;
+  uint32_t *target = nullptr;
+
+  void SetTarget(uint32_t *t) { target = t; }
+
+protected:
+  void Do() override
+  {
+    generation++;
+    if (target == nullptr)
+    {
+      return;
+    }
+    for (int i = 0; i < kProbeBufWords; i++)
+    {
+      target[i] = generation * kProbeMultiplier + (uint32_t)i;
+    }
+  }
+};
+
+static bool probeVerifyBuffer(const uint32_t *buf, uint32_t expectedGen)
+{
+  for (int i = 0; i < kProbeBufWords; i++)
+  {
+    const uint32_t expected = expectedGen * kProbeMultiplier + (uint32_t)i;
+    if (buf[i] != expected)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+} // namespace
+
+// Dispatches `task`, then busy-spins on IsDone() with NO SRL::Core::Synchronize()
+// calls at all - this is the pattern the real drawBullets-on-slave design
+// needs for its final "confirm done right before flipScreen()" step, since
+// mid-frame there is no frame boundary to pace against. Returns the number
+// of spin iterations it took (0 = already done on first check), or -1 if it
+// never completed within maxSpinIterations.
+static int32_t spinWaitForProbeTaskDone(CoherencyProbeTask &task, uint32_t maxSpinIterations)
+{
+  uint32_t spins = 0;
+  while (!task.IsDone())
+  {
+    if (spins >= maxSpinIterations)
+    {
+      return -1;
+    }
+    spins++;
+  }
+  return (int32_t)spins;
+}
+
+static void runCacheCoherencyProbe()
+{
+  uint32_t *lwramBuf = allocateLowWorkRamItems<uint32_t>(kProbeBufWords);
+  SRL::Logger::LogWarning("[CACHE_PROBE] hwramBuf=%p lwramBuf=%p", (void *)sProbeHwramBuf, (void *)lwramBuf);
+
+  static CoherencyProbeTask hwTask;
+  static CoherencyProbeTask lwTask;
+  hwTask.SetTarget(sProbeHwramBuf);
+  lwTask.SetTarget(lwramBuf);
+  hwTask.ResetTask();
+  lwTask.ResetTask();
+
+  uint32_t hwChecked = 0, hwMismatches = 0, hwNeverDone = 0, hwFirstMismatchGen = 0;
+  uint32_t lwChecked = 0, lwMismatches = 0, lwNeverDone = 0, lwFirstMismatchGen = 0;
+  uint32_t hwSpinMax = 0, lwSpinMax = 0;
+  uint64_t hwSpinSum = 0, lwSpinSum = 0;
+
+  constexpr uint32_t kProbeIterations = 100;
+  constexpr uint32_t kMaxSpinIterations = 2000000;
+  for (uint32_t iter = 0; iter < kProbeIterations; iter++)
+  {
+    const uint32_t hwExpectGen = hwTask.generation + 1;
+    SRL::Slave::ExecuteOnSlave(hwTask);
+    hwChecked++;
+    const int32_t hwSpins = spinWaitForProbeTaskDone(hwTask, kMaxSpinIterations);
+    if (hwSpins < 0)
+    {
+      hwNeverDone++;
+    }
+    else
+    {
+      hwSpinSum += (uint32_t)hwSpins;
+      if ((uint32_t)hwSpins > hwSpinMax) hwSpinMax = (uint32_t)hwSpins;
+      if (!probeVerifyBuffer(sProbeHwramBuf, hwExpectGen))
+      {
+        hwMismatches++;
+        if (hwFirstMismatchGen == 0)
+        {
+          hwFirstMismatchGen = hwExpectGen;
+        }
+      }
+    }
+
+    const uint32_t lwExpectGen = lwTask.generation + 1;
+    SRL::Slave::ExecuteOnSlave(lwTask);
+    lwChecked++;
+    const int32_t lwSpins = spinWaitForProbeTaskDone(lwTask, kMaxSpinIterations);
+    if (lwSpins < 0)
+    {
+      lwNeverDone++;
+    }
+    else
+    {
+      lwSpinSum += (uint32_t)lwSpins;
+      if ((uint32_t)lwSpins > lwSpinMax) lwSpinMax = (uint32_t)lwSpins;
+      if (!probeVerifyBuffer(lwramBuf, lwExpectGen))
+      {
+        lwMismatches++;
+        if (lwFirstMismatchGen == 0)
+        {
+          lwFirstMismatchGen = lwExpectGen;
+        }
+      }
+    }
+
+    if ((iter % 10) == 0)
+    {
+      SRL::Logger::LogWarning(
+        "[CACHE_PROBE2] progress iter=%lu hw(checked=%lu mism=%lu neverDone=%lu spinMax=%lu) lw(checked=%lu mism=%lu neverDone=%lu spinMax=%lu)",
+        (unsigned long)iter,
+        (unsigned long)hwChecked, (unsigned long)hwMismatches, (unsigned long)hwNeverDone, (unsigned long)hwSpinMax,
+        (unsigned long)lwChecked, (unsigned long)lwMismatches, (unsigned long)lwNeverDone, (unsigned long)lwSpinMax);
+    }
+  }
+
+  SRL::Logger::LogWarning(
+    "[CACHE_PROBE2] FINAL hw(checked=%lu mism=%lu neverDone=%lu spinMax=%lu spinAvg=%lu) lw(checked=%lu mism=%lu neverDone=%lu spinMax=%lu spinAvg=%lu)",
+    (unsigned long)hwChecked, (unsigned long)hwMismatches, (unsigned long)hwNeverDone, (unsigned long)hwSpinMax,
+    (unsigned long)(hwChecked > 0 ? hwSpinSum / hwChecked : 0),
+    (unsigned long)lwChecked, (unsigned long)lwMismatches, (unsigned long)lwNeverDone, (unsigned long)lwSpinMax,
+    (unsigned long)(lwChecked > 0 ? lwSpinSum / lwChecked : 0));
+
+  while (true)
+  {
+    SRL::Logger::LogWarning(
+      "[CACHE_PROBE] HALT hw(checked=%lu mism=%lu neverDone=%lu) lw(checked=%lu mism=%lu neverDone=%lu) -- probe complete, see FINAL line above",
+      (unsigned long)hwChecked, (unsigned long)hwMismatches, (unsigned long)hwNeverDone,
+      (unsigned long)lwChecked, (unsigned long)lwMismatches, (unsigned long)lwNeverDone);
+    SRL::Core::Synchronize();
+  }
+}
+#endif // NOIZ2SA_CACHE_COHERENCY_PROBE
+
 int main()
 {
   SRL::Logger::LogInfo("[MAIN] Noiz2sa startup (v%d)", VERSION_NUM);
@@ -1365,6 +1565,10 @@ int main()
   SRL::Logger::LogInfo("[MAIN_TRACE] before SRL::Core::Initialize");
   SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
   SRL::Logger::LogInfo("[MAIN_TRACE] after SRL::Core::Initialize");
+
+#if NOIZ2SA_CACHE_COHERENCY_PROBE
+  runCacheCoherencyProbe(); // TEMP: never returns
+#endif
 
   // Define loading steps for main()
   const char* mainSteps[] = {
@@ -1425,6 +1629,16 @@ int main()
   initFirst();
   SRL::Logger::LogInfo("[MAIN_TRACE] step: initFirst end");
 
+  // Allocate the foe[] pool from LWRAM once, before the first initFoes()
+  // call (from initTitle()/initGame()). See allocateFoePool()'s comment in
+  // foe.cc: this frees ~86KB of HWRAM that a plain static array would
+  // otherwise take from the same budget program code/data shares with the
+  // dynamic heap on this platform.
+  if (!allocateFoePool())
+  {
+    SRL::System::Exit(1);
+  }
+
   // Pre-allocate FoeCommand pool after startup initialization has configured
   // memory systems and loaded startup assets. Doing this too early allows
   // later init paths to stomp the free-list metadata.
@@ -1452,12 +1666,34 @@ int main()
     }
   }
 
+  // Pre-warm the single-slot growth cache used when a runner needs more than
+  // TaskBufferPool::kSlotCapacity concurrent tasks. Under the startup-only
+  // allocation policy, ensureTaskCapacity() cannot allocate during gameplay,
+  // so without this the cache stays empty and any pattern needing growth
+  // silently fails once gameplay starts.
+  {
+    const bool taskCacheOk = BulletMLRunnerImpl::PreallocateTaskBufferCache(96);
+    SRL::Logger::LogInfo("[TASK_POOL] growth cache preallocate %s capacity=%u",
+                         taskCacheOk ? "OK" : "FAILED",
+                         (unsigned)BulletMLRunnerImpl::GetTaskBufferCacheCapacity());
+    if (!taskCacheOk) {
+      SRL::Logger::LogWarning("[TASK_POOL] growth cache preallocation FAILED - task growth beyond slot capacity will be suppressed");
+    }
+  }
+
   // Pre-populate BulletML state + small-array pools during startup so gameplay
   // can run with startup-only allocation policy enabled.
   {
     const uint16_t statePreallocCount = 32u;
-    const uint16_t nodeArrayPreallocCounts[8] = {32u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
-    const uint16_t parameterArrayPreallocCounts[8] = {32u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    // Buckets are indexed by (capacity/4)-1, i.e. capacities 4,8,12,...,32.
+    // Every bucket needs some coverage: a bucket left at 0 means any
+    // node/parameter array landing in that size class can never be created
+    // during gameplay under the startup-only allocation policy. Counts taper
+    // off for larger capacities since most BulletML fire/action nodes have
+    // few children/params; total reserved LWRAM for both arrays combined is
+    // only a few KB.
+    const uint16_t nodeArrayPreallocCounts[8] = {32u, 16u, 8u, 8u, 4u, 4u, 2u, 2u};
+    const uint16_t parameterArrayPreallocCounts[8] = {32u, 16u, 8u, 4u, 2u, 2u, 1u, 1u};
 
     const bool preallocOk = preallocateBulletMlStatePools(statePreallocCount,
                                                            nodeArrayPreallocCounts,
@@ -1475,6 +1711,37 @@ int main()
 
     if (!preallocOk) {
       SRL::Logger::LogWarning("[BML-PREALLOC] FAILED - startup pool targets not fully populated");
+    }
+  }
+
+  // Pre-populate the BulletMLRunnerImpl object pool and its impls_ array-pool
+  // buckets. Every FoeCommand recreation (bullet-pattern loop restart) used
+  // to allocate/free a BulletMLRunnerImpl (and its impls_[1] array) raw via
+  // lwnew/delete - the one BulletML allocation site the earlier zero-alloc
+  // steps missed. Left unpooled, that churn fragments the LWRAM heap over a
+  // long session and progressively slows every later lwnew call (confirmed
+  // root cause of FPS collapsing over time). Sized to match the FoeCommand
+  // pool (256) since most patterns need exactly one impl per FoeCommand.
+  {
+    const uint16_t runnerImplPreallocCount = 256u;
+    // impls_ is almost always capacity 1 (a single top-level action), so
+    // weight bucket 0 heavily; a handful of higher buckets cover patterns
+    // with a few concurrent top-level actions.
+    const uint16_t runnerImplArrayPreallocCounts[8] = {256u, 8u, 4u, 2u, 2u, 1u, 1u, 1u};
+
+    const bool runnerImplPoolOk = preallocateBulletMlRunnerImplPool(runnerImplPreallocCount);
+    const bool runnerImplArrayOk = preallocateBulletMlRunnerImplArrayPool(runnerImplArrayPreallocCounts);
+    SRL::Logger::LogInfo(
+        "[BML-PREALLOC] runner_impl=%u impl_arr4=%u ok=%d/%d cached_impl=%lu lwfree=%lu",
+        (unsigned)runnerImplPreallocCount,
+        (unsigned)runnerImplArrayPreallocCounts[0],
+        runnerImplPoolOk ? 1 : 0,
+        runnerImplArrayOk ? 1 : 0,
+        (unsigned long)getBulletMlRunnerImplCachedCount(),
+        (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+
+    if (!runnerImplPoolOk || !runnerImplArrayOk) {
+      SRL::Logger::LogWarning("[BML-PREALLOC] runner-impl pool FAILED - startup pool targets not fully populated");
     }
   }
 
@@ -1498,9 +1765,18 @@ int main()
   SRL::Logger::LogInfo("[MAIN_TRACE] step: g_loadingScreen.Clear end");
 
   SRL::Logger::LogInfo("[MAIN_TRACE] step: initGamepad begin");
-  initGamepad();
-  SRL::Logger::LogInfo("[MAIN_TRACE] step: initGamepad end");
-  SRL::Logger::LogInfo("[MAIN] Gamepad initialized");
+  const bool gamepadReady = initGamepad();
+  SRL::Logger::LogInfo("[MAIN_TRACE] step: initGamepad end ready=%d", gamepadReady ? 1 : 0);
+  if (gamepadReady) {
+    SRL::Logger::LogInfo("[MAIN] Gamepad initialized");
+  } else {
+    // Non-fatal by design (SRL::Logger::LogFatal here would halt automated/
+    // headless test campaigns that boot without a controller attached);
+    // every gamepad-> use site already null/IsConnected()-checks. Still
+    // surface this loudly since a player with no working controller
+    // otherwise gets no feedback beyond a log line.
+    SRL::Logger::LogWarning("[MAIN] Gamepad NOT available; continuing with no controller input");
+  }
 
   SRL::Logger::LogInfo("[MAIN] Main game loop starting");
 
