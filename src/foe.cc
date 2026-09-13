@@ -14,7 +14,9 @@
 
 #include "SDL.h"
 #include <stdlib.h>
+#include <string.h>
 #include <srl_memory.hpp>
+#include <srl_log.hpp>
 
 #include "noiz2sa.h"
 #include "screen.h"
@@ -30,12 +32,20 @@
 #include "attractmanager.h"
 #include "brgmng_mtd.h"
 #include "letterrender.h"
+#include "memory_factory.h"
 
 #define FOE_MAX 1024
 #define FOE_TYPE_MAX 4
 #define SHIP_HIT_WIDTH (512 * 512)
 
-static Foe foe[FOE_MAX];
+// foe[] is placed in LWRAM (allocated once at startup, before any gameplay
+// tick) rather than as a plain static array. Plain statics all land in the
+// same physical HWRAM region as program code/data on this platform (there is
+// no separate ROM region and no linker-script LWRAM section), and this
+// single 86KB array was a large share of what left HWRAM too tight to load
+// real textures once sound was compiled in. LWRAM sits almost completely
+// unused by comparison, so this is pure headroom recovered for free.
+static Foe* foe = nullptr;
 static int foeActiveIndices[FOE_MAX];
 static int foeActivePos[FOE_MAX];
 static int foeActiveCount = 0;
@@ -245,6 +255,26 @@ void removeFoe(Foe *fe)
   {
     destroyFoeCommand(fe->cmd);
   }
+}
+
+/** @brief Allocates the foe[] pool from LWRAM. Call exactly once at startup,
+ *  before the first initFoes() call - initFoes() reads fe->cmd on every
+ *  slot, so this memory must be zeroed before that first call, not just
+ *  allocated. */
+bool allocateFoePool()
+{
+  if (foe != nullptr)
+  {
+    return true;
+  }
+  foe = allocateLowWorkRamItems<Foe>(FOE_MAX);
+  if (foe == nullptr)
+  {
+    SRL::Logger::LogFatal("[FOE] Failed to allocate foe[%d] pool from LWRAM", FOE_MAX);
+    return false;
+  }
+  memset(foe, 0, sizeof(Foe) * FOE_MAX);
+  return true;
 }
 
 /** @brief Initialises all foe pools and counters. */
@@ -730,7 +760,7 @@ void moveFoes()
               addEnemyFrag(&(fe->pos), mx, my, fe->type);
               if (fe->type == BOSS_TYPE)
               {
-                bossDestroied();
+                bossDestroyed();
                 playChunk(3);
               }
               else
