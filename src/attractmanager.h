@@ -73,5 +73,3 @@ void moveTitleMenu();
 void movePause();
 /** @brief Draws the pause screen. */
 void drawPause();
-/** @brief Draws the title screen. */
-void drawTitle();
