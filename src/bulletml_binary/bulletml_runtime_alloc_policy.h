@@ -1,5 +1,4 @@
-#ifndef BULLETML_RUNTIME_ALLOC_POLICY_H_
-#define BULLETML_RUNTIME_ALLOC_POLICY_H_
+#pragma once
 
 #include "bulletmlrunner.hpp"
 #include "bulletmlstate.hpp"
@@ -36,5 +35,3 @@ inline void setBulletMlStartupOnlyAllocationPolicy(bool enabled) {
     // Keep policy transitions deterministic; callers enable preallocation explicitly.
     endBulletMlStartupPreallocationPhase();
 }
-
-#endif // BULLETML_RUNTIME_ALLOC_POLICY_H_

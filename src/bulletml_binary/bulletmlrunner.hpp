@@ -266,7 +266,6 @@ public:
           expand_ref_id_(0),
           expand_fanout_(0),
           expand_child_count_(0),
-          capacity_fail_logs_(0),
           peak_task_count_(0) {
         if (!state || !runner_) {
             end_ = true;
@@ -279,7 +278,7 @@ public:
                 static_cast<void*>(this),
                 static_cast<void*>(runner_));
             end_ = true;
-            freeBulletMlObject(state);
+            destroyBulletMlState(state);
             return;
         }
 
@@ -291,7 +290,7 @@ public:
         copyParameters(state->getParameters(), state->getParameterCount());
 
         if (!ensureTaskCapacity(static_cast<uint16_t>(nc + 8))) {
-            freeBulletMlObject(state);
+            destroyBulletMlState(state);
             end_ = true;
             return;
         }
@@ -302,7 +301,7 @@ public:
             }
         }
 
-        freeBulletMlObject(state);
+        destroyBulletMlState(state);
         wait_until_turn_ = runner_->getTurn();
     }
 
@@ -1661,12 +1660,135 @@ private:
     uint32_t expand_ref_id_;
     uint32_t expand_fanout_;
     uint32_t expand_child_count_;
-    uint16_t capacity_fail_logs_;
+    // Shared across every instance (not per-object) so this genuinely caps
+    // total log volume for the game session, matching the sParameterCopyLogs
+    // / sPoolExhaustedLogs pattern used elsewhere for the same purpose. A
+    // per-instance counter here would reset to 0 on every pattern-loop
+    // restart (i.e. constantly), defeating the "log only the first few
+    // times" intent entirely.
+    static inline uint16_t capacity_fail_logs_ = 0;
     uint16_t peak_task_count_;  // Track peak utilization for telemetry
 
     BulletMLRunnerImpl(const BulletMLRunnerImpl&);
     BulletMLRunnerImpl& operator=(const BulletMLRunnerImpl&);
 };
+
+// Pool for BulletMLRunnerImpl objects and the BulletMLRunnerImpl* arrays that
+// point at them. Every FoeCommand recreation (every bullet-pattern loop
+// restart) used to allocate/free these raw via lwnew/delete, unpooled -
+// unlike BulletMLState/task-buffers/FoeCommand, which all went through a
+// startup-preallocated free-list. That raw churn progressively fragmented
+// the LWRAM heap over a long play session, causing lwnew to get slower and
+// slower - the confirmed root cause of the observed FPS collapse. This pool
+// closes that gap using the same free-list technique as the sibling pools,
+// and reuses bulletml_state_pool::StatePoolState's startup-only-allocation
+// flags so one master switch still governs every BulletML allocation site.
+namespace bulletml_runner_impl_pool {
+struct FreeNode {
+    FreeNode* next;
+};
+struct PoolState {
+    static inline FreeNode* freeList = nullptr;
+    static inline std::size_t cachedCount = 0;
+};
+}
+
+inline BulletMLRunnerImpl* createPooledBulletMlRunnerImpl(BulletMLState* state, BulletMLRunner* runner) {
+    using bulletml_runner_impl_pool::FreeNode;
+    using bulletml_runner_impl_pool::PoolState;
+
+    if (PoolState::freeList) {
+        FreeNode* node = PoolState::freeList;
+        PoolState::freeList = node->next;
+        if (PoolState::cachedCount > 0) {
+            PoolState::cachedCount--;
+        }
+        return new (node) BulletMLRunnerImpl(state, runner);
+    }
+
+    if (bulletml_state_pool::StatePoolState::startupOnlyAllocation &&
+        !bulletml_state_pool::StatePoolState::startupPreallocationPhase) {
+        return nullptr;
+    }
+
+    return allocBulletMlObject<BulletMLRunnerImpl>("runner.impl", state, runner);
+}
+
+inline void destroyPooledBulletMlRunnerImpl(BulletMLRunnerImpl*& impl) {
+    using bulletml_runner_impl_pool::FreeNode;
+    using bulletml_runner_impl_pool::PoolState;
+
+    if (!impl) {
+        return;
+    }
+    impl->~BulletMLRunnerImpl();
+    FreeNode* node = reinterpret_cast<FreeNode*>(impl);
+    node->next = PoolState::freeList;
+    PoolState::freeList = node;
+    PoolState::cachedCount++;
+    impl = nullptr;
+}
+
+// Pre-allocates a guaranteed pool of BulletMLRunnerImpl storage at startup.
+// A null state/runner pair makes the constructor a safe, fully-inert no-op
+// (end_=true immediately, no tasks/params touched), so its memory can be
+// reclaimed straight back onto the free list - mirrors how
+// preallocateBulletMlStatePools() preallocates BulletMLState the same way.
+inline bool preallocateBulletMlRunnerImplPool(uint16_t count) {
+    using bulletml_runner_impl_pool::FreeNode;
+    using bulletml_runner_impl_pool::PoolState;
+
+    for (uint16_t i = 0; i < count; ++i) {
+        BulletMLRunnerImpl* obj = allocBulletMlObject<BulletMLRunnerImpl>("runner.impl.prealloc", nullptr, nullptr);
+        if (!obj) {
+            return false;
+        }
+        obj->~BulletMLRunnerImpl();
+        FreeNode* node = reinterpret_cast<FreeNode*>(obj);
+        node->next = PoolState::freeList;
+        PoolState::freeList = node;
+        PoolState::cachedCount++;
+    }
+    return true;
+}
+
+// Pre-allocates the BulletMLRunnerImpl* array-pool buckets (same bucketed
+// capacities 4,8,...,32 as the BulletMLNode*/Fxp* array pools in
+// bulletmlstate.hpp). impls_ is almost always capacity 1 (a single top-level
+// action), so counts should be heavily weighted toward bucket 0.
+inline bool preallocateBulletMlRunnerImplArrayPool(const uint16_t* counts) {
+    for (uint16_t bucketIndex = 0; bucketIndex < 8u; ++bucketIndex) {
+        const uint16_t capacity = static_cast<uint16_t>((bucketIndex + 1u) * 4u);
+        const uint16_t n = counts ? counts[bucketIndex] : 0u;
+        for (uint16_t i = 0; i < n; ++i) {
+            BulletMLRunnerImpl** ptr = createBulletMlRuntimeArray<BulletMLRunnerImpl*>(capacity);
+            if (!ptr) {
+                return false;
+            }
+            auto* node = reinterpret_cast<bulletml_state_pool::ArrayFreeNode<BulletMLRunnerImpl*>*>(ptr);
+            node->next = bulletml_state_pool::ArrayPoolState<BulletMLRunnerImpl*>::freeLists[bucketIndex];
+            bulletml_state_pool::ArrayPoolState<BulletMLRunnerImpl*>::freeLists[bucketIndex] = node;
+            bulletml_state_pool::ArrayPoolState<BulletMLRunnerImpl*>::cachedCounts[bucketIndex]++;
+        }
+    }
+    return true;
+}
+
+inline std::size_t getBulletMlRunnerImplCachedCount() {
+    return bulletml_runner_impl_pool::PoolState::cachedCount;
+}
+
+inline void releaseBulletMlRunnerImplPool() {
+    using bulletml_runner_impl_pool::FreeNode;
+    using bulletml_runner_impl_pool::PoolState;
+
+    while (PoolState::freeList) {
+        FreeNode* node = PoolState::freeList;
+        PoolState::freeList = node->next;
+        freeBulletMlRuntimeRaw(node, sizeof(BulletMLRunnerImpl), false);
+    }
+    PoolState::cachedCount = 0;
+}
 
 inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
     : parser_(parser), state_(nullptr), impls_(nullptr), impl_count_(0), impl_capacity_(0) {
@@ -1677,9 +1799,10 @@ inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
     if (!top_actions || top_count_u32 == 0) return;
 
     uint16_t top_count = (top_count_u32 > 65535U) ? 65535U : static_cast<uint16_t>(top_count_u32);
-    impls_ = allocBulletMlArray<BulletMLRunnerImpl*>("runner.impls.top", top_count);
+    uint16_t impls_capacity = 0;
+    impls_ = bulletml_state_pool::createPooledArray<BulletMLRunnerImpl*>(top_count, impls_capacity);
     if (!impls_) return;
-    impl_capacity_ = top_count;
+    impl_capacity_ = impls_capacity;
 
     for (uint16_t i = 0; i < top_count; ++i) impls_[i] = nullptr;
 
@@ -1694,7 +1817,7 @@ inline BulletMLRunner::BulletMLRunner(BulletMLParserBLB* parser)
             break;
         }
 
-        BulletMLRunnerImpl* impl = allocBulletMlObject<BulletMLRunnerImpl>("runner.top.impl", st, this);
+        BulletMLRunnerImpl* impl = createPooledBulletMlRunnerImpl(st, this);
         if (!impl) {
             destroyBulletMlState(st);
             break;
@@ -1709,13 +1832,15 @@ inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
     if (!state_) return;
 
     parser_ = state_->getParser();
-    impls_ = allocBulletMlArray<BulletMLRunnerImpl*>("runner.impls.single", 1);
+    uint16_t impls_capacity = 0;
+    impls_ = bulletml_state_pool::createPooledArray<BulletMLRunnerImpl*>(1, impls_capacity);
     if (!impls_) return;
-    impl_capacity_ = 1;
+    impl_capacity_ = impls_capacity;
 
-    impls_[0] = allocBulletMlObject<BulletMLRunnerImpl>("runner.impl.single", state_, this);
+    impls_[0] = createPooledBulletMlRunnerImpl(state_, this);
     if (!impls_[0]) {
-        freeBulletMlArray(impls_, 1);
+        destroyBulletMlState(state_);
+        bulletml_state_pool::recyclePooledArray(impls_, impl_capacity_);
         impls_ = nullptr;
         return;
     }
@@ -1726,9 +1851,9 @@ inline BulletMLRunner::BulletMLRunner(BulletMLState* state)
 
 inline BulletMLRunner::~BulletMLRunner() {
     for (uint16_t i = 0; i < impl_count_; ++i) {
-        freeBulletMlObject(impls_[i]);
+        destroyPooledBulletMlRunnerImpl(impls_[i]);
     }
-    freeBulletMlArray(impls_, impl_capacity_ > 0 ? impl_capacity_ : 1);
+    bulletml_state_pool::recyclePooledArray(impls_, impl_capacity_);
     impl_count_ = 0;
     impl_capacity_ = 0;
 
