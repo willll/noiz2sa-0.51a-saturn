@@ -7,10 +7,6 @@
 /**
  * BGM/SE manager.
  *
- * Backend behaviour:
- *   SRL_USE_SGL_SOUND_DRIVER=1  -> SGL driver for CDDA + WAV SFX
- *   SRL_USE_SGL_SOUND_DRIVER=0  -> Ponesound driver for CDDA + optional PCM SFX
- *
  * @version $Revision: 1.4 $
  */
 #include "SDL.h"
@@ -19,11 +15,7 @@
 #include <srl_system.hpp>
 
 #if NOIZ2SA_ENABLE_SOUND == 1
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-#    include <srl_sound.hpp>
-#  else
 #    include <ponesound.hpp>
-#  endif
 #endif
 
 #include "sound_factory.h"
@@ -52,12 +44,7 @@ static const char *chunkName[CHUNK_NUM] = {
   "SHOT", "HIT", "FOEDES", "BOSDES", "SHIPDS", "BONUS", "EXTEND",
 };
 
-#if NOIZ2SA_ENABLE_SOUND == 1 && SRL_USE_SGL_SOUND_DRIVER == 1
-static SRL::Sound::Pcm::WaveSound* sglChunks[CHUNK_NUM];
-static bool sglChunkExists[CHUNK_NUM];
-static char sglChunkFileName[CHUNK_NUM][32];
-static bool sglStartupSelfTestPlayed = false;
-#elif NOIZ2SA_ENABLE_SOUND == 1 && SRL_USE_SGL_SOUND_DRIVER == 0
+#if NOIZ2SA_ENABLE_SOUND == 1
 static int16_t chunk[CHUNK_NUM];
 static bool ponesoundDriverInitialized = false;
 static bool chunkInvalidWarned[CHUNK_NUM];
@@ -126,16 +113,6 @@ void closeSound() {
   }
 
 #if NOIZ2SA_ENABLE_SOUND == 1
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-  SRL::Logger::LogDebug("[CDDA] closeSound: stop request (backend=SGL)");
-  SRL::Sound::Cdda::StopPause();
-  for (int i = 0; i < CHUNK_NUM; i++) {
-    sglChunkFileName[i][0] = '\0';
-    if (sglChunks[i] != nullptr) {
-      destroyWaveSound(sglChunks[i]);
-    }
-  }
-#  else
   SRL::Logger::LogDebug("[SOUND] closeSound: Stopping CDDA (Ponesound)");
   SRL::Ponesound::Sound::Driver::SetTickEnabled(false);
   SRL::Ponesound::CD::Stop();
@@ -145,7 +122,6 @@ void closeSound() {
     chunkReloadAttempted[i] = false;
   }
   SRL::Ponesound::Pcm::Unload(-1);
-#  endif
 #endif
 
   useAudio = 0;
@@ -156,60 +132,15 @@ void closeSound() {
 /** @brief Loads BGM and SFX assets from disc. */
 void loadSounds() {
   SRL::Logger::LogDebug("[SOUND] loadSounds() called");
+  int loaded = 0;
 
 #if NOIZ2SA_ENABLE_SOUND == 0
   SRL::Logger::LogDebug("[SOUND] loadSounds: sound disabled at compile time");
   return;
 #else
-  int loaded = 0;
-
   SRL::Cd::ChangeDir((char *)nullptr);
   SRL::Cd::ChangeDir("SOUNDS");
 
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-  // SGL backend validates WAV loading at initialization but does not keep all
-  // samples resident to avoid startup RAM pressure.
-  for (int i = 0; i < CHUNK_NUM; i++) {
-    sglChunks[i] = nullptr;
-    sglChunkExists[i] = false;
-    sglChunkFileName[i][0] = '\0';
-
-    char normalizedName[32];
-    char fallbackName[32];
-    snprintf(normalizedName, sizeof(normalizedName), "%s.SGL.WAV", chunkName[i]);
-    snprintf(fallbackName, sizeof(fallbackName), "%s.WAV", chunkName[i]);
-
-    const char* selectedName = nullptr;
-    SRL::Cd::File normalized(normalizedName);
-    if (normalized.Exists()) {
-      selectedName = normalizedName;
-    } else {
-      SRL::Cd::File fallback(fallbackName);
-      if (fallback.Exists()) selectedName = fallbackName;
-    }
-
-    if (selectedName == nullptr) {
-      SRL::Logger::LogWarning("[SOUND] loadSounds (SGL): %s and %s not found on disc", normalizedName, fallbackName);
-      continue;
-    }
-
-    snprintf(sglChunkFileName[i], sizeof(sglChunkFileName[i]), "%s", selectedName);
-    SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loading %s", sglChunkFileName[i]);
-
-    SRL::Sound::Pcm::WaveSound* preload = createWaveSound(sglChunkFileName[i]);
-    destroyWaveSound(preload);
-    sglChunkExists[i] = true;
-    SRL::Logger::LogDebug("[SOUND] loadSounds (SGL): Loaded WAV %s during init (released)", sglChunkFileName[i]);
-    loaded++;
-  }
-#  else
-#    if NOIZ2SA_ENABLE_PCM_SFX == 0
-  SRL::Logger::LogWarning("[SOUND] Ponesound PCM SFX disabled (NOIZ2SA_ENABLE_PCM_SFX=0)");
-  for (int i = 0; i < CHUNK_NUM; i++) {
-    chunk[i] = -1;
-    chunkReloadAttempted[i] = false;
-  }
-#    else
   SRL::Logger::LogDebug("[CDDA] stop backend=Ponesound");
   int availableChunks = 0;
 
@@ -281,8 +212,8 @@ void loadSounds() {
   }
   loaded = loadedNow;
   SRL::Logger::LogInfo("[SOUND] loadSounds (Ponesound): loaded %d/%d PCM chunks upfront", loadedNow, CHUNK_NUM);
-#    endif
-#  endif
+
+#endif
 
   SRL::Cd::ChangeDir((char *)nullptr);
 
@@ -290,16 +221,7 @@ void loadSounds() {
     SRL::Logger::LogWarning("[SOUND] No SFX chunks loaded");
   } else {
     SRL::Logger::LogDebug("[SOUND] Loaded %d/%d SFX chunks", loaded, CHUNK_NUM);
-
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-    if (!sglStartupSelfTestPlayed && useAudio) {
-      sglStartupSelfTestPlayed = true;
-      SRL::Logger::LogDebug("[SOUND] SGL startup self-test: playing HIT");
-      playChunk(1); // HIT
-    }
-#  endif
   }
-#endif
 }
 
 /** @brief Initialises the sound backend selection and runtime state. */
@@ -312,17 +234,7 @@ void initSound() {
 #else
   SRL::Logger::LogDebug("[SOUND] initSound() called");
 
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-  for (int i = 0; i < CHUNK_NUM; i++) {
-    sglChunks[i] = nullptr;
-    sglChunkExists[i] = false;
-    sglChunkFileName[i][0] = '\0';
-  }
-  SRL::Logger::LogDebug("[SOUND] SGL sound driver already initialised by Core::Initialize");
-  SRL::Sound::Cdda::SetVolume(7);
-  SRL::Logger::LogDebug("[SOUND] SGL CDDA volume set");
-  useAudio = 1;
-#  elif NOIZ2SA_ENABLE_PCM_SFX == 0
+#  if NOIZ2SA_ENABLE_PCM_SFX == 0
   for (int i = 0; i < CHUNK_NUM; i++) {
     chunk[i] = -1;
     chunkInvalidWarned[i] = false;
@@ -360,12 +272,6 @@ void playMusic(int idx) {
   SRL::Logger::LogInfo("[CDDA] playMusic idx=%d track=%u", idx, (unsigned int)track);
 
 #if NOIZ2SA_ENABLE_SOUND == 1
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-  SRL::Logger::LogInfo("[CDDA] backend=SGL stop before play track=%u", (unsigned int)track);
-  SRL::Sound::Cdda::StopPause();
-  SRL::Logger::LogInfo("[CDDA] backend=SGL play track=%u loop=1", (unsigned int)track);
-  SRL::Sound::Cdda::PlaySingle(track, true);
-#  else
   SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
   SRL::Ponesound::CD::SetVolume(7);
   SRL::Ponesound::CD::SetPan(0x1F, 0x0F);
@@ -379,7 +285,6 @@ void playMusic(int idx) {
 
   SRL::Logger::LogInfo("[CDDA] backend=Ponesound play track=%u loop=1", (unsigned int)track);
   SRL::Ponesound::CD::PlaySingle(track, true);
-#  endif
 #endif
   currentMusicIdx = idx;
 }
@@ -390,7 +295,6 @@ void preloadChunksNow() {
   }
 
 #if NOIZ2SA_ENABLE_SOUND == 1
-#  if SRL_USE_SGL_SOUND_DRIVER == 0
   if (!ponesoundDriverInitialized) {
     return;
   }
@@ -417,7 +321,6 @@ void preloadChunksNow() {
   }
 
   SRL::Logger::LogInfo("[SOUND] preloadChunksNow: loaded=%d/%d", loadedNow, CHUNK_NUM);
-#  endif
 #endif
 }
 
@@ -428,13 +331,8 @@ void fadeMusic() {
   }
 
 #if NOIZ2SA_ENABLE_SOUND == 1
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-  SRL::Logger::LogInfo("[CDDA] fadeMusic backend=SGL stop");
-  SRL::Sound::Cdda::StopPause();
-#  else
   SRL::Logger::LogInfo("[CDDA] fadeMusic backend=Ponesound stop");
   SRL::Ponesound::CD::Stop();
-#  endif
 #endif
   currentMusicIdx = -1;
 }
@@ -446,13 +344,8 @@ void stopMusic() {
   }
 
 #if NOIZ2SA_ENABLE_SOUND == 1
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-  SRL::Logger::LogInfo("[CDDA] stopMusic backend=SGL stop");
-  SRL::Sound::Cdda::StopPause();
-#  else
   SRL::Logger::LogInfo("[CDDA] stopMusic backend=Ponesound stop");
   SRL::Ponesound::CD::Stop();
-#  endif
 #endif
   currentMusicIdx = -1;
 }
@@ -468,30 +361,6 @@ void playChunk(int idx) {
   }
 
 #if NOIZ2SA_ENABLE_SOUND == 1
-#  if SRL_USE_SGL_SOUND_DRIVER == 1
-  if (!sglChunkExists[idx]) {
-    SRL::Logger::LogWarning("[SOUND] playChunk: %s.WAV missing", chunkName[idx]);
-    return;
-  }
-  if (sglChunks[idx] == nullptr) {
-    // Runtime reload happens from root dir; switch into SOUNDS for WaveSound file open.
-    SRL::Cd::ChangeDir((char *)nullptr);
-    SRL::Cd::ChangeDir("SOUNDS");
-    sglChunks[idx] = createWaveSound(sglChunkFileName[idx]);
-    SRL::Cd::ChangeDir((char *)nullptr);
-  }
-
-  if (sglChunks[idx]->Play(127, 0) < 0) {
-    SRL::Logger::LogWarning("[SOUND] playChunk (SGL): No free PCM channel for %s.WAV, forcing channel 0", chunkName[idx]);
-
-    // If all channels are occupied, steal channel 0 to guarantee audible SFX.
-    SRL::Sound::Pcm::StopSound(0);
-    if (!SRL::Sound::Pcm::PlayOnChannel(*sglChunks[idx], 0, 127, 0)) {
-      SRL::Logger::LogWarning("[SOUND] playChunk (SGL): Failed to start %s.WAV on forced channel", chunkName[idx]);
-      return;
-    }
-  }
-#  else
   if (chunk[idx] < 0) {
     // Retry transient M68K readiness failures (-7) on subsequent calls.
     // Non-transient failures keep one-shot behaviour to avoid CD thrashing.
@@ -524,17 +393,14 @@ void playChunk(int idx) {
   SRL::Ponesound::Sound::Driver::SetTickEnabled(true);
   SRL::Logger::LogDebug("[SOUND] playChunk idx=%d id=%d", idx, chunk[idx]);
   SRL::Ponesound::Pcm::Play(chunk[idx], SRL::Ponesound::PlayMode::Volatile, 7);
-#  endif
 #endif
 }
 
 /** @brief Advances sound driver state once per frame. */
 void soundTick() {
 #if NOIZ2SA_ENABLE_SOUND == 1
-#  if SRL_USE_SGL_SOUND_DRIVER == 0
   if (useAudio && ponesoundDriverInitialized) {
     SRL::Ponesound::Sound::Driver::Tick();
   }
-#  endif
 #endif
 }
