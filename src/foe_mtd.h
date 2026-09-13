@@ -21,6 +21,10 @@
 extern int processSpeedDownBulletsNum;
 extern int nowait;
 
+/** @brief Allocates the foe[] pool from LWRAM. Call exactly once at startup,
+ *  before the first initFoes() call. Returns false (and logs fatal) on
+ *  allocation failure. */
+bool allocateFoePool();
 /** @brief Initialises foe state and allocators. */
 void initFoes();
 /** @brief Releases all foe state. */
