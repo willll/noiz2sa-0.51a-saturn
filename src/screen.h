@@ -72,8 +72,6 @@ struct ScreenVdpPerfStats
 
 /** @brief Initialises SDL and the rendering subsystem. */
 void initSDL();
-/** @brief Shuts down SDL and releases rendering resources. */
-void closeSDL();
 /** @brief Blends the playfield and panel surfaces. */
 void blendScreen();
 /** @brief Marks the entire playfield as dirty for redraw. */
