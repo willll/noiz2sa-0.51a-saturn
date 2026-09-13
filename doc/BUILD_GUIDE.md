@@ -139,7 +139,6 @@ cmake --build build
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `SRL_USE_SGL_SOUND_DRIVER` | OFF | Use SGL sound instead of SCSP |
 | `SRL_ENABLE_FREQ_ANALYSIS` | OFF | Enable frequency analysis |
 
 ### Custom Flags
@@ -223,7 +222,6 @@ After successful compilation, the following happens automatically:
 - Creates `build/cd/data/` and `build/cd/music/` directories
 - Creates required metadata files (`ABS.TXT`, `BIB.TXT`, `CPY.TXT`)
 - Converts `noiz2sa.elf` → `build/cd/data/0.bin` (binary format)
-- Copies SGL sound driver files (if `SRL_USE_SGL_SOUND_DRIVER=ON`)
 - Copies frequency analysis DSP (if `SRL_ENABLE_FREQ_ANALYSIS=ON`)
 
 **Build Outputs:**

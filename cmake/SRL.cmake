@@ -56,7 +56,7 @@ set(SRL_LIBS
 )
 
 #if(SRL_USE_SGL_SOUND_DRIVER)
-    list(APPEND SRL_LIBS "${SRL_SGL_LIB_DIR}/LIBSND.A")
+#    list(APPEND SRL_LIBS "${SRL_SGL_LIB_DIR}/LIBSND.A")
 #endif()
 
 foreach(_lib IN LISTS SRL_LIBS)
@@ -78,7 +78,9 @@ if(NOT TARGET SRL::Core)
 
     set_property(TARGET SRL::Core PROPERTY
         INTERFACE_LINK_LIBRARIES
-            "${SRL_LIBS}")
+            "-Wl,-bcoff-sh"
+            "${SRL_LIBS}"
+            "-Wl,-belf32-sh")
     
     set_property(TARGET SRL::Core PROPERTY
         IMPORTED_NO_SYSTEM TRUE)
