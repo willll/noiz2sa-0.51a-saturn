@@ -9,6 +9,8 @@
  *
  * @version $Revision: 1.1.1.1 $
  */
+#pragma once
+
 #include <srl_cram.hpp>
 #include <srl_color.hpp>
 

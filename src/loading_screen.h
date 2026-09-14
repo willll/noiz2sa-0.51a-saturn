@@ -1,8 +1,6 @@
 /*
  * Copyright 2002 Kenta Cho. All rights reserved.
- */
-
-/**
+ *
  * Loading screen manager header.
  *
  * Centralises every aspect of the boot-time loading screen:

@@ -4,11 +4,8 @@
  * Copyright 2002 Kenta Cho. All rights reserved.
  */
 
-/**
- * Player data.
- *
- * @version $Revision: 1.1.1.1 $
- */
+#pragma once
+
 #include "vector.h"
 
 typedef struct {

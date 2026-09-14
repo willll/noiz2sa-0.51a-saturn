@@ -24,9 +24,7 @@
   Adjusted SDL_gamecontroller.h based on SDL2 for SDL1.
 */
 
-
-#ifndef GAMEPAD_H
-#define GAMEPAD_H
+#pragma once
 
 #include <srl_input.hpp>
 
@@ -86,4 +84,3 @@ void closeGamepad();
  */
 Uint8 SDL_GameControllerGetButton(SRL::Input::Digital * gamecontroller, SDL_GameControllerButton button);
 
-#endif // GAMEPAD_H

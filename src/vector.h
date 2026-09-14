@@ -4,11 +4,6 @@
  * Copyright 2002 Kenta Cho. All rights reserved.
  */
 
-/**
- * Vector data (wrapped from SaturnMathPP Vector2D).
- *
- * @version $Revision: 1.1.1.1 $
- */
 #pragma once
 
 #include <srl.hpp>

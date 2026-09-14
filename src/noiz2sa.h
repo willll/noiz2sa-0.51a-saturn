@@ -4,11 +4,6 @@
  * Copyright 2002 Kenta Cho. All rights reserved.
  */
 
-/**
- * Noiz2sa header file.
- *
- * @version $Revision: 1.4 $
- */
 #pragma once
 
 #include <stdint.h>
