@@ -4,11 +4,8 @@
  * Copyright 2002 Kenta Cho. All rights reserved.
  */
 
-/**
- * BGM/SE manager header file.
- *
- * @version $Revision: 1.1.1.1 $
- */
+#pragma once
+
 /** @brief Shuts down the audio subsystem and releases loaded sounds. */
 void closeSound();
 /** @brief Initialises the audio subsystem. */
