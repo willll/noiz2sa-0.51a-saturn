@@ -551,6 +551,7 @@ void moveGameover()
   if (goCnt > 900 || (goCnt > 128 && mnp && (btn & PAD_BUTTON1)))
   {
     setHiScore();
+    savePreference(); // players power off instead of picking QUIT
     initTitle();
     return;
   }
@@ -592,6 +593,7 @@ void moveStageClear()
   if (scCnt > 900 || (scCnt > 128 && mnp && (btn & PAD_BUTTON1)))
   {
     setHiScore();
+    savePreference(); // players power off instead of picking QUIT
     initTitle();
     return;
   }

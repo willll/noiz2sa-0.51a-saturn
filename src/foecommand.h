@@ -9,8 +9,7 @@
  *
  * @version $Revision: 1.2 $
  */
-#ifndef FOECOMMAND_H_
-#define FOECOMMAND_H_
+#pragma once
 
 #include <cstddef>
 
@@ -18,8 +17,6 @@ struct foe;  // Forward declaration
 
 #include "bulletml_binary/bulletmlparser_blb.hpp"
 #include "bulletml_binary/bulletmlrunner.hpp"
-
-struct foe;  // Forward declaration
 
 class FoeCommand : public BulletMLRunner {
  public:
@@ -62,7 +59,7 @@ class FoeCommand : public BulletMLRunner {
   virtual Fxp getBulletSpeedX();
   /** @brief Returns the current bullet Y speed. */
   virtual Fxp getBulletSpeedY();
-  
+
  private:
   struct foe *foe;
 };
@@ -73,8 +70,7 @@ void destroyFoeCommand(FoeCommand*& cmd);
 void preallocateFoeCommandPool(std::size_t count);
 void releaseFoeCommandPool();
 std::size_t getFoeCommandCachedCount();
-void trimFoeCommandPool(std::size_t maxCached);
 
-#endif
+
 
 

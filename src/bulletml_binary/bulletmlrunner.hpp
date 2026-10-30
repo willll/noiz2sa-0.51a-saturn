@@ -109,7 +109,11 @@ inline T* allocBulletMlObject(const char* tag, Args... args) {
         return nullptr;
     }
     bulletml_runner_trace::noteAlloc(sizeof(T), false);
-    T* ptr = lwnew T(args...);
+    // HWRAM, not LWRAM: this is only ever called for BulletMLRunnerImpl
+    // (allocBulletMlArray<Task> is the separate, LWRAM-resident path for
+    // Task arrays). See bulletml_runtime_factory.h for the matching move
+    // of the BulletMLState/node/param/impl-array pools.
+    T* ptr = hwnew T(args...);
     if (!ptr) {
         bulletml_runner_trace::noteFree(sizeof(T), false);
         logBulletMlAllocFailure(tag);
@@ -512,24 +516,31 @@ public:
 private:
     static constexpr uint16_t kMaxTaskCapacity = 2048;
 
-    enum TaskType {
+    enum TaskType : uint8_t {
         TASK_NODE = 0,
         TASK_REPEAT = 1,
         TASK_POP_PARAMS = 2,
     };
 
+    // Field order matters: the four pointer/int members are grouped first
+    // (each already 4-byte aligned, no gaps between them), then the three
+    // sub-word members (2+1+1 bytes) are grouped last so they pack into a
+    // single trailing 4-byte word with no padding. This gives sizeof(Task)
+    // == 20 instead of 24 (the naive largest-to-smallest order still pads
+    // to 24, since 23 content bytes round up to the next 4-byte multiple
+    // either way) - saving 4 bytes x kSlotCount x kSlotCapacity in the pool.
+    // repeat_remaining stays `int`, not narrowed: times_num (bulletmlrunner.hpp
+    // ~1484) is only warned, never clamped, past 512, so a pattern-authored
+    // repeat count could in principle exceed int16_t range.
     struct Task {
-        TaskType type;
         BulletMLNode* node;
+        BulletMLNode* repeat_action;  // repeat task field
+        int repeat_remaining;         // repeat task field
+        Fxp* saved_params;            // param restore task field
 
-        // repeat task fields
-        BulletMLNode* repeat_action;
-        int repeat_remaining;
-
-        // param restore task fields
-        Fxp* saved_params;
-        uint16_t saved_count;
-        bool saved_owns;
+        uint16_t saved_count;  // param restore task field
+        bool saved_owns;       // param restore task field
+        TaskType type;
     };
 
     struct LinearChange {
@@ -553,11 +564,19 @@ private:
     // churn across clearFoes() cycles, eliminating the fragmentation that caused
     // the entity-count degradation (186→64→28→9) observed on real hardware.
     //
-    // kSlotCount=400 covers the observed peak of ~382 concurrent runners with a
-    // safety margin.  Pool memory: 400×32×24B = 307 200B (~300KB LWRAM).
+    // kSlotCount/kSlotCapacity are CMake-configurable (NOIZ2SA_TASKPOOL_SLOT_COUNT/
+    // NOIZ2SA_TASKPOOL_SLOT_CAPACITY). A 45-minute real-hardware endless-mode
+    // soak on 2026-09-14 peaked at 124 concurrent slots. InitTaskPool() logs the
+    // pool's actual size at boot ([BML-POOL] ... lwram_bytes=).
+#ifndef NOIZ2SA_TASKPOOL_SLOT_CAPACITY
+#define NOIZ2SA_TASKPOOL_SLOT_CAPACITY 32
+#endif
+#ifndef NOIZ2SA_TASKPOOL_SLOT_COUNT
+#define NOIZ2SA_TASKPOOL_SLOT_COUNT 220 // keep in sync with the CMake default
+#endif
     struct TaskBufferPool {
-        static constexpr uint16_t kSlotCapacity = 32;
-        static constexpr uint16_t kSlotCount    = 400;
+        static constexpr uint16_t kSlotCapacity = NOIZ2SA_TASKPOOL_SLOT_CAPACITY;
+        static constexpr uint16_t kSlotCount    = NOIZ2SA_TASKPOOL_SLOT_COUNT;
 
         Task*    base;
         uint16_t freeStack[kSlotCount];
@@ -725,31 +744,21 @@ private:
         if (needed <= task_capacity_) return true;
 
         const int safeTurn = safeRunnerTurn();
-        if (safeTurn < 0 && capacity_fail_logs_ < 12) {
-            ++capacity_fail_logs_;
-            SRL::Logger::LogWarning(
-                "[BML-RUNNER] invalid runner pointer in ensureTaskCapacity this=%p runner=%p needed=%u cap=%u count=%u",
-                static_cast<void*>(this),
-                static_cast<void*>(runner_),
-                static_cast<unsigned>(needed),
-                static_cast<unsigned>(task_capacity_),
-                static_cast<unsigned>(task_count_));
+        // The guard must not depend on the log cap: it has to run every time.
+        if (safeTurn < 0) {
+            if (capacity_fail_logs_ < 12) {
+                ++capacity_fail_logs_;
+                SRL::Logger::LogWarning(
+                    "[BML-RUNNER] invalid runner pointer in ensureTaskCapacity this=%p runner=%p needed=%u cap=%u count=%u",
+                    static_cast<void*>(this),
+                    static_cast<void*>(runner_),
+                    static_cast<unsigned>(needed),
+                    static_cast<unsigned>(task_capacity_),
+                    static_cast<unsigned>(task_count_));
+            }
             end_ = true;
             task_count_ = 0;
             return false;
-        }
-
-        if (capacity_fail_logs_ < 12) {
-            SRL::Logger::LogInfo(
-                "[BML-RUNNER] task growth request needed=%u current=%u turn=%d wait=%d ctx_name=%u ctx_ref=%u ctx_fanout=%u ctx_children=%u",
-                static_cast<unsigned>(needed),
-                static_cast<unsigned>(task_capacity_),
-                safeTurn,
-                wait_until_turn_,
-                static_cast<unsigned>(expand_name_),
-                static_cast<unsigned>(expand_ref_id_),
-                static_cast<unsigned>(expand_fanout_),
-                static_cast<unsigned>(expand_child_count_));
         }
 
         if (needed > kMaxTaskCapacity) {
@@ -807,17 +816,7 @@ private:
                 }
                 return false;
             }
-            if (capacity_fail_logs_ < 12) {
-                SRL::Logger::LogInfo("[BML-RUNNER] task buffer cache miss needed=%u new_cap=%u",
-                                     static_cast<unsigned>(needed),
-                                     static_cast<unsigned>(new_cap));
-            }
             t = allocBulletMlArray<Task>("runner.tasks", new_cap);
-        }
-        else if (capacity_fail_logs_ < 12) {
-            SRL::Logger::LogInfo("[BML-RUNNER] task buffer cache hit needed=%u cached_cap=%u",
-                                 static_cast<unsigned>(needed),
-                                 static_cast<unsigned>(cached_cap));
         }
         if (!t) return false;
 

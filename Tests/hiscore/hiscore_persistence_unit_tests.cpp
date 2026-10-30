@@ -82,6 +82,21 @@ static void test_decode_rejects_version_mismatch()
   EXPECT_FALSE(decodeHiScoreBackupData(&data, &decoded));
 }
 
+static void test_decode_rejects_out_of_range_stage()
+{
+  const HiScore original = makeSampleHiScore();
+  HiScoreBackupData data{};
+  encodeHiScoreBackupData(&data, &original);
+
+  HiScore decoded{};
+  data.stage = STAGE_NUM + ENDLESS_STAGE_NUM; // QUIT slot, not a playable stage
+  EXPECT_FALSE(decodeHiScoreBackupData(&data, &decoded));
+  data.stage = -1;
+  EXPECT_FALSE(decodeHiScoreBackupData(&data, &decoded));
+  data.stage = STAGE_NUM + ENDLESS_STAGE_NUM - 1;
+  EXPECT_TRUE(decodeHiScoreBackupData(&data, &decoded));
+}
+
 static void test_binary_layout_matches_gp32_sequence()
 {
   const HiScore original = makeSampleHiScore();
@@ -114,6 +129,7 @@ extern "C" int logic_test_main()
 {
   test_encode_then_decode_round_trip();
   test_decode_rejects_version_mismatch();
+  test_decode_rejects_out_of_range_stage();
   test_binary_layout_matches_gp32_sequence();
 
   if (g_failed != 0)

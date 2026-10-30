@@ -19,10 +19,12 @@ else()
 endif()
 
 set(SRL_ROOT "${_SRL_ROOT_DEFAULT}" CACHE PATH "Path to SaturnRingLib root")
-set(SRL_MODULES_DIR "${SRL_ROOT}/modules" CACHE PATH "Path to SaturnRingLib modules")
-set(SRL_SGL_DIR "${SRL_MODULES_DIR}/sgl" CACHE PATH "Path to SGL module")
-set(SRL_SGL_INCLUDE_DIR "${SRL_SGL_DIR}/INC" CACHE PATH "Path to SGL include dir")
-set(SRL_SGL_LIB_DIR "${SRL_SGL_DIR}/LIB" CACHE PATH "Path to SGL static libs")
+# Derived, not cached: a cached copy kept pointing at the old SRL after SRL_ROOT
+# changed, mixing one checkout's headers with another's sources.
+set(SRL_MODULES_DIR "${SRL_ROOT}/modules")
+set(SRL_SGL_DIR "${SRL_MODULES_DIR}/sgl")
+set(SRL_SGL_INCLUDE_DIR "${SRL_SGL_DIR}/INC")
+set(SRL_SGL_LIB_DIR "${SRL_SGL_DIR}/LIB")
 
 set(_srl_missing FALSE)
 foreach(_p

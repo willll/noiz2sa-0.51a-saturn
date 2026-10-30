@@ -156,8 +156,24 @@ inline T* allocateLowWorkRamItems(std::size_t count)
 }
 
 template <typename T>
+/** @brief Frees low work RAM storage and clears the pointer. */
+inline void freeLowWorkRamItems(T*& ptr)
+{
+  SRL::Memory::LowWorkRam::Free(ptr);
+  ptr = nullptr;
+}
+
+template <typename T>
 /** @brief Allocates high work RAM storage for count items. */
 inline T* allocateHighWorkRamItems(std::size_t count)
 {
   return static_cast<T*>(SRL::Memory::HighWorkRam::Malloc(sizeof(T) * count));
+}
+
+template <typename T>
+/** @brief Frees high work RAM storage and clears the pointer. */
+inline void freeHighWorkRamItems(T*& ptr)
+{
+  SRL::Memory::HighWorkRam::Free(ptr);
+  ptr = nullptr;
 }

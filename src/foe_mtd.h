@@ -45,11 +45,17 @@ void drawBullets();
 void drawBulletDebugOverlay();
 
 struct FoePressureStats {
-  uint32_t foeCount;      // total active entities (foes + bullets)
-  uint32_t bulletCount;   // live projectile count (active + normal + boss)
-  uint32_t drawnBullets;  // bullets drawn (passed screen bounds test)
-  uint32_t culledBullets; // bullets skipped (entirely off-screen)
-  uint32_t foeBudget;     // effective foe update budget used this tick
+  uint32_t foeCount;         // total active entities (foes + bullets)
+  uint32_t bulletCount;      // live projectile count (active + normal + boss)
+  uint32_t drawnBullets;     // bullets drawn (passed screen bounds test)
+  uint32_t culledBullets;    // bullets skipped (entirely off-screen)
+  uint32_t foeBudget;        // effective foe update budget used this tick
+  uint32_t nonBulletFoeCount; // foeCount - bulletCount: actual ZAKO/MIDDLE/BOSS
+                              // enemies, uncapped unlike bullets (see foe.cc
+                              // kMaxTotalProjectiles comment) - the suspected
+                              // driver of the real-hardware move-phase FPS collapse
+  uint32_t bossTypeFoeCount;  // enNum[BOSS_TYPE]: BOSS-pattern entities specifically,
+                              // documented at ~5ms/tick each on SH-2 (no FPU)
 };
 /** @brief Copies the latest foe pressure statistics into the output structure. */
 void consumeFoePressureStats(FoePressureStats *outStats);
@@ -67,8 +73,8 @@ int getLiveProjectileCount();
 int getActiveFoeCount();
 /** @brief Returns the total foe pool capacity. */
 int getFoePoolCapacity();
+/** @brief Returns the cumulative count of spawns rejected by the non-bullet foe cap. */
+unsigned long getFoeSpawnCappedCount();
 
 /** @brief Returns the number of cached FoeCommand nodes kept for reuse. */
 int getFoeCommandPoolCachedCount();
-/** @brief Trims cached FoeCommand nodes down to maxCached. */
-void trimFoeCommandPoolCachedCount(int maxCached);

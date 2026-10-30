@@ -27,6 +27,19 @@
         "NOIZ2SA_DISABLE_FOECMD_PREALLOC": "OFF",
         "NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY": "ON"
       }
+    },
+    {
+      "name": "profiler",
+      "displayName": "Profiler",
+      "description": "Release build with the SRL CPU profiler on the gameplay hot path (foes, BulletML, barrages, screen, background); report streamed over the DevCart every 60 frames",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build-profiler",
+      "cacheVariables": {
+        "SRL_PROFILER": "ON",
+        "SRL_PROFILER_REPORT_FRAMES": "60",
+        "SRL_PROFILER_SAMPLE_HZ": "0",
+        "SRL_PROFILE_SOURCES": "src/foe.cc;src/foecommand.cc;src/barragemanager.cc;src/screen.cpp;src/background.cpp"
+      }
     }
   ],
   "buildPresets": [
@@ -37,6 +50,10 @@
     {
       "name": "hw-debug",
       "configurePreset": "hw-debug"
+    },
+    {
+      "name": "profiler",
+      "configurePreset": "profiler"
     }
   ]
 }

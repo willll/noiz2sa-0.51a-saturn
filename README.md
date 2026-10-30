@@ -193,6 +193,30 @@ cmake --build build_hw_debug
 
 See [doc/HW_DEBUG_GUIDE.md](doc/HW_DEBUG_GUIDE.md) for complete instructions, including optional ESP-SaturnPSU_Control device integration for automated hardware control via REST API.
 
+### CPU Profiler Build
+
+The `profiler` preset builds the normal game with SaturnRingLib's CPU profiler (`srl_profiler.hpp`). Functions in the gameplay hot path (`foe.cc`, `foecommand.cc`, `barragemanager.cc`, `screen.cpp`, `background.cpp`) are timed on both SH-2s, and a report is streamed over the DevCart every 60 frames. Time spent in files that aren't instrumented counts toward the instrumented function that called them.
+
+```bash
+cmake --preset profiler
+cmake --build --preset profiler
+
+# On the rig: start the DevCart relay, record, then read the result
+ftx -g 1234 &
+python3 $SRL_INSTALL_ROOT/tools/scripts/srl_prof_capture.py capture.bin --seconds 30
+python3 $SRL_INSTALL_ROOT/tools/scripts/srl_prof.py BuildDrop/noiz2sa.elf capture.bin
+# Frame timeline for ui.perfetto.dev
+python3 $SRL_INSTALL_ROOT/tools/scripts/srl_prof.py BuildDrop/noiz2sa.elf capture.bin --format perfetto -o trace.json
+```
+
+- Read the capture with the same `BuildDrop/noiz2sa.elf` that recorded it. Every preset writes to `BuildDrop/`, so rebuilding another preset replaces it.
+- `-DSRL_PROFILER_SAMPLE_HZ=16000` adds a PC sampler that also sees SGL and other code built without hooks. Its interrupt time is charged to whatever it interrupts, so leave it off when timing functions exactly.
+- `-DSRL_PROFILER_REPORT_FRAMES=0` turns streaming off; read the tables with GDB instead (`DEBUG=ON`, then `srl-prof-dump` from SRL's `tools/scripts/srl_prof.gdb`).
+- Choose which files to time with `-DSRL_PROFILE_SOURCES="src/foe.cc;src/screen.cpp"`. Empty means all game sources, but that costs about 120 KB more HWRAM and doesn't fit beside the game.
+- Cost with the preset: about 108 KB of HWRAM (41 KB of tables plus profiler code compiled into every file) and 32 KB of LWRAM, and every instrumented call gets slower. Use the numbers to compare functions with each other, not as real frame times. Shrink the tables with `-DSRL_CUSTOM_CCFLAGS="-DSRL_PROFILER_MAX_FUNCS=256 -DSRL_PROFILER_MAX_ARCS=512"`.
+- Because of that HWRAM cost, the 150 KB smoke lookup table no longer fits, so this build always draws smoke the fallback way. `smokeScreen()` times from it don't match the real game.
+- Known issue (2026-10-30): under mednafen, streaming reports crash the game about 46 s after boot, inside `SRL::Core::VblankHandling()`. With `-DSRL_PROFILER_REPORT_FRAMES=0` it runs normally. It hasn't been tried on hardware yet.
+
 ## Development Environment
 
 Recommended external tooling used in this project workflow:

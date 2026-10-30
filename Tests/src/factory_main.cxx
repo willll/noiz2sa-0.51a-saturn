@@ -5,8 +5,6 @@
  *  - bulletml_alloc_latch.h: latch set / clear / reset
  *  - BulletMLRunnerImpl task-buffer cache: ReleaseTaskBufferCache /
  *    GetTaskBufferCacheCapacity (inline static cache in bulletmlrunner.hpp)
- *  - foecommand pool trim API: getFoeCommandCachedCount / trimFoeCommandPool
- *    (via the foecommand.cc sources added to this target)
  */
 #include <srl.hpp>
 #include <srl_log.hpp>

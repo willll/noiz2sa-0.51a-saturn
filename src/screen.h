@@ -58,16 +58,15 @@ struct ScreenVdpPerfStats
 	uint32_t playfieldUploadBytes;
 	uint32_t flipPresentUs;
 	uint32_t hwLineUs;
-	uint32_t blendCopyUs;
-	uint32_t blendAlphaUs;
 	uint32_t vdp1BlitUploadUs;
 	uint32_t vdp1BlitDrawUs;
+	uint32_t lineCommandsSubmitted;  ///< Hardware line draws (SRL::Scene2D::DrawLine) this frame
+	uint32_t polygonsSubmitted;      ///< Hardware polygon draws (SRL::Scene2D::DrawPolygon) this frame
+	uint32_t vdp1SubmitFailures;     ///< DrawLine/DrawPolygon/DrawSprite calls that returned false this frame
 };
 
 /** @brief Initialises SDL and the rendering subsystem. */
 void initSDL();
-/** @brief Blends the playfield and panel surfaces. */
-void blendScreen();
 /** @brief Marks the entire playfield as dirty for redraw. */
 void markPlayfieldDirty();
 /** @brief Marks a rectangular playfield region as dirty. */

@@ -34,7 +34,7 @@
 #include "letterrender.h"
 #include "memory_factory.h"
 
-#define FOE_MAX 1024
+#define FOE_MAX 512
 #define FOE_TYPE_MAX 4
 #define SHIP_HIT_WIDTH (512 * 512)
 
@@ -54,6 +54,7 @@ int foeCnt, enNum[FOE_TYPE_MAX];
 static unsigned long bulletSpawnedActive = 0;
 static unsigned long bulletSpawnedNormal = 0;
 static unsigned long bulletSpawnFailed = 0;
+static unsigned long foeSpawnCapped = 0;
 static unsigned long bulletRemovedOffscreen = 0;
 static unsigned long bulletRemovedHitShip = 0;
 
@@ -63,6 +64,8 @@ static uint32_t sFrameBulletCount = 0;
 static uint32_t sFrameDrawnBullets = 0;
 static uint32_t sFrameCulledBullets = 0;
 static uint32_t sFrameFoeBudget = 0;
+static uint32_t sFrameNonBulletFoeCount = 0;
+static uint32_t sFrameBossTypeFoeCount = 0;
 
 // Runtime foe update budget.  0 = uncapped (process all foes every frame).
 // Adjusted dynamically by noiz2sa.cpp's adaptive controller each tick.
@@ -91,6 +94,19 @@ static constexpr int kMaxBossActiveBullets = 64;
 static constexpr int kMaxTotalProjectiles = 420;
 #endif
 
+// Companion cap for concurrent non-bullet (ZAKO/MIDDLE/BOSS) Foe entities -
+// unlike bullets above, this had no limit at all. Real-hardware soak testing
+// (2026-09-14, HW_DEBUG endless mode) found the exact same per-entity cost
+// mechanism (no SH-2 FPU) applies to regular enemies, not just BOSS-pattern
+// ones: FPS collapsed from ~24 to 2-9 once concurrent non-bullet count passed
+// ~18-20, with boss_peak=0 throughout every collapse episode observed - so
+// this is a general entity-count problem, not boss-specific.
+static constexpr int kMaxNonBulletFoes = NOIZ2SA_MAX_NONBULLET_FOES;
+
+// Every spawn path checks these caps first, so the foe[] pool can never fill.
+static_assert(kMaxTotalProjectiles + kMaxNonBulletFoes <= FOE_MAX,
+              "foe[] pool must hold all capped projectiles and enemies");
+
 static int sLiveActiveBullets = 0;
 static int sLiveNormalBullets = 0;
 static int sLiveBossActiveBullets = 0;
@@ -105,6 +121,11 @@ int getActiveFoeCount()
   return foeActiveCount;
 }
 
+unsigned long getFoeSpawnCappedCount()
+{
+  return foeSpawnCapped;
+}
+
 int getFoePoolCapacity()
 {
   return FOE_MAX;
@@ -113,15 +134,6 @@ int getFoePoolCapacity()
 int getFoeCommandPoolCachedCount()
 {
   return (int)getFoeCommandCachedCount();
-}
-
-void trimFoeCommandPoolCachedCount(int maxCached)
-{
-  if (maxCached < 0)
-  {
-    maxCached = 0;
-  }
-  trimFoeCommandPool((size_t)maxCached);
 }
 
 /** @brief Returns the array index for a foe pointer. */
@@ -172,6 +184,20 @@ static bool bulletHitsShip(const Foe *fe)
   const int deltaY = fe->pos.y - fe->ppos.y;
   const int shipX = ship.pos.x;
   const int shipY = ship.pos.y;
+
+  // Cheap exact reject before the 64-bit divide: the nearest point lies inside
+  // the segment's bounding box, so a ship more than the hit radius outside it
+  // on either axis cannot be hit.
+  const int kHitRadius = 512; // sqrt(SHIP_HIT_WIDTH)
+  const int minX = (deltaX < 0) ? fe->pos.x : startX;
+  const int maxX = (deltaX < 0) ? startX : fe->pos.x;
+  const int minY = (deltaY < 0) ? fe->pos.y : startY;
+  const int maxY = (deltaY < 0) ? startY : fe->pos.y;
+  if (shipX < minX - kHitRadius || shipX > maxX + kHitRadius ||
+      shipY < minY - kHitRadius || shipY > maxY + kHitRadius)
+  {
+    return false;
+  }
 
   const long long lengthSquared = (long long)deltaX * (long long)deltaX +
                                   (long long)deltaY * (long long)deltaY;
@@ -295,6 +321,7 @@ void initFoes()
   bulletSpawnedActive = 0;
   bulletSpawnedNormal = 0;
   bulletSpawnFailed = 0;
+  foeSpawnCapped = 0;
   bulletRemovedOffscreen = 0;
   bulletRemovedHitShip = 0;
   sLiveActiveBullets = 0;
@@ -317,7 +344,7 @@ void closeFoes()
 
 static int foeIdx = FOE_MAX;
 
-/** @brief Finds the next available foe slot, recycling if needed. */
+/** @brief Finds the next free foe slot, or nullptr if the pool is full. */
 static Foe *getNextFoe()
 {
   int i;
@@ -332,54 +359,7 @@ static Foe *getNextFoe()
   if (i < FOE_MAX)
     return &(foe[foeIdx]);
 
-  // Pool full: recycle least-valuable active slot.
-  // Priority (most expendable first): BULLET, ACTIVE_BULLET, BOSS_ACTIVE_BULLET.
-  static const int kRecyclePriority[3] = {BULLET, ACTIVE_BULLET, BOSS_ACTIVE_BULLET};
-  for (int p = 0; p < 3; p++)
-  {
-    for (int j = 0; j < FOE_MAX; j++)
-    {
-      if (foe[j].spc == kRecyclePriority[p])
-      {
-        removeFoeForced(&foe[j]);
-        return &foe[j];
-      }
-    }
-  }
-
-  // Option 1 behavior: recycle FOE entities too when pressure is extreme.
-  // Prefer non-boss foes first; if only bosses remain, recycle oldest boss.
-  int victim = -1;
-  int oldestCnt = -1;
-  for (int j = 0; j < FOE_MAX; j++)
-  {
-    if (foe[j].spc == FOE && foe[j].type != BOSS_TYPE && foe[j].cnt > oldestCnt)
-    {
-      oldestCnt = foe[j].cnt;
-      victim = j;
-    }
-  }
-  if (victim >= 0)
-  {
-    removeFoeForced(&foe[victim]);
-    return &foe[victim];
-  }
-
-  oldestCnt = -1;
-  for (int j = 0; j < FOE_MAX; j++)
-  {
-    if (foe[j].spc == FOE && foe[j].cnt > oldestCnt)
-    {
-      oldestCnt = foe[j].cnt;
-      victim = j;
-    }
-  }
-  if (victim >= 0)
-  {
-    removeFoeForced(&foe[victim]);
-    return &foe[victim];
-  }
-
+  // Unreachable while the static_assert on the spawn caps holds.
   return nullptr;
 }
 
@@ -387,6 +367,19 @@ Foe *addFoe(int x, int y, Fxp rank, int d, int spd, int type, int shield,
             BulletMLParserBLB *parser)
 {
   int i;
+
+  // Companion cap to the bullet caps above: keeps concurrent non-bullet
+  // enemy count bounded (see kMaxNonBulletFoes comment). Note this also
+  // gates addFoeBossActiveBullet()'s internal addFoe() call, since that
+  // path re-labels the slot as a bullet only *after* addFoe() succeeds -
+  // acceptable here, since denying a spawn while enemy count is already
+  // high is the safe direction regardless of what type it becomes.
+  if (foeCnt >= kMaxNonBulletFoes)
+  {
+    foeSpawnCapped++;
+    return nullptr;
+  }
+
   Foe *fe = getNextFoe();
   if (!fe)
     return nullptr;
@@ -578,6 +571,8 @@ void moveFoes()
   // Snapshot entity pressure for this tick before any removals.
   sFrameFoeCount = (uint32_t)foeActiveCount;
   sFrameBulletCount = (uint32_t)(sLiveActiveBullets + sLiveNormalBullets + sLiveBossActiveBullets);
+  sFrameNonBulletFoeCount = sFrameFoeCount - sFrameBulletCount;
+  sFrameBossTypeFoeCount = (uint32_t)enNum[BOSS_TYPE];
 
 #if NOIZ2SA_PERF_MODE
   if (status == IN_GAME || status == GAMEOVER || status == PAUSE)
@@ -768,11 +763,16 @@ void moveFoes()
                 playChunk(2);
               }
               removeFoeForced(fe);
-              continue;
+              break; // dead: later shots in this frame must not kill it again
             }
             playChunk(1);
           }
         }
+      }
+      if (fe->spc == NOT_EXIST)
+      {
+        // Removal swapped another foe into slot i; process it without i++.
+        continue;
       }
     }
     else
@@ -1055,13 +1055,16 @@ void drawBullets()
 
 void consumeFoePressureStats(FoePressureStats *outStats)
 {
-  outStats->foeCount      = sFrameFoeCount;
-  outStats->bulletCount   = sFrameBulletCount;
-  outStats->drawnBullets  = sFrameDrawnBullets;
-  outStats->culledBullets = sFrameCulledBullets;
-  outStats->foeBudget     = sFrameFoeBudget;
+  outStats->foeCount          = sFrameFoeCount;
+  outStats->bulletCount       = sFrameBulletCount;
+  outStats->drawnBullets      = sFrameDrawnBullets;
+  outStats->culledBullets     = sFrameCulledBullets;
+  outStats->foeBudget         = sFrameFoeBudget;
+  outStats->nonBulletFoeCount = sFrameNonBulletFoeCount;
+  outStats->bossTypeFoeCount  = sFrameBossTypeFoeCount;
   sFrameFoeCount = sFrameBulletCount = sFrameDrawnBullets = sFrameCulledBullets = 0;
   sFrameFoeBudget = 0;
+  sFrameNonBulletFoeCount = sFrameBossTypeFoeCount = 0;
 }
 
 void drawBulletDebugOverlay()

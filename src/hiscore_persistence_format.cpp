@@ -40,6 +40,12 @@ bool decodeHiScoreBackupData(const HiScoreBackupData *data, HiScore *outHiScore)
     return false;
   }
 
+  // stage indexes the title-menu tables; a damaged save must not reach them.
+  if (data->stage < 0 || data->stage >= STAGE_NUM + ENDLESS_STAGE_NUM)
+  {
+    return false;
+  }
+
   for (int i = 0; i < STAGE_NUM; i++)
   {
     outHiScore->stageScore[i] = (int)data->stages[i].stageScore;

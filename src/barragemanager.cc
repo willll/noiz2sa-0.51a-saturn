@@ -29,7 +29,7 @@
 #include <srl_string.hpp>
 #include <ctype.h>
 
-#if HW_DEBUG
+#if NOIZ2SA_EMBED_BULLETML
 #include "hw_debug_bulletml_embedded.hpp"
 #endif
 
@@ -129,7 +129,7 @@ static const char *const kBossBlbNames[] = {
 
 /** @brief Loads BulletML files for a barrage category from disc or embedded data. */
 static int readBulletMLFiles(const char *dirPath, Barrage brg[]) {
-#if HW_DEBUG
+#if NOIZ2SA_EMBED_BULLETML
   int i = 0;
   const HWDebugBulletML::EmbeddedPattern* patterns = nullptr;
   uint32_t patternCount = 0;

@@ -68,7 +68,7 @@ template <typename T, typename... Args>
 inline T* createBulletMlRuntimeObject(Args&&... args)
 {
   bulletml_runtime_trace::noteAlloc(sizeof(T), false);
-  return lwnew T(std::forward<Args>(args)...);
+  return hwnew T(std::forward<Args>(args)...);
 }
 
 template <typename T>
@@ -76,7 +76,7 @@ template <typename T>
 inline T* createBulletMlRuntimeArray(std::size_t count)
 {
   bulletml_runtime_trace::noteAlloc(sizeof(T) * count, true);
-  return lwnew T[count];
+  return hwnew T[count];
 }
 
 template <typename T>

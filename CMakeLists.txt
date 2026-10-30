@@ -1,22 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
 
-# === Line Drawing Path Options ===
-option(NOIZ2SA_ENABLE_HARDWARE_LINE "Enable hardware-accelerated line drawing" ON)
-option(NOIZ2SA_ENABLE_SOFTWARE_LINE "Enable software (buffer) line drawing" ON)
-
-# Gameplay performance toggles
-if(NOIZ2SA_ENABLE_HARDWARE_LINE)
-    add_compile_definitions(NOIZ2SA_ENABLE_HARDWARE_LINE=1)
-else()
-    add_compile_definitions(NOIZ2SA_ENABLE_HARDWARE_LINE=0)
-endif()
-
-if(NOIZ2SA_ENABLE_SOFTWARE_LINE)
-    add_compile_definitions(NOIZ2SA_ENABLE_SOFTWARE_LINE=1)
-else()
-    add_compile_definitions(NOIZ2SA_ENABLE_SOFTWARE_LINE=0)
-endif()
-
 # ============================================================================
 # Saturn Toolchain Configuration
 # ============================================================================
@@ -60,16 +43,10 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# SaturnRingLib include path configuration
-# Use environment variable if available, otherwise use relative path
-if(DEFINED ENV{SRL_INSTALL_ROOT})
-    set(SRL_INSTALL_ROOT $ENV{SRL_INSTALL_ROOT})
-else()
-    set(SRL_INSTALL_ROOT "${CMAKE_SOURCE_DIR}/SaturnRingLib")
-endif()
-
-set(SRL_ROOT "${SRL_INSTALL_ROOT}" CACHE PATH "Path to SaturnRingLib root" FORCE)
-include("/saturn/noiz2sa-0.51a-saturn/cmake/SRL.cmake")
+# SaturnRingLib location: chosen once in cmake/SRL.cmake (-DSRL_ROOT=<path>, else
+# $ENV{SRL_INSTALL_ROOT} on first configure). Every SRL path derives from it.
+include("${CMAKE_SOURCE_DIR}/cmake/SRL.cmake")
+set(SRL_INSTALL_ROOT "${SRL_ROOT}")
 
 # Add subdirectories after SRL setup so Saturn include paths are available
 add_subdirectory(src/bulletml_binary)
@@ -111,13 +88,13 @@ set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 # their console logs unless you explicitly want DevCart output.
 option(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE "Enable Saturn backup-device hi-score persistence" OFF)
 
-# FPS display option
-option(NOIZ2SA_SHOW_FPS "Display FPS counter on screen" ON)
+# On-screen debug HUD: off for release, on in HW_DEBUG (forced below).
+option(NOIZ2SA_SHOW_FPS "Display FPS counter on screen" OFF)
 
 # Memory debug display options
-option(NOIZ2SA_SHOW_FREE_HWRAM "Display free High Work RAM on screen" ON)
-option(NOIZ2SA_SHOW_FREE_LWRAM "Display free Low Work RAM on screen" ON)
-option(NOIZ2SA_SHOW_MEMORY_POOLS "Display pool free/total counters on screen" ON)
+option(NOIZ2SA_SHOW_FREE_HWRAM "Display free High Work RAM on screen" OFF)
+option(NOIZ2SA_SHOW_FREE_LWRAM "Display free Low Work RAM on screen" OFF)
+option(NOIZ2SA_SHOW_MEMORY_POOLS "Display pool free/total counters on screen" OFF)
 option(NOIZ2SA_SHOW_MEMORY_POOL_FOE "Display foe pool free/total" ON)
 option(NOIZ2SA_SHOW_MEMORY_POOL_SHOT "Display shot pool free/total" ON)
 option(NOIZ2SA_SHOW_MEMORY_POOL_BONUS "Display bonus pool free/total" ON)
@@ -125,62 +102,31 @@ option(NOIZ2SA_SHOW_MEMORY_POOL_FRAG "Display frag pool free/total" ON)
 
 # Performance/Debug logging option
 option(NOIZ2SA_ENABLE_PERF_LOGS "Enable debug/performance logs" OFF)
-if(NOIZ2SA_SHOW_FPS)
-    add_compile_definitions(NOIZ2SA_SHOW_FPS=1)
-else()
-    add_compile_definitions(NOIZ2SA_SHOW_FPS=0)
-endif()
-
-if(NOIZ2SA_SHOW_FREE_HWRAM)
-    add_compile_definitions(NOIZ2SA_SHOW_FREE_HWRAM=1)
-else()
-    add_compile_definitions(NOIZ2SA_SHOW_FREE_HWRAM=0)
-endif()
-
-if(NOIZ2SA_SHOW_FREE_LWRAM)
-    add_compile_definitions(NOIZ2SA_SHOW_FREE_LWRAM=1)
-else()
-    add_compile_definitions(NOIZ2SA_SHOW_FREE_LWRAM=0)
-endif()
-
-if(NOIZ2SA_SHOW_MEMORY_POOLS)
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOLS=1)
-else()
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOLS=0)
-endif()
-
-if(NOIZ2SA_SHOW_MEMORY_POOL_FOE)
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FOE=1)
-else()
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FOE=0)
-endif()
-
-if(NOIZ2SA_SHOW_MEMORY_POOL_SHOT)
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_SHOT=1)
-else()
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_SHOT=0)
-endif()
-
-if(NOIZ2SA_SHOW_MEMORY_POOL_BONUS)
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_BONUS=1)
-else()
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_BONUS=0)
-endif()
-
-if(NOIZ2SA_SHOW_MEMORY_POOL_FRAG)
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FRAG=1)
-else()
-    add_compile_definitions(NOIZ2SA_SHOW_MEMORY_POOL_FRAG=0)
-endif()
-
 if(NOIZ2SA_ENABLE_PERF_LOGS)
     add_compile_definitions(NOIZ2SA_ENABLE_PERF_LOGS=1)
 else()
     add_compile_definitions(NOIZ2SA_ENABLE_PERF_LOGS=0)
 endif()
 
+# SRL CPU profiler (srl_profiler.hpp), same knobs as SRL's shared.mk.
+# Its tables cost ~41KB HWRAM; shrink with SRL_CUSTOM_CCFLAGS, e.g.
+# "-DSRL_PROFILER_MAX_FUNCS=256 -DSRL_PROFILER_MAX_ARCS=512".
+option(SRL_PROFILER "Build with the SRL CPU profiler" OFF)
+# Each instrumented file adds hook calls to HWRAM code; instrumenting all of them
+# (~120KB) does not fit beside the game's own HWRAM needs, so list only the
+# files you are measuring.
+set(SRL_PROFILE_SOURCES "" CACHE STRING "Game sources to instrument with -finstrument-functions (;-list, e.g. src/foe.cc;src/screen.cpp); empty = all game sources")
+set(SRL_PROFILER_REPORT_FRAMES "0" CACHE STRING "Frames between profiler reports streamed over the DevCart (0 = read with GDB only)")
+set(SRL_PROFILER_SAMPLE_HZ "0" CACHE STRING "Profiler PC samples per second on the master (0 = no sampler)")
+if(SRL_PROFILER)
+    add_compile_definitions(
+        SRL_PROFILER
+        SRL_PROFILER_REPORT_FRAMES=${SRL_PROFILER_REPORT_FRAMES}
+        SRL_PROFILER_SAMPLE_HZ=${SRL_PROFILER_SAMPLE_HZ}
+    )
+endif()
+
 # Sound configuration
-option(SRL_ENABLE_FREQ_ANALYSIS "Enable frequency analysis" OFF)
 set(MATH_PERFORMANCE_MODE "TURBO" CACHE STRING "Math precision: ACCURATE, FAST, or TURBO")
 option(NOIZ2SA_ENABLE_SOUND "Enable in-game sound (PCM SFX + CDDA BGM)" ON)
 option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound backend" ON)
@@ -191,18 +137,31 @@ set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=ha
 set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
 option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
 option(NOIZ2SA_REFRESH_ONLY_SYNC "Use input-refresh-only frame sync path (bypass slSynch/SRL sync calls)" OFF)
-option(NOIZ2SA_DEBUG_AUTOSTART_SMOKE "Debug-only: auto-start gameplay from title for deterministic smoke runs" OFF)
 option(NOIZ2SA_PERF_MODE "Enable performance mode (disables non-essential draws for benchmarking)" OFF)
-option(NOIZ2SA_BLEND_SKIP "Skip alpha compositing in blendScreen (copy only) — measures FPS headroom without alpha cost" OFF)
 option(NOIZ2SA_DISABLE_BULLET_SLOWDOWN "Disable bullet slowdown when foe count is high" ON)
 option(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY "Enable startup-only BulletML runtime allocation policy" OFF)
-option(NOIZ2SA_DISABLE_FOECMD_PREALLOC "Disable startup FoeCommand pool preallocation (debug corruption mitigation)" OFF)
 option(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK "Skip per-frame soundTick() in refresh-only sync builds" OFF)
 option(NOIZ2SA_ENABLE_INVINCIBLE "Make player invincible (debug/testing)" OFF)
 option(NOIZ2SA_ENABLE_AUTO_SHOT "Automatically fire without button input (debug/testing)" OFF)
 set(NOIZ2SA_SPAWN_BUDGET_PER_TICK "2" CACHE STRING "Maximum new enemies spawned per tick")
 set(NOIZ2SA_FOE_UPDATE_BUDGET "160" CACHE STRING "Maximum foe updates processed per tick")
+# Cap on concurrent non-bullet (ZAKO/MIDDLE/BOSS) Foe entities. Unlike bullets
+# (kMaxActiveBullets/kMaxTotalProjectiles in foe.cc), enemy count was previously
+# uncapped. Real-hardware soak testing (2026-09-14, HW_DEBUG endless mode) found
+# a severe move-phase FPS collapse (~24fps -> 2-9fps, move= 8x+ over budget) once
+# concurrent non-bullet count climbed past ~18-20, driven by SH-2 having no
+# hardware FPU (BulletML direction/trig math is software-emulated per entity).
+# The HW_DEBUG default below (18) is hardware-validated; the production default
+# here is an unvalidated, conservative placeholder pending a similar soak test
+# on a non-HW_DEBUG build.
+set(NOIZ2SA_MAX_NONBULLET_FOES "48" CACHE STRING "Maximum concurrent non-bullet Foe entities")
 option(HW_DEBUG "Hardware debug mode: run without CD-backed files or audio assets" OFF)
+# Decoupled from HW_DEBUG: loads BulletML patterns from a build-time-embedded
+# table (see generate_hw_debug_bulletml.cmake) instead of real SRL::Cd::File
+# reads. HW_DEBUG always implies this (no disc in the automated test rig);
+# this lets a non-HW_DEBUG build (real bullet/enemy caps, real sync path) also
+# run on that same rig for validation, without needing a physical CD.
+option(NOIZ2SA_EMBED_BULLETML "Load BulletML patterns from an embedded table instead of the CD" OFF)
 set(HW_DEBUG_ENDLESS_STAGE "10" CACHE STRING "Endless stage index to boot directly in HW_DEBUG mode (10-13)")
 set(HW_DEBUG_STARTING_SHIPS "20" CACHE STRING "Starting ships in HW_DEBUG mode (minimum 1)")
 set_property(CACHE HW_DEBUG_ENDLESS_STAGE PROPERTY STRINGS 10 11 12 13)
@@ -216,13 +175,30 @@ if(HW_DEBUG)
     # source. HW_DEBUG is the diagnostic build, so paying LogInfo's
     # formatting cost here is expected, unlike the production default above.
     set(SRL_LOG_LEVEL "INFO" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
+    set(NOIZ2SA_SHOW_FPS ON CACHE BOOL "Display FPS counter on screen" FORCE)
+    set(NOIZ2SA_SHOW_MEMORY_POOLS ON CACHE BOOL "Display pool free/total counters on screen" FORCE)
     set(NOIZ2SA_SHOW_FREE_HWRAM ON CACHE BOOL "Display free High Work RAM on screen" FORCE)
     set(NOIZ2SA_SHOW_FREE_LWRAM ON CACHE BOOL "Display free Low Work RAM on screen" FORCE)
     set(NOIZ2SA_ENABLE_SOUND OFF CACHE BOOL "Enable in-game sound (PCM SFX + CDDA BGM)" FORCE)
     set(NOIZ2SA_ENABLE_PCM_SFX OFF CACHE BOOL "Enable PCM SFX loading through Ponesound backend" FORCE)
     set(NOIZ2SA_ENABLE_INVINCIBLE ON CACHE BOOL "Make player invincible (debug/testing)" FORCE)
     set(NOIZ2SA_ENABLE_AUTO_SHOT ON CACHE BOOL "Automatically fire without button input (debug/testing)" FORCE)
+    # Hardware-validated (see NOIZ2SA_MAX_NONBULLET_FOES declaration above).
+    set(NOIZ2SA_MAX_NONBULLET_FOES "18" CACHE STRING "Maximum concurrent non-bullet Foe entities" FORCE)
+    set(NOIZ2SA_EMBED_BULLETML ON CACHE BOOL "Load BulletML patterns from an embedded table instead of the CD" FORCE)
+endif()
 
+# After the HW_DEBUG block, so its FORCE'd HUD values apply on the first configure.
+foreach(_hud IN ITEMS FPS FREE_HWRAM FREE_LWRAM MEMORY_POOLS
+                      MEMORY_POOL_FOE MEMORY_POOL_SHOT MEMORY_POOL_BONUS MEMORY_POOL_FRAG)
+    if(NOIZ2SA_SHOW_${_hud})
+        add_compile_definitions(NOIZ2SA_SHOW_${_hud}=1)
+    else()
+        add_compile_definitions(NOIZ2SA_SHOW_${_hud}=0)
+    endif()
+endforeach()
+
+if(HW_DEBUG OR NOIZ2SA_EMBED_BULLETML)
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
     file(GLOB HW_DEBUG_ZAKO_BLB_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/noiz2sa_share/zako_blb/*.blb")
     file(GLOB HW_DEBUG_MIDDLE_BLB_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/noiz2sa_share/middle_blb/*.blb")
@@ -247,11 +223,18 @@ set(NOIZ2SA_POST_LOAD_BG_COLOR "BLUE" CACHE STRING "Background color after loadi
 set_property(CACHE NOIZ2SA_POST_LOAD_BG_COLOR PROPERTY STRINGS BLUE WHITE BLACK)
 
 # SGL Work Area Settings
-set(SGL_MAX_VERTICES "1800" CACHE STRING "Maximum vertices")
-set(SGL_MAX_POLYGONS "1200" CACHE STRING "Maximum polygons")
+set(SGL_MAX_VERTICES "384" CACHE STRING "Maximum vertices")
+set(SGL_MAX_POLYGONS "256" CACHE STRING "Maximum polygons")
 set(SGL_MAX_EVENTS "64" CACHE STRING "Maximum events")
 set(SGL_MAX_WORKS "256" CACHE STRING "Maximum work units")
 set(SGL_SLAVE_BUF_SIZE "71680" CACHE STRING "Slave buffer size")
+
+# BulletMLRunnerImpl task-buffer slab pool (see bulletmlrunner.hpp TaskBufferPool).
+# kSlotCount is the number of concurrent per-runner task buffers the pool can
+# hand out; kSlotCapacity is tasks per buffer. Measured real-hardware peak
+# concurrent usage (45min endless-mode soak, 2026-09-14): 124/400 slots.
+set(NOIZ2SA_TASKPOOL_SLOT_COUNT "220" CACHE STRING "BulletML task-buffer pool slot count")
+set(NOIZ2SA_TASKPOOL_SLOT_CAPACITY "32" CACHE STRING "BulletML task-buffer pool tasks per slot")
 
 # Memory allocator
 set(SRL_MALLOC_METHOD "TLSF" CACHE STRING "Memory allocator method (TLSF or empty)")
@@ -369,12 +352,6 @@ else()
     add_compile_definitions(NOIZ2SA_PERF_MODE=0)
 endif()
 
-if(NOIZ2SA_BLEND_SKIP)
-    add_compile_definitions(NOIZ2SA_BLEND_SKIP=1)
-else()
-    add_compile_definitions(NOIZ2SA_BLEND_SKIP=0)
-endif()
-
 if(NOIZ2SA_DISABLE_BULLET_SLOWDOWN)
     add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=1)
 else()
@@ -385,12 +362,6 @@ if(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY)
     add_compile_definitions(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY=1)
 else()
     add_compile_definitions(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY=0)
-endif()
-
-if(NOIZ2SA_DISABLE_FOECMD_PREALLOC)
-    add_compile_definitions(NOIZ2SA_DISABLE_FOECMD_PREALLOC=1)
-else()
-    add_compile_definitions(NOIZ2SA_DISABLE_FOECMD_PREALLOC=0)
 endif()
 
 if(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK)
@@ -417,11 +388,18 @@ else()
     add_compile_definitions(HW_DEBUG=0)
 endif()
 
+if(NOIZ2SA_EMBED_BULLETML)
+    add_compile_definitions(NOIZ2SA_EMBED_BULLETML=1)
+else()
+    add_compile_definitions(NOIZ2SA_EMBED_BULLETML=0)
+endif()
+
 add_compile_definitions(
     HW_DEBUG_ENDLESS_STAGE=${HW_DEBUG_ENDLESS_STAGE}
     HW_DEBUG_STARTING_SHIPS=${HW_DEBUG_STARTING_SHIPS}
     NOIZ2SA_SPAWN_BUDGET_PER_TICK=${NOIZ2SA_SPAWN_BUDGET_PER_TICK}
     NOIZ2SA_FOE_UPDATE_BUDGET=${NOIZ2SA_FOE_UPDATE_BUDGET}
+    NOIZ2SA_MAX_NONBULLET_FOES=${NOIZ2SA_MAX_NONBULLET_FOES}
 )
 
 # SGL Work Area
@@ -431,6 +409,12 @@ add_compile_definitions(
     SGL_MAX_EVENTS=${SGL_MAX_EVENTS}
     SGL_MAX_WORKS=${SGL_MAX_WORKS}
     SGL_SLAVE_BUF_SIZE=${SGL_SLAVE_BUF_SIZE}
+)
+
+# BulletMLRunnerImpl task-buffer pool
+add_compile_definitions(
+    NOIZ2SA_TASKPOOL_SLOT_COUNT=${NOIZ2SA_TASKPOOL_SLOT_COUNT}
+    NOIZ2SA_TASKPOOL_SLOT_CAPACITY=${NOIZ2SA_TASKPOOL_SLOT_CAPACITY}
 )
 
 # TLSF Allocator
@@ -507,6 +491,19 @@ if(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE)
                 src/hiscore_persistence.cpp
                 src/hiscore_persistence_format.cpp
         )
+endif()
+
+if(SRL_PROFILER)
+    # Only game code gets hooks; SRL/SGL/SaturnMathPP, the vendored libraries
+    # under src/*/INC and libstdc++ headers are excluded, so their inlined code
+    # counts as the caller's own time (and doesn't bloat HWRAM with hooks).
+    if(SRL_PROFILE_SOURCES STREQUAL "")
+        set(_srl_profiled_sources ${SOURCES_NOIZ2SA})
+    else()
+        set(_srl_profiled_sources ${SRL_PROFILE_SOURCES})
+    endif()
+    set_source_files_properties(${_srl_profiled_sources} PROPERTIES COMPILE_OPTIONS
+        "-finstrument-functions;-finstrument-functions-exclude-file-list=${SRL_ROOT}/,/include/c++/,/src/ponesound/,/src/smpc/,/src/decompression/,/src/backup/")
 endif()
 
 # SGL Preloader - MUST be linked first (before all other object files)
@@ -609,9 +606,9 @@ set(ENTRYPOINT "" CACHE STRING "Optional additional directory or files for ISO g
 
 # Find iso2raw in SaturnRingLib tools (with fallback)
 if(WIN32)
-    set(ISO2RAW_EXECUTABLE "${CMAKE_SOURCE_DIR}/../SaturnRingLib/tools/bin/win/iso2raw/iso2raw.exe")
+    set(ISO2RAW_EXECUTABLE "${SRL_ROOT}/tools/bin/win/iso2raw/iso2raw.exe")
 else()
-    set(ISO2RAW_EXECUTABLE "${CMAKE_SOURCE_DIR}/../SaturnRingLib/tools/bin/lin/iso2raw/iso2raw")
+    set(ISO2RAW_EXECUTABLE "${SRL_ROOT}/tools/bin/lin/iso2raw/iso2raw")
     if(NOT EXISTS "${ISO2RAW_EXECUTABLE}")
         find_program(ISO2RAW_EXECUTABLE iso2raw)
     endif()
@@ -688,10 +685,6 @@ if(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE)
     target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_ENABLE_BACKUP_PERSISTENCE=1)
 else()
     target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_ENABLE_BACKUP_PERSISTENCE=0)
-endif()
-
-if(NOIZ2SA_DEBUG_AUTOSTART_SMOKE)
-    target_compile_definitions(${CD_NAME}.elf PUBLIC NOIZ2SA_DEBUG_AUTOSTART_SMOKE=1)
 endif()
 
 target_link_options(${CD_NAME}.elf PUBLIC
@@ -863,9 +856,20 @@ message(STATUS "Maximum vertices: ${SGL_MAX_VERTICES}")
 message(STATUS "Maximum polygons: ${SGL_MAX_POLYGONS}")
 message(STATUS "Maximum events: ${SGL_MAX_EVENTS}")
 message(STATUS "Maximum work units: ${SGL_MAX_WORKS}")
+message(STATUS "Task pool slots: ${NOIZ2SA_TASKPOOL_SLOT_COUNT} x ${NOIZ2SA_TASKPOOL_SLOT_CAPACITY} tasks")
+message(STATUS "Max non-bullet foes: ${NOIZ2SA_MAX_NONBULLET_FOES}")
 message(STATUS "Video mode: ${SRL_MODE}")
 message(STATUS "Framerate: ${SRL_FRAMERATE}")
 message(STATUS "HW debug mode: ${HW_DEBUG}")
+if(SRL_PROFILER)
+    message(STATUS "SRL profiler: ON (report every ${SRL_PROFILER_REPORT_FRAMES} frames, sampler ${SRL_PROFILER_SAMPLE_HZ} Hz)")
+    if(SRL_PROFILE_SOURCES STREQUAL "")
+        message(STATUS "SRL profiler instruments: all game sources")
+    else()
+        message(STATUS "SRL profiler instruments: ${SRL_PROFILE_SOURCES}")
+    endif()
+endif()
+message(STATUS "Embedded BulletML patterns: ${NOIZ2SA_EMBED_BULLETML}")
 if(HW_DEBUG)
     message(STATUS "HW debug endless stage: ${HW_DEBUG_ENDLESS_STAGE}")
 endif()
@@ -1518,12 +1522,6 @@ add_sh2_logic_test(
 )
 
 add_sh2_logic_test(
-    "noiz2sa_foecommand_trim_ut"
-    "${CMAKE_SOURCE_DIR}/Tests/bulletml/foecommand_trim_tests.cpp"
-    "cd_foecommand_trim"
-)
-
-add_sh2_logic_test(
     "noiz2sa_memory_pressure_ut"
     "${CMAKE_SOURCE_DIR}/Tests/bulletml/memory_pressure_tests.cpp"
     "cd_memory_pressure"
@@ -1577,16 +1575,6 @@ add_test(
             --log "${CMAKE_SOURCE_DIR}/Tests/uts_bulletml_latch.log"
 )
 set_tests_properties(bulletml_latch_recovery_test PROPERTIES TIMEOUT 700)
-
-add_test(
-    NAME foecommand_trim_test
-    COMMAND bash "${CMAKE_SOURCE_DIR}/Tests/test_native_sh2_campaign.sh"
-            --cd-name noiz2sa_foecommand_trim_ut
-            --emulator mednafen
-            --strict
-            --log "${CMAKE_SOURCE_DIR}/Tests/uts_foecommand_trim.log"
-)
-set_tests_properties(foecommand_trim_test PROPERTIES TIMEOUT 700)
 
 add_test(
     NAME memory_pressure_policy_test

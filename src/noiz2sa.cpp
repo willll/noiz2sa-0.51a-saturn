@@ -9,9 +9,6 @@
  *
  * @version $Revision: 1.8 $
  */
-// TEMP: forces the cross-CPU cache-coherency probe below; remove with the probe.
-#define NOIZ2SA_CACHE_COHERENCY_PROBE 1
-
 #include "SDL.h"
 #include <stdio.h>
 #include <srl.hpp> // for malloc/free, atoi
@@ -19,8 +16,6 @@
 #include <srl_timer.hpp>
 #include <srl_log.hpp>    // for logging
 #include <srl_system.hpp> // for exit
-#include <srl_slave.hpp>  // TEMP: cross-CPU cache-coherency probe
-#include "memory_factory.h" // TEMP: cross-CPU cache-coherency probe (allocateLowWorkRamItems)
 
 // Include Random class (must be AFTER SRL headers to avoid macro conflicts)
 #include <impl/random.hpp>
@@ -240,6 +235,9 @@ void initGame(int stg)
 
   status = IN_GAME;
 
+  // The title screen caps foe updates per tick; gameplay must run uncapped.
+  setFoeBudgetLimit(0);
+
   initShip();
   initShots();
   initFoes();
@@ -388,8 +386,14 @@ static inline uint32_t profileMicrosNow()
 static inline void synchronizeFrame()
 {
 #if defined(NOIZ2SA_REFRESH_ONLY_SYNC) && (NOIZ2SA_REFRESH_ONLY_SYNC != 0)
-  // Diagnostic mode: bypass SGL/SRL synchronize path to isolate SlaveControl
-  // null-jump crashes while keeping input updates alive.
+  // 2026-09-14 experiment: the slSynch()-skip below was added to dodge a
+  // SlaveControl null-jump crash. Several unrelated root causes (cache-probe
+  // infinite halt, untested malloc hang, LWRAM exhaustion) have since been
+  // found and fixed on real hardware this session, and skipping slSynch()
+  // here leaves the VDP1 sort list never drained, so every DrawLine/DrawPolygon
+  // submission silently fails once it fills (observed: vdp1_fail climbing into
+  // the hundreds within seconds). Trying slSynch() again to see if the
+  // original crash still reproduces now that those causes are gone.
   static uint32_t sRefreshOnlySyncCalls = 0u;
   ++sRefreshOnlySyncCalls;
   if (sRefreshOnlySyncCalls <= 8u || (sRefreshOnlySyncCalls % 120u) == 0u)
@@ -401,13 +405,15 @@ static inline void synchronizeFrame()
         tick,
         (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
   }
+  slSynch();
   SRL::Input::Management::RefreshPeripherals();
 #elif HW_DEBUG
-  // Skip VBlank/SGL sync in HW_DEBUG: sprite data not loaded, SGL pipeline
-  // may never complete, causing slSynch() to block indefinitely.
-  // Match the same skip applied in loading_screen.cpp Render().
+  // 2026-09-14 experiment: see NOIZ2SA_REFRESH_ONLY_SYNC branch above — same
+  // slSynch()-skip, same rationale for trying it again now.
+  slSynch();
   SRL::Input::Management::RefreshPeripherals();
-#elif defined(NOIZ2SA_ENABLE_GUN_SYNC) && NOIZ2SA_ENABLE_GUN_SYNC
+#elif (defined(NOIZ2SA_ENABLE_GUN_SYNC) && NOIZ2SA_ENABLE_GUN_SYNC) || defined(SRL_PROFILER)
+  // The profiler counts frames and streams its reports from Core::Synchronize().
   SRL::Core::Synchronize();
 #else
   // Avoid SRL::Input::Gun::Synchronize() per-frame slGetStatus() polling.
@@ -461,21 +467,9 @@ static inline bool shouldClearBulletMlAllocFailureLatch(uint32_t hwFree, int liv
   // Forced recovery: checked BEFORE the backoff-retry gate so that
   // repeated allocation failures (which keep pushing sRetryTick forward)
   // cannot indefinitely delay recovery and cause a permanent no-shoot state.
-  //
-  // However, forced recovery requires a minimum hwFree to avoid allocating
-  // in a crash scenario. We use 8KB as the floor — below this, recovery
-  // would likely fail anyway, so we wait for the backoff/normal retry path.
-  const uint32_t MIN_HW_FOR_RECOVERY = 8192u;
-
-  if (status != TITLE && latchAge >= 300 && liveProjectiles <= 64)
+  if (isForcedLatchClearDue(status == TITLE, latchAge, liveProjectiles, hwFree))
   {
-    if (hwFree > 0u && hwFree >= MIN_HW_FOR_RECOVERY)
-      return true;
-  }
-  if (status != TITLE && latchAge >= 900)
-  {
-    if (hwFree > 0u && hwFree >= MIN_HW_FOR_RECOVERY)
-      return true;
+    return true;
   }
 
   if (tick < sRetryTick)
@@ -521,19 +515,6 @@ static inline bool shouldClearBulletMlAllocFailureLatch(uint32_t hwFree, int liv
   return true;
 }
 
-static inline int getFoeCommandCacheBudget(uint32_t hwFree, int gameStatus)
-{
-  if (hwFree > 0u && hwFree < 20000u)
-  {
-    return 32;
-  }
-  if (hwFree > 0u && hwFree < 32000u)
-  {
-    return 96;
-  }
-  return (gameStatus == TITLE) ? 96 : 192;
-}
-
 #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
 static volatile uint8_t gDiagPhaseTag = 0u;
 static inline void setDiagPhase(uint8_t tag)
@@ -551,17 +532,14 @@ static void move()
   uint32_t phaseStart;
   const int liveProjectiles = getLiveProjectileCount();
   const uint32_t hwFree = (uint32_t)SRL::Memory::HighWorkRam::GetFreeSpace();
-  const int foeCmdCacheBudget = getFoeCommandCacheBudget(hwFree, status);
   static bool sTitleLatchRecoveryCleared = false;
   if (hasBulletMlAllocFailureLatched())
   {
-    trimFoeCommandPoolCachedCount(0);
     BulletMLRunnerImpl::ReleaseTaskBufferCache();
     if (status == TITLE && !sTitleLatchRecoveryCleared)
     {
       // Attract mode LWRAM recovery: destroy all active foes once to free
-      // their LWRAM task buffer allocations. trimFoeCommandPoolCachedCount(0)
-      // above reclaims pooled FoeCommand nodes on subsequent ticks. Once the
+      // their LWRAM task buffer allocations. Once the
       // latch clears (~30 ticks), new task buffer allocations succeed and
       // attract mode resumes. Only clear once per latch episode - repeating
       // it every tick for the full ~30-tick duration just makes every enemy
@@ -574,7 +552,6 @@ static void move()
   else
   {
     sTitleLatchRecoveryCleared = false;
-    trimFoeCommandPoolCachedCount(foeCmdCacheBudget);
     if (hwFree > 0u && hwFree < 20000u)
     {
       BulletMLRunnerImpl::ReleaseTaskBufferCache();
@@ -589,9 +566,8 @@ static void move()
 #if HW_DEBUG
   if ((tick % 60) == 0)
   {
-    SRL::Logger::LogInfo("[FOECMD_POOL] cached=%d budget=%d task_cache=%u hwfree=%u",
+    SRL::Logger::LogInfo("[FOECMD_POOL] cached=%d task_cache=%u hwfree=%u",
                          getFoeCommandPoolCachedCount(),
-                         foeCmdCacheBudget,
                          (unsigned)BulletMLRunnerImpl::GetTaskBufferCacheCapacity(),
                          (unsigned)hwFree);
   }
@@ -1000,8 +976,6 @@ struct PerfTraceWindow {
   uint64_t vdpHwLineUs;
   uint64_t vdpPanelUploadBytes;
   uint64_t vdpPlayfieldUploadBytes;
-  uint64_t blendCopyUs;
-  uint64_t blendAlphaUs;
   uint64_t vdp1BlitUploadUs;
   uint64_t vdp1BlitDrawUs;
   uint64_t foeTotalCount;
@@ -1009,8 +983,14 @@ struct PerfTraceWindow {
   uint64_t drawnBulletTotal;
   uint64_t culledBulletTotal;
   uint64_t foeBudgetTotal;
+  uint64_t nonBulletFoeTotal;
   uint32_t peakFoeCount;
   uint32_t peakBulletCount;
+  uint32_t peakNonBulletFoeCount;
+  uint32_t peakBossTypeFoeCount;
+  uint32_t peakLineCommands;
+  uint32_t peakPolygonsSubmitted;
+  uint32_t vdp1SubmitFailures;
   uint32_t loopCount;
   uint32_t renderCount;
   uint32_t overBudgetCount;
@@ -1040,11 +1020,6 @@ static inline void setDebugHudColorRed()
   SRL::ASCII::SetColor(red, 15);
   SRL::Debug::PrintColorSet(2);
 }
-
-#if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
-static int gAutoStartTitleFrames = 0;
-static bool gAutoStartTriggered = false;
-#endif
 
 static void drawFpsCounter()
 {
@@ -1158,13 +1133,12 @@ static void logPerfTraceWindowAndReset()
   const uint32_t avgVdpHwLineUs = (uint32_t)(gPerfTraceWindow.vdpHwLineUs / loops);
   const uint32_t avgVdpPanelUploadBytes = (uint32_t)(gPerfTraceWindow.vdpPanelUploadBytes / loops);
   const uint32_t avgVdpPlayfieldUploadBytes = (uint32_t)(gPerfTraceWindow.vdpPlayfieldUploadBytes / loops);
-  const uint32_t avgBlendCopyUs = (uint32_t)(gPerfTraceWindow.blendCopyUs / loops);
-  const uint32_t avgBlendAlphaUs = (uint32_t)(gPerfTraceWindow.blendAlphaUs / loops);
   const uint32_t avgFoeCount = (uint32_t)(gPerfTraceWindow.foeTotalCount / loops);
   const uint32_t avgBulletCount = (uint32_t)(gPerfTraceWindow.bulletTotalCount / loops);
   const uint32_t avgDrawnBullets = (uint32_t)(gPerfTraceWindow.drawnBulletTotal / loops);
   const uint32_t avgCulledBullets = (uint32_t)(gPerfTraceWindow.culledBulletTotal / loops);
   const uint32_t avgFoeBudget = (uint32_t)(gPerfTraceWindow.foeBudgetTotal / loops);
+  const uint32_t avgNonBulletFoeCount = (uint32_t)(gPerfTraceWindow.nonBulletFoeTotal / loops);
   const uint32_t cullPct = (avgDrawnBullets + avgCulledBullets > 0u) ?
       (avgCulledBullets * 100u) / (avgDrawnBullets + avgCulledBullets) : 0u;
   const uint32_t budgetUsePct = (avgTotalUs * 100u) / kTargetFrameBudgetUs;
@@ -1294,12 +1268,12 @@ static void logPerfTraceWindowAndReset()
       (unsigned int)avgVdpHwLineUs);
 
     SRL::Logger::LogInfo(
-      "[PERF_DRAW2] blend_copy=%uus blend_alpha=%uus skip=%d vdp1_upload=%uus vdp1_draw=%uus",
-      (unsigned int)avgBlendCopyUs,
-      (unsigned int)avgBlendAlphaUs,
-      (int)NOIZ2SA_BLEND_SKIP,
+      "[PERF_DRAW2] vdp1_upload=%uus vdp1_draw=%uus vdp1_lines_peak=%u vdp1_polys_peak=%u vdp1_fail=%u",
       (unsigned int)(gPerfTraceWindow.vdp1BlitUploadUs / loops),
-      (unsigned int)(gPerfTraceWindow.vdp1BlitDrawUs / loops));
+      (unsigned int)(gPerfTraceWindow.vdp1BlitDrawUs / loops),
+      (unsigned int)gPerfTraceWindow.peakLineCommands,
+      (unsigned int)gPerfTraceWindow.peakPolygonsSubmitted,
+      (unsigned int)gPerfTraceWindow.vdp1SubmitFailures);
 
     SRL::Logger::LogInfo(
       "[PERF_FOE] avg_entities=%u peak=%u avg_bullets=%u peak=%u budget=%u",
@@ -1308,6 +1282,15 @@ static void logPerfTraceWindowAndReset()
       (unsigned int)avgBulletCount,
       (unsigned int)gPerfTraceWindow.peakBulletCount,
       (unsigned int)avgFoeBudget);
+
+    // Separate line: appending these to [PERF_FOE] above overflowed
+    // SRL_DEBUG_MAX_LOG_LENGTH=120 (silently truncated mid-field).
+    SRL::Logger::LogInfo(
+      "[PERF_FOE2] nb_avg=%u nb_peak=%u boss_peak=%u capped=%lu",
+      (unsigned int)avgNonBulletFoeCount,
+      (unsigned int)gPerfTraceWindow.peakNonBulletFoeCount,
+      (unsigned int)gPerfTraceWindow.peakBossTypeFoeCount,
+      getFoeSpawnCappedCount());
 
     SRL::Logger::LogInfo(
       "[BML-POOL-STAT] states=%lu na4=%lu na8=%lu na12=%lu na16=%lu na20=%lu na24=%lu na28=%lu na32=%lu pa4=%lu pa8=%lu pa12=%lu pa16=%lu pa20=%lu pa24=%lu pa28=%lu pa32=%lu",
@@ -1360,194 +1343,6 @@ static void logPerfTraceWindowAndReset()
   gDrawPhaseFrameCount = 0;
 }
 
-// TEMP DIAGNOSTIC: cross-CPU (master/slave SH2) shared-memory cache-coherency
-// probe. Dispatches a task to the slave that stamps a distinctive, changing
-// pattern into a buffer; the master immediately polls IsDone() and verifies
-// every word against the expected pattern, in both HWRAM (plain static,
-// normally cached) and LWRAM (allocateLowWorkRamItems, matching
-// BackgroundRenderTask's buffer placement) to determine whether either
-// placement exhibits stale reads across the master/slave boundary. Answers
-// the open question of whether offloading real per-frame work (e.g.
-// drawBullets) to the slave needs explicit cache handling, before building
-// that feature on an unverified assumption. Remove after use.
-#if NOIZ2SA_CACHE_COHERENCY_PROBE
-namespace {
-
-constexpr int kProbeBufWords = 256;
-constexpr uint32_t kProbeMultiplier = 1000003u;
-
-static uint32_t sProbeHwramBuf[kProbeBufWords];
-
-// Canary: a SEPARATE HWRAM buffer the MASTER itself writes (normal cached
-// store) immediately before each dispatch, to directly test whether purging
-// the master's cache (to see the slave's fresh writes) also discards the
-// master's OWN not-yet-evicted dirty writes elsewhere in shared memory -
-// exactly the risk a blind purge-before-flipScreen() would carry for the
-// real drawBullets design (background/foes/ship also write into `buf`
-// earlier in the same frame via normal cached access).
-static uint32_t sMasterCanaryBuf[kProbeBufWords];
-constexpr uint32_t kCanaryMultiplier = 2000003u;
-
-// Cache Control Register purge, same register/bit srl_slave.hpp already uses
-// to purge the SLAVE's own instruction cache. SH-2 has a unified I/D cache,
-// so this purges data too; used here on the MASTER to force a fresh read.
-static inline void purgeMasterCache()
-{
-  *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
-  asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop" ::: "memory");
-}
-
-class CoherencyProbeTask : public SRL::Types::ITask
-{
-public:
-  uint32_t generation = 0;
-  uint32_t *target = nullptr;
-
-  void SetTarget(uint32_t *t) { target = t; }
-
-protected:
-  void Do() override
-  {
-    generation++;
-    if (target == nullptr)
-    {
-      return;
-    }
-    for (int i = 0; i < kProbeBufWords; i++)
-    {
-      target[i] = generation * kProbeMultiplier + (uint32_t)i;
-    }
-  }
-};
-
-static bool probeVerifyBuffer(const uint32_t *buf, uint32_t expectedGen)
-{
-  for (int i = 0; i < kProbeBufWords; i++)
-  {
-    const uint32_t expected = expectedGen * kProbeMultiplier + (uint32_t)i;
-    if (buf[i] != expected)
-    {
-      return false;
-    }
-  }
-  return true;
-}
-
-} // namespace
-
-// Dispatches `task`, then busy-spins on IsDone() with NO SRL::Core::Synchronize()
-// calls at all - this is the pattern the real drawBullets-on-slave design
-// needs for its final "confirm done right before flipScreen()" step, since
-// mid-frame there is no frame boundary to pace against. Returns the number
-// of spin iterations it took (0 = already done on first check), or -1 if it
-// never completed within maxSpinIterations.
-static int32_t spinWaitForProbeTaskDone(CoherencyProbeTask &task, uint32_t maxSpinIterations)
-{
-  uint32_t spins = 0;
-  while (!task.IsDone())
-  {
-    if (spins >= maxSpinIterations)
-    {
-      return -1;
-    }
-    spins++;
-  }
-  return (int32_t)spins;
-}
-
-static void runCacheCoherencyProbe()
-{
-  uint32_t *lwramBuf = allocateLowWorkRamItems<uint32_t>(kProbeBufWords);
-  SRL::Logger::LogWarning("[CACHE_PROBE] hwramBuf=%p lwramBuf=%p", (void *)sProbeHwramBuf, (void *)lwramBuf);
-
-  static CoherencyProbeTask hwTask;
-  static CoherencyProbeTask lwTask;
-  hwTask.SetTarget(sProbeHwramBuf);
-  lwTask.SetTarget(lwramBuf);
-  hwTask.ResetTask();
-  lwTask.ResetTask();
-
-  uint32_t hwChecked = 0, hwMismatches = 0, hwNeverDone = 0, hwFirstMismatchGen = 0;
-  uint32_t lwChecked = 0, lwMismatches = 0, lwNeverDone = 0, lwFirstMismatchGen = 0;
-  uint32_t hwSpinMax = 0, lwSpinMax = 0;
-  uint64_t hwSpinSum = 0, lwSpinSum = 0;
-
-  constexpr uint32_t kProbeIterations = 100;
-  constexpr uint32_t kMaxSpinIterations = 2000000;
-  for (uint32_t iter = 0; iter < kProbeIterations; iter++)
-  {
-    const uint32_t hwExpectGen = hwTask.generation + 1;
-    SRL::Slave::ExecuteOnSlave(hwTask);
-    hwChecked++;
-    const int32_t hwSpins = spinWaitForProbeTaskDone(hwTask, kMaxSpinIterations);
-    if (hwSpins < 0)
-    {
-      hwNeverDone++;
-    }
-    else
-    {
-      hwSpinSum += (uint32_t)hwSpins;
-      if ((uint32_t)hwSpins > hwSpinMax) hwSpinMax = (uint32_t)hwSpins;
-      if (!probeVerifyBuffer(sProbeHwramBuf, hwExpectGen))
-      {
-        hwMismatches++;
-        if (hwFirstMismatchGen == 0)
-        {
-          hwFirstMismatchGen = hwExpectGen;
-        }
-      }
-    }
-
-    const uint32_t lwExpectGen = lwTask.generation + 1;
-    SRL::Slave::ExecuteOnSlave(lwTask);
-    lwChecked++;
-    const int32_t lwSpins = spinWaitForProbeTaskDone(lwTask, kMaxSpinIterations);
-    if (lwSpins < 0)
-    {
-      lwNeverDone++;
-    }
-    else
-    {
-      lwSpinSum += (uint32_t)lwSpins;
-      if ((uint32_t)lwSpins > lwSpinMax) lwSpinMax = (uint32_t)lwSpins;
-      if (!probeVerifyBuffer(lwramBuf, lwExpectGen))
-      {
-        lwMismatches++;
-        if (lwFirstMismatchGen == 0)
-        {
-          lwFirstMismatchGen = lwExpectGen;
-        }
-      }
-    }
-
-    if ((iter % 10) == 0)
-    {
-      SRL::Logger::LogWarning(
-        "[CACHE_PROBE2] progress iter=%lu hw(checked=%lu mism=%lu neverDone=%lu spinMax=%lu) lw(checked=%lu mism=%lu neverDone=%lu spinMax=%lu)",
-        (unsigned long)iter,
-        (unsigned long)hwChecked, (unsigned long)hwMismatches, (unsigned long)hwNeverDone, (unsigned long)hwSpinMax,
-        (unsigned long)lwChecked, (unsigned long)lwMismatches, (unsigned long)lwNeverDone, (unsigned long)lwSpinMax);
-    }
-  }
-
-  SRL::Logger::LogWarning(
-    "[CACHE_PROBE2] FINAL hw(checked=%lu mism=%lu neverDone=%lu spinMax=%lu spinAvg=%lu) lw(checked=%lu mism=%lu neverDone=%lu spinMax=%lu spinAvg=%lu)",
-    (unsigned long)hwChecked, (unsigned long)hwMismatches, (unsigned long)hwNeverDone, (unsigned long)hwSpinMax,
-    (unsigned long)(hwChecked > 0 ? hwSpinSum / hwChecked : 0),
-    (unsigned long)lwChecked, (unsigned long)lwMismatches, (unsigned long)lwNeverDone, (unsigned long)lwSpinMax,
-    (unsigned long)(lwChecked > 0 ? lwSpinSum / lwChecked : 0));
-
-  while (true)
-  {
-    SRL::Logger::LogWarning(
-      "[CACHE_PROBE] HALT hw(checked=%lu mism=%lu neverDone=%lu) lw(checked=%lu mism=%lu neverDone=%lu) -- probe complete, see FINAL line above",
-      (unsigned long)hwChecked, (unsigned long)hwMismatches, (unsigned long)hwNeverDone,
-      (unsigned long)lwChecked, (unsigned long)lwMismatches, (unsigned long)lwNeverDone);
-    SRL::Core::Synchronize();
-  }
-}
-#endif // NOIZ2SA_CACHE_COHERENCY_PROBE
-
 int main()
 {
   SRL::Logger::LogInfo("[MAIN] Noiz2sa startup (v%d)", VERSION_NUM);
@@ -1565,10 +1360,6 @@ int main()
   SRL::Logger::LogInfo("[MAIN_TRACE] before SRL::Core::Initialize");
   SRL::Core::Initialize(SRL::Types::HighColor(20, 10, 50));
   SRL::Logger::LogInfo("[MAIN_TRACE] after SRL::Core::Initialize");
-
-#if NOIZ2SA_CACHE_COHERENCY_PROBE
-  runCacheCoherencyProbe(); // TEMP: never returns
-#endif
 
   // Define loading steps for main()
   const char* mainSteps[] = {
@@ -1642,17 +1433,12 @@ int main()
   // Pre-allocate FoeCommand pool after startup initialization has configured
   // memory systems and loaded startup assets. Doing this too early allows
   // later init paths to stomp the free-list metadata.
-#if defined(NOIZ2SA_DISABLE_FOECMD_PREALLOC) && (NOIZ2SA_DISABLE_FOECMD_PREALLOC != 0)
-  SRL::Logger::LogInfo("[MAIN_TRACE] preallocateFoeCommandPool disabled by NOIZ2SA_DISABLE_FOECMD_PREALLOC");
-  preallocateFoeCommandPool(0);
-#else
   SRL::Logger::LogInfo("[MAIN_TRACE] before preallocateFoeCommandPool(256)");
   preallocateFoeCommandPool(256);
   SRL::Logger::LogInfo("[MAIN_TRACE] after preallocateFoeCommandPool(256)");
-#endif
 
   // Initialise the BulletMLRunnerImpl task-buffer slab pool.
-  // One contiguous LWRAM allocation (400×32×24B = 307KB) serves all task
+  // One contiguous LWRAM allocation (size logged below) serves all task
   // buffers for the entire session — no per-buffer lwnew/delete, zero
   // LWRAM fragmentation across clearFoes() recovery cycles.
   {
@@ -1800,27 +1586,6 @@ int main()
       SRL::Logger::LogInfo("[PHASE] loop-start loop=%lu status=%d", (unsigned long)sPhaseProbeLoops, status);
     }
 #endif
-#if defined(NOIZ2SA_DEBUG_AUTOSTART_SMOKE) && NOIZ2SA_DEBUG_AUTOSTART_SMOKE
-    if (!gAutoStartTriggered)
-    {
-      if (status == TITLE)
-      {
-        gAutoStartTitleFrames++;
-        if (gAutoStartTitleFrames >= 120)
-        {
-          const int autoStage = 0;
-          SRL::Logger::LogWarning("[SMOKE] NOIZ2SA_DEBUG_AUTOSTART_SMOKE enabled - auto starting stage %d", autoStage);
-          initGame(autoStage);
-          gAutoStartTriggered = true;
-        }
-      }
-      else
-      {
-        gAutoStartTitleFrames = 0;
-      }
-    }
-#endif
-
     // Handle pause/unpause input
   #if HW_DEBUG
     // Perf-campaign debug probe: bypass START polling to isolate loop-1 stall source.
@@ -2326,6 +2091,19 @@ int main()
           (unsigned)avgBulletCount,
           (unsigned)gPerfTraceWindow.peakBulletCount,
           getLiveProjectileCount());
+        // Separate, short line: SRL_DEBUG_MAX_LOG_LENGTH=120 truncates the
+        // HEARTBEAT line above well before this point (it was already
+        // silently cut off at "hot=..." before this line was added - a
+        // pre-existing condition, not introduced here), so this can't be
+        // appended there. Kept deliberately compact to stay under the limit.
+        SRL::Logger::LogInfo(
+          "[HB2] ms=%lu fps=%u.%02u move=%u nb_peak=%u boss_peak=%u",
+          (unsigned long)hbNowMs,
+          (unsigned)(gFpsTimes100 / 100u),
+          (unsigned)(gFpsTimes100 % 100u),
+          (unsigned)avgMoveUs,
+          (unsigned)gPerfTraceWindow.peakNonBulletFoeCount,
+          (unsigned)gPerfTraceWindow.peakBossTypeFoeCount);
         static uint32_t sMemLogSampleCounter = 0;
         const bool emitMemSample = ((sMemLogSampleCounter++ % 10u) == 0u);
         if (emitMemSample) {
@@ -2429,6 +2207,21 @@ int main()
                  (unsigned)avgBulletCount,
                  (unsigned)gPerfTraceWindow.peakBulletCount,
                  getLiveProjectileCount());
+        // Mirrors [HB2] in the HW_DEBUG branch above - see that comment for
+        // why this is a separate, deliberately short line.
+        SRL::Logger::LogInfo(
+          "[HB2] ms=%lu fps=%u.%02u move=%u nb_peak=%u boss_peak=%u",
+          (unsigned long)hbNowMs,
+          (unsigned)(gFpsTimes100 / 100u),
+          (unsigned)(gFpsTimes100 % 100u),
+          (unsigned)avgMoveUs,
+          (unsigned)gPerfTraceWindow.peakNonBulletFoeCount,
+          (unsigned)gPerfTraceWindow.peakBossTypeFoeCount);
+        SRL::Logger::LogInfo(
+          "[PERF_FOE2] nb_peak=%u boss_peak=%u capped=%lu",
+          (unsigned)gPerfTraceWindow.peakNonBulletFoeCount,
+          (unsigned)gPerfTraceWindow.peakBossTypeFoeCount,
+          getFoeSpawnCappedCount());
 #endif
       }
       sPhaseTraceCounter++;
@@ -2449,10 +2242,11 @@ int main()
     gPerfTraceWindow.vdpHwLineUs += frameVdpStats.hwLineUs;
     gPerfTraceWindow.vdpPanelUploadBytes += frameVdpStats.panelUploadBytes;
     gPerfTraceWindow.vdpPlayfieldUploadBytes += frameVdpStats.playfieldUploadBytes;
-    gPerfTraceWindow.blendCopyUs += frameVdpStats.blendCopyUs;
-    gPerfTraceWindow.blendAlphaUs += frameVdpStats.blendAlphaUs;
     gPerfTraceWindow.vdp1BlitUploadUs += frameVdpStats.vdp1BlitUploadUs;
     gPerfTraceWindow.vdp1BlitDrawUs += frameVdpStats.vdp1BlitDrawUs;
+    gPerfTraceWindow.peakLineCommands = maxU32(gPerfTraceWindow.peakLineCommands, frameVdpStats.lineCommandsSubmitted);
+    gPerfTraceWindow.peakPolygonsSubmitted = maxU32(gPerfTraceWindow.peakPolygonsSubmitted, frameVdpStats.polygonsSubmitted);
+    gPerfTraceWindow.vdp1SubmitFailures += frameVdpStats.vdp1SubmitFailures;
 
     FoePressureStats frameFoeStats{};
     consumeFoePressureStats(&frameFoeStats);
@@ -2461,8 +2255,11 @@ int main()
     gPerfTraceWindow.drawnBulletTotal += frameFoeStats.drawnBullets;
     gPerfTraceWindow.culledBulletTotal += frameFoeStats.culledBullets;
     gPerfTraceWindow.foeBudgetTotal += frameFoeStats.foeBudget;
+    gPerfTraceWindow.nonBulletFoeTotal += frameFoeStats.nonBulletFoeCount;
     gPerfTraceWindow.peakFoeCount = maxU32(gPerfTraceWindow.peakFoeCount, frameFoeStats.foeCount);
     gPerfTraceWindow.peakBulletCount = maxU32(gPerfTraceWindow.peakBulletCount, frameFoeStats.bulletCount);
+    gPerfTraceWindow.peakNonBulletFoeCount = maxU32(gPerfTraceWindow.peakNonBulletFoeCount, frameFoeStats.nonBulletFoeCount);
+    gPerfTraceWindow.peakBossTypeFoeCount = maxU32(gPerfTraceWindow.peakBossTypeFoeCount, frameFoeStats.bossTypeFoeCount);
     gPerfTraceWindow.loopCount++;
     if (renderThisLoop)
     {

@@ -21,6 +21,7 @@
 #include "degutil.h"
 #include "ship.h"
 #include "bulletml_binary/bulletml_alloc_latch.h"
+#include "memory_factory.h"
 
 #include <new>
 
@@ -73,42 +74,57 @@ static Fxp legacyDirectionIndexToFxpDegrees(int direction)
 
 namespace
 {
-struct FoeCommandFreeNode
-{
-  FoeCommandFreeNode* next;
-};
+// Fixed pool: one HWRAM block of FoeCommand slots plus a separate stack of free
+// slot indices. The bookkeeping lives outside the objects, so a late write into
+// a recycled FoeCommand can no longer break the pool itself.
+static constexpr std::size_t kFoeCommandPoolMaxCapacity = 512;
+static FoeCommand* sFoeCommandPool = nullptr;
+static uint16_t sFoeCommandPoolSize = 0;
+static uint16_t sFoeCommandFreeSlots[kFoeCommandPoolMaxCapacity];
+static uint16_t sFoeCommandFreeTop = 0;
+static bool sFoeCommandSlotInUse[kFoeCommandPoolMaxCapacity];
 
-static FoeCommandFreeNode* sFoeCommandFreeList = nullptr;
-static std::size_t sFoeCommandFreeCount = 0;
-static std::size_t sMinPoolSize = 0;  ///< Minimum guaranteed pool size
+/** @brief Returns the pool slot index of cmd, or -1 if cmd is not a pool slot. */
+static int getFoeCommandSlot(const FoeCommand* cmd)
+{
+  if (!sFoeCommandPool)
+  {
+    return -1;
+  }
+  const uintptr_t base = reinterpret_cast<uintptr_t>(sFoeCommandPool);
+  const uintptr_t p = reinterpret_cast<uintptr_t>(cmd);
+  if (p < base || (p - base) % sizeof(FoeCommand) != 0)
+  {
+    return -1;
+  }
+  const uintptr_t slot = (p - base) / sizeof(FoeCommand);
+  return (slot < sFoeCommandPoolSize) ? static_cast<int>(slot) : -1;
+}
 }
 
 template <typename... Args>
-/** @brief Allocates a FoeCommand from the recycled pool or high work RAM. */
+/** @brief Takes a FoeCommand from the fixed pool; never allocates. */
 static FoeCommand* createFoeCommandFromPool(Args&&... args)
 {
-  if (sFoeCommandFreeList)
+  if (sFoeCommandFreeTop == 0)
   {
-    FoeCommandFreeNode* node = sFoeCommandFreeList;
-    sFoeCommandFreeList = node->next;
-    if (sFoeCommandFreeCount > 0)
+    // Pool exhausted: this is spawn suppression, not an error. Callers already
+    // treat a null return as "spawn skipped this tick" (see addFoe /
+    // addFoeActiveBullet in foe.cc).
+    static std::size_t sPoolExhaustedLogs = 0;
+    if (sPoolExhaustedLogs < 12 || (sPoolExhaustedLogs % 64) == 0)
     {
-      sFoeCommandFreeCount--;
+      SRL::Logger::LogInfo("[FOECMD_POOL] pool exhausted; suppressing spawn size=%u",
+                           (unsigned int)sFoeCommandPoolSize);
     }
-    return new (node) FoeCommand(std::forward<Args>(args)...);
+    ++sPoolExhaustedLogs;
+    return nullptr;
   }
-  static std::size_t sFallbackAllocLogs = 0;
-  if (sFallbackAllocLogs < 12 || (sFallbackAllocLogs % 64) == 0)
-  {
-    SRL::Logger::LogInfo("[FOECMD_POOL] pool empty fallback alloc cached=%u min_pool=%u",
-               (unsigned int)sFoeCommandFreeCount,
-               (unsigned int)sMinPoolSize);
-  }
-  ++sFallbackAllocLogs;
-  return createBulletMlRuntimeObject<FoeCommand>(std::forward<Args>(args)...);
+
+  const uint16_t slot = sFoeCommandFreeSlots[--sFoeCommandFreeTop];
+  sFoeCommandSlotInUse[slot] = true;
+  return new (&sFoeCommandPool[slot]) FoeCommand(std::forward<Args>(args)...);
 }
-
-
 
 /** @brief Constructs a command runner bound to a BulletML parser. */
 FoeCommand::FoeCommand(BulletMLParserBLB *parser, Foe *f)
@@ -123,7 +139,8 @@ FoeCommand::FoeCommand(BulletMLState *state, Foe *f)
 }
 
 /** @brief Destroys the command runner. */
-FoeCommand::~FoeCommand() {}
+FoeCommand::~FoeCommand() {
+}
 
 /** @brief Creates a FoeCommand for a parser-backed foe. */
 FoeCommand* createFoeCommand(BulletMLParserBLB* parser, Foe* f) {
@@ -139,7 +156,7 @@ FoeCommand* createFoeCommand(BulletMLState* state, Foe* f) {
   return createFoeCommandFromPool(state, f);
 }
 
-/** @brief Returns a FoeCommand to the recycle pool and clears the pointer. */
+/** @brief Returns a FoeCommand to the pool and clears the pointer. */
 void destroyFoeCommand(FoeCommand*& cmd)
 {
   if (!cmd)
@@ -147,72 +164,76 @@ void destroyFoeCommand(FoeCommand*& cmd)
     return;
   }
 
+  const int slot = getFoeCommandSlot(cmd);
+  if (slot < 0 || !sFoeCommandSlotInUse[slot])
+  {
+    // Double destroy or stray pointer: pushing it would give one slot two owners.
+    SRL::Logger::LogWarning("[FOECMD_POOL] destroy of non-live command cmd=%p slot=%d",
+                            (void*)cmd, slot);
+    cmd = nullptr;
+    return;
+  }
+
   cmd->~FoeCommand();
-
-  FoeCommandFreeNode* node = reinterpret_cast<FoeCommandFreeNode*>(cmd);
-  node->next = sFoeCommandFreeList;
-  sFoeCommandFreeList = node;
-  sFoeCommandFreeCount++;
-
+  sFoeCommandSlotInUse[slot] = false;
+  sFoeCommandFreeSlots[sFoeCommandFreeTop++] = static_cast<uint16_t>(slot);
   cmd = nullptr;
 }
 
-/** @brief Frees all pooled FoeCommand storage. */
+/** @brief Frees the pool block. Shutdown only: live commands go with it. */
 void releaseFoeCommandPool()
 {
-  while (sFoeCommandFreeList)
+  if (sFoeCommandPool)
   {
-    FoeCommandFreeNode* node = sFoeCommandFreeList;
-    sFoeCommandFreeList = node->next;
-    SRL::Memory::Free(node);
-    if (sFoeCommandFreeCount > 0)
-    {
-      sFoeCommandFreeCount--;
-    }
+    freeHighWorkRamItems(sFoeCommandPool);
   }
-  sFoeCommandFreeCount = 0;
+  sFoeCommandPoolSize = 0;
+  sFoeCommandFreeTop = 0;
 }
 
 std::size_t getFoeCommandCachedCount()
 {
-  return sFoeCommandFreeCount;
+  return sFoeCommandFreeTop;
 }
 
-void trimFoeCommandPool(std::size_t maxCached)
-{
-  // Never trim below the minimum pool size
-  std::size_t trimLimit = (maxCached > sMinPoolSize) ? maxCached : sMinPoolSize;
-  while (sFoeCommandFreeCount > trimLimit && sFoeCommandFreeList)
-  {
-    FoeCommandFreeNode* node = sFoeCommandFreeList;
-    sFoeCommandFreeList = node->next;
-    SRL::Memory::Free(node);
-    sFoeCommandFreeCount--;
-  }
-}
-
-/** @brief Pre-allocates a guaranteed minimum pool of FoeCommand objects.
+/** @brief Allocates the fixed FoeCommand pool once at startup.
  *  This prevents allocation failures during peak gameplay load.
  */
 void preallocateFoeCommandPool(std::size_t count)
 {
-  sMinPoolSize = count;
+  if (sFoeCommandPool)
+  {
+    SRL::Logger::LogWarning("[FOECMD_POOL] Pool already allocated (size=%u)",
+                            (unsigned int)sFoeCommandPoolSize);
+    return;
+  }
+  if (count > kFoeCommandPoolMaxCapacity)
+  {
+    count = kFoeCommandPoolMaxCapacity;
+  }
+  if (count == 0)
+  {
+    return;
+  }
+
+  sFoeCommandPool = allocateHighWorkRamItems<FoeCommand>(count);
+  if (!sFoeCommandPool)
+  {
+    SRL::Logger::LogWarning("[FOECMD_POOL] Preallocation of %u FoeCommand objects failed",
+                            (unsigned int)count);
+    return;
+  }
+
+  sFoeCommandPoolSize = static_cast<uint16_t>(count);
   for (std::size_t i = 0; i < count; ++i)
   {
-    void* mem = SRL::Memory::HighWorkRam::Malloc(sizeof(FoeCommand));
-    if (!mem)
-    {
-      SRL::Logger::LogWarning("[FOECMD_POOL] Preallocation failed at index %u (wanted %u total)",
-              (unsigned int)i, (unsigned int)count);
-      break;
-    }
-    FoeCommandFreeNode* node = reinterpret_cast<FoeCommandFreeNode*>(mem);
-    node->next = sFoeCommandFreeList;
-    sFoeCommandFreeList = node;
-    sFoeCommandFreeCount++;
+    // Lowest slot on top, so the first spawns use the start of the block.
+    sFoeCommandFreeSlots[i] = static_cast<uint16_t>(count - 1 - i);
+    sFoeCommandSlotInUse[i] = false;
   }
-  SRL::Logger::LogInfo("[FOECMD_POOL] Preallocated %u FoeCommand objects (min pool size=%u)",
-                       (unsigned int)sFoeCommandFreeCount, (unsigned int)sMinPoolSize);
+  sFoeCommandFreeTop = static_cast<uint16_t>(count);
+  SRL::Logger::LogInfo("[FOECMD_POOL] Preallocated %u FoeCommand objects (%u bytes)",
+                       (unsigned int)count, (unsigned int)(count * sizeof(FoeCommand)));
 }
 
 Fxp FoeCommand::getBulletDirection() {

@@ -163,6 +163,7 @@ static void queueHardwareLineCommand(int x1, int y1, int x2, int y2, Canvas::Pix
 {
   if (pendingLineCommandCount >= MAX_PENDING_LINE_COMMANDS)
   {
+    gScreenVdpPerfStats.vdp1SubmitFailures++;
     return;
   }
 
@@ -172,6 +173,7 @@ static void queueHardwareLineCommand(int x1, int y1, int x2, int y2, Canvas::Pix
   pendingLineCommands[pendingLineCommandCount].y2 = (int16_t)y2;
   pendingLineCommands[pendingLineCommandCount].color = lineColor;
   pendingLineCommandCount++;
+  gScreenVdpPerfStats.lineCommandsSubmitted++;
 }
 
 /** @brief Flushes queued line commands to the hardware renderer. */
@@ -187,11 +189,14 @@ static void flushHardwareLineCommands()
     const int16_t sceneX2 = (int16_t)(layerRect.x + line.x2 - (SCREEN_WIDTH / 2));
     const int16_t sceneY2 = (int16_t)(layerRect.y + line.y2 - (SCREEN_HEIGHT / 2));
 
-    SRL::Scene2D::DrawLine(
+    if (!SRL::Scene2D::DrawLine(
         Vector2D(Fxp::Convert(sceneX1), Fxp::Convert(sceneY1)),
         Vector2D(Fxp::Convert(sceneX2), Fxp::Convert(sceneY2)),
         color[line.color],
-        Fxp::Convert(lineSort));
+        Fxp::Convert(lineSort)))
+    {
+      gScreenVdpPerfStats.vdp1SubmitFailures++;
+    }
   }
 
   pendingLineCommandCount = 0;
@@ -211,8 +216,15 @@ static inline void drawHardwarePolygonDoubleSided(SRL::Math::Types::Vector2D poi
       points[2],
       points[1]};
 
-  SRL::Scene2D::DrawPolygon(points, fill, polyColor, sort);
-  SRL::Scene2D::DrawPolygon(reversePoints, fill, polyColor, sort);
+  gScreenVdpPerfStats.polygonsSubmitted += 2;
+  if (!SRL::Scene2D::DrawPolygon(points, fill, polyColor, sort))
+  {
+    gScreenVdpPerfStats.vdp1SubmitFailures++;
+  }
+  if (!SRL::Scene2D::DrawPolygon(reversePoints, fill, polyColor, sort))
+  {
+    gScreenVdpPerfStats.vdp1SubmitFailures++;
+  }
 }
 
 /** @brief Draws a thick line using layered quads for hardware rendering. */
@@ -693,12 +705,15 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
     const int32_t previousEndCode = SRL::Scene2D::GetEffect(SRL::Scene2D::SpriteEffect::EnableECD);
     SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, 0);
 
-  SRL::Scene2D::DrawSprite(
+  if (!SRL::Scene2D::DrawSprite(
       (uint16_t)sprite[n].textureIndex,
       pos,
       Angle::Zero(),
       Vector2D(0.5, 0.5),
-      SRL::Scene2D::ZoomPoint::UpperLeft);
+      SRL::Scene2D::ZoomPoint::UpperLeft))
+  {
+    gScreenVdpPerfStats.vdp1SubmitFailures++;
+  }
 
     SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, previousEndCode == 1 ? 1 : 0);
 }
@@ -708,12 +723,17 @@ static void makeSmokeBuf()
 {
   int x, y, mx, my;
 
+  // HWRAM, not LWRAM: this ~150KB lookup table would eat into the LWRAM
+  // budget background.cpp's CPU-side render buffers depend on (see the
+  // comment there). HWRAM sits ~199KB free and essentially untouched
+  // between screen init and background init, so it fits comfortably here
+  // alongside the FoeCommand pool's own small HWRAM footprint.
   if (smokeBuf != nullptr)
   {
-    freeHeapItems(smokeBuf);
+    freeHighWorkRamItems(smokeBuf);
   }
 
-  smokeBuf = allocateHeapItems<Canvas::Pixel*>(pitch * LAYER_HEIGHT);
+  smokeBuf = allocateHighWorkRamItems<Canvas::Pixel*>(pitch * LAYER_HEIGHT);
   if (smokeBuf == nullptr)
   {
     SRL::Logger::LogWarning("Couldn't allocate smokeBuf lookup table. Using fallback smoke mode.");
@@ -851,117 +871,22 @@ void initSDL()
   initPanelLayer((int16_t)mainPaletteBank);
   SRL::Logger::LogInfo("[INIT_TRACE] initSDL: initPanelLayer done");
   makeSmokeBuf();
+  SRL::Logger::LogInfo("[INIT_TRACE] initSDL: makeSmokeBuf done");
   clearLPanel();
+  SRL::Logger::LogInfo("[INIT_TRACE] initSDL: clearLPanel done");
   clearRPanel();
+  SRL::Logger::LogInfo("[INIT_TRACE] initSDL: clearRPanel done");
   refreshPanelLayer();
   SRL::Logger::LogInfo("[INIT_TRACE] initSDL: panels/smoke done");
 
-#if HW_DEBUG
+#if HW_DEBUG || NOIZ2SA_EMBED_BULLETML
+  // NOIZ2SA_EMBED_BULLETML also covers title-sprite loading here, despite
+  // its name: both are CD-backed reads that can't work on this rig's
+  // disc-less test setup, so "no real CD" is what actually gates this.
   SRL::Logger::LogInfo("[HW_DEBUG] Skipping CD-backed sprite loading");
 #else
   loadSprites();
 #endif
-}
-
-/** @brief Blends the playfield and panel layers into the final frame. */
-void blendScreen()
-{
-#if NOIZ2SA_PERF_MODE
-  if (status == IN_GAME || status == PAUSE)
-  {
-    // Faster gameplay blend: opaque top layer avoids per-pixel alpha table lookups.
-    // Clear playfield first so stale pixels from previous frames do not persist.
-    memset(buf, 0, lyrSize);
-
-    for (int i = lyrSize - 1; i >= 0; i--)
-    {
-      if (l1buf[i] != 0)
-      {
-        buf[i] = l1buf[i];
-      }
-    }
-
-    // Force full playfield upload every frame in perf mode
-    SDL_SetSurfaceDirty(layer);
-    layer->dirtyX1 = 0;
-    layer->dirtyY1 = 0;
-    layer->dirtyX2 = LAYER_WIDTH;
-    layer->dirtyY2 = LAYER_HEIGHT;
-    return;
-  }
-#endif
-
-  // Single-pass blend: combine the l2buf→buf copy and the l1buf alpha composite
-  // into one loop.  When an entire 4-pixel word of l1buf is zero (the common
-  // case on sparse bullet patterns) we write the 4 background pixels as a single
-  // 32-bit store, avoiding a separate full-surface SDL_CopyBytes pass (~12 ms).
-#if NOIZ2SA_BLEND_SKIP
-  // Skip per-pixel alpha table lookup — opaque composite only.
-  // Used to measure FPS headroom without alpha-blend cost.
-  {
-    const uint32_t blendStart = SDL_GetProfileMicros();
-    const uint32_t *l1w = reinterpret_cast<const uint32_t *>(l1buf);
-    const uint32_t *l2w = reinterpret_cast<const uint32_t *>(l2buf);
-    uint32_t       *bufw = reinterpret_cast<uint32_t *>(buf);
-    const int words = lyrSize >> 2;
-    const int tail  = lyrSize & 3;
-    for (int w = 0; w < words; w++)
-    {
-      if (l1w[w] == 0u) { bufw[w] = l2w[w]; continue; }
-      const int base = w << 2;
-      for (int j = base; j < base + 4; j++)
-        buf[j] = (l1buf[j] != 0) ? l1buf[j] : l2buf[j];
-    }
-    for (int i = lyrSize - tail; i < lyrSize; i++)
-      buf[i] = (l1buf[i] != 0) ? l1buf[i] : l2buf[i];
-    gScreenVdpPerfStats.blendCopyUs  += SDL_GetProfileMicros() - blendStart;
-    gScreenVdpPerfStats.blendAlphaUs += 0u;
-  }
-#else
-  // Forward iteration is cache-friendly for sequential l1buf/buf access.
-  // Check 4 pixels at a time as uint32: when the entire foreground word is
-  // zero, write the background word directly (32-bit store, no table lookup).
-  {
-    const uint32_t blendStart = SDL_GetProfileMicros();
-    const uint32_t *l1w  = reinterpret_cast<const uint32_t *>(l1buf);
-    const uint32_t *l2w  = reinterpret_cast<const uint32_t *>(l2buf);
-    uint32_t       *bufw = reinterpret_cast<uint32_t *>(buf);
-    const int words = lyrSize >> 2;
-    const int tail  = lyrSize & 3;
-
-    for (int w = 0; w < words; w++)
-    {
-      if (l1w[w] == 0u)
-      {
-        bufw[w] = l2w[w]; // No foreground in this 4-pixel group — bulk copy bg
-        continue;
-      }
-      const int base = w << 2;
-      for (int j = base; j < base + 4; j++)
-      {
-        const Canvas::Pixel fg = l1buf[j];
-        if (fg == 0)
-        {
-          buf[j] = l2buf[j];
-          continue;
-        }
-        const Canvas::Pixel bg = l2buf[j];
-        buf[j] = (bg == 0) ? fg : colorAlp[fg][bg];
-      }
-    }
-    // Handle any remaining pixels (lyrSize not a multiple of 4)
-    for (int i = lyrSize - tail; i < lyrSize; i++)
-    {
-      const Canvas::Pixel fg = l1buf[i];
-      buf[i] = (fg == 0) ? l2buf[i] :
-               (l2buf[i] == 0) ? fg : colorAlp[fg][l2buf[i]];
-    }
-    gScreenVdpPerfStats.blendCopyUs  += 0u; // no separate copy pass
-    gScreenVdpPerfStats.blendAlphaUs += SDL_GetProfileMicros() - blendStart;
-  }
-#endif
-
-  SDL_SetSurfaceDirty(layer);
 }
 
 /** @brief Marks the entire playfield as dirty. */
@@ -1134,10 +1059,8 @@ void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Ca
   ly = abs(y2 - y1);
 
 
-  // Configurable hardware/software line path
   // Iter E: drawBulletsWake now passes ::buf instead of l1buf, so match both.
   // Iter F: also allow hardware lines in GAMEOVER state (wake drawing is equally expensive).
-#if NOIZ2SA_ENABLE_HARDWARE_LINE
   if ((buf == l1buf || buf == ::buf) && (status == IN_GAME || status == GAMEOVER))
   {
     if (width == 1)
@@ -1161,11 +1084,6 @@ void drawLine(int x1, int y1, int x2, int y2, Canvas::Pixel color, int width, Ca
       return;
     }
   }
-#endif
-  // Always allow software path if enabled
-#if !NOIZ2SA_ENABLE_SOFTWARE_LINE
-  return;
-#endif
 
   if (lx < ly)
   {
@@ -1280,8 +1198,6 @@ void drawThickLine(int x1, int y1, int x2, int y2,
   width1 = width - 2;
 
 
-  // Configurable hardware/software thick line path
-#if NOIZ2SA_ENABLE_HARDWARE_LINE
   if (status == IN_GAME)
   {
     if (drawHardwareThickLine(
@@ -1299,10 +1215,6 @@ void drawThickLine(int x1, int y1, int x2, int y2,
       return;
     }
   }
-#endif
-#if !NOIZ2SA_ENABLE_SOFTWARE_LINE
-  return;
-#endif
 
   if (lx < ly)
   {
