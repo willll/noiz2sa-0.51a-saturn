@@ -41,9 +41,7 @@ static SRL_Surface layerSurface;
 static SRL_Surface lpanelSurface;
 static SRL_Surface rpanelSurface;
 
-static Canvas::Pixel **smokeBuf = nullptr;
-// Frame buffers allocated from LWRAM (0x00200000, 1MB) to preserve main RAM heap for BLB parsers
-static Canvas::Pixel *pbuf  = nullptr;
+// l1buf: the smoke trail layer (HWRAM, else LWRAM); l2buf: unused, LWRAM.
 Canvas::Pixel *l1buf = nullptr;
 Canvas::Pixel *l2buf = nullptr;
 // buf is the playfield sprite layer, written every frame by CPU (memset + draw calls).
@@ -52,11 +50,10 @@ Canvas::Pixel *l2buf = nullptr;
 // LWRAM (16-bit bus) without any risk of overwriting TLSF metadata.
 // IMPORTANT: keep this array ≤ lyrSize bytes; do NOT resize SCREEN_DIVISOR without
 //            updating this declaration.
-static Canvas::Pixel gBufStorage[LAYER_WIDTH * LAYER_HEIGHT];
+alignas(4) static Canvas::Pixel gBufStorage[LAYER_WIDTH * LAYER_HEIGHT]; // word-wise fade/clear
 Canvas::Pixel *buf   = nullptr;
 Canvas::Pixel *lpbuf = nullptr;
 Canvas::Pixel *rpbuf = nullptr;
-static Canvas::Pixel smokeFallback = 0;
 static SDL_Rect layerRect, layerClearRect;
 static SDL_Rect lpanelRect, rpanelRect, panelClearRect;
 static void *panelLayerVram = nullptr;
@@ -364,6 +361,10 @@ static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect
   {
     return;
   }
+
+  // The slave draws the bonus stars into buf; drop any copy of it in this CPU's
+  // cache (write-through, so nothing is lost) so the copy below reads RAM.
+  *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
 
 #if NOIZ2SA_PERF_MODE
   // Force VRAM clear for playfield region before every upload in perf mode
@@ -718,47 +719,6 @@ void drawSprite(const uint8_t n, const int16_t x, const int16_t y)
     SRL::Scene2D::SetEffect(SRL::Scene2D::SpriteEffect::EnableECD, previousEndCode == 1 ? 1 : 0);
 }
 
-/** @brief Builds the smoke overlay buffer used for screen transitions. */
-static void makeSmokeBuf()
-{
-  int x, y, mx, my;
-
-  // HWRAM, not LWRAM: this ~150KB lookup table would eat into the LWRAM
-  // budget background.cpp's CPU-side render buffers depend on (see the
-  // comment there). HWRAM sits ~199KB free and essentially untouched
-  // between screen init and background init, so it fits comfortably here
-  // alongside the FoeCommand pool's own small HWRAM footprint.
-  if (smokeBuf != nullptr)
-  {
-    freeHighWorkRamItems(smokeBuf);
-  }
-
-  smokeBuf = allocateHighWorkRamItems<Canvas::Pixel*>(pitch * LAYER_HEIGHT);
-  if (smokeBuf == nullptr)
-  {
-    SRL::Logger::LogWarning("Couldn't allocate smokeBuf lookup table. Using fallback smoke mode.");
-    return;
-  }
-
-  smokeFallback = 0;
-  for (y = 0; y < LAYER_HEIGHT; y++)
-  {
-    for (x = 0; x < LAYER_WIDTH; x++)
-    {
-      mx = x + sctbl[(x * 8) & (DIV - 1)] / 128;
-      my = y + sctbl[(y * 8) & (DIV - 1)] / 128;
-      if (mx < 0 || mx >= LAYER_WIDTH || my < 0 || my >= LAYER_HEIGHT)
-      {
-        smokeBuf[x + y * pitch] = &smokeFallback;
-      }
-      else
-      {
-        smokeBuf[x + y * pitch] = &(pbuf[mx + my * pitch]);
-      }
-    }
-  }
-}
-
 /** @brief Initialises SDL-backed screen resources and sprite assets. */
 void initSDL()
 {
@@ -775,24 +735,28 @@ void initSDL()
   lpanel = &lpanelSurface;
   rpanel = &rpanelSurface;
 
-  // Allocate frame buffers: pbuf/l1buf/l2buf from LWRAM; buf from static HWRAM BSS array.
+  // Allocate frame buffers: l1buf/l2buf from LWRAM; buf from static HWRAM BSS array.
   // gBufStorage[] lives in BSS before __heap_start so memset cannot corrupt TLSF metadata.
   const size_t lwrFreeBefore = SRL::Memory::LowWorkRam::GetFreeSpace();
   const size_t hwrFreeBefore = SRL::Memory::HighWorkRam::GetFreeSpace();
   SRL::Logger::LogInfo("[SCREEN] LWRAM free before frame buffers: %lu  HWRAM free: %lu",
                        (unsigned long)lwrFreeBefore, (unsigned long)hwrFreeBefore);
 
-  pbuf  = allocateLowWorkRamItems<Canvas::Pixel>(lyrSize);
-  l1buf = allocateLowWorkRamItems<Canvas::Pixel>(lyrSize);
+#if NOIZ2SA_ENABLE_SMOKE
+  // The slave reads and writes the whole trail layer every frame (see fadeTrailIntoBuf).
+  l1buf = allocateHighWorkRamItems<Canvas::Pixel>(lyrSize);
+  if (!l1buf) l1buf = allocateLowWorkRamItems<Canvas::Pixel>(lyrSize);
+#else
+  l1buf = allocateLowWorkRamItems<Canvas::Pixel>(lyrSize); // unused without smoke
+#endif
   l2buf = allocateLowWorkRamItems<Canvas::Pixel>(lyrSize);
   buf   = gBufStorage;   // static HWRAM BSS array — never touches TLSF pool
   lpbuf = allocateLowWorkRamItems<Canvas::Pixel>(PANEL_WIDTH * PANEL_HEIGHT);
   rpbuf = allocateLowWorkRamItems<Canvas::Pixel>(PANEL_WIDTH * PANEL_HEIGHT);
-  if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
+  if (!l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
   {
     SRL::Logger::LogWarning(
-        "[SCREEN] LWRAM alloc fallback: p=%p l1=%p l2=%p b=%p lp=%p rp=%p freeAfter=%lu",
-        pbuf,
+        "[SCREEN] LWRAM alloc fallback: l1=%p l2=%p b=%p lp=%p rp=%p freeAfter=%lu",
         l1buf,
         l2buf,
         buf,
@@ -800,7 +764,6 @@ void initSDL()
         rpbuf,
         (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
 
-    if (!pbuf)  pbuf  = allocateHighWorkRamItems<Canvas::Pixel>(lyrSize);
     if (!l1buf) l1buf = allocateHighWorkRamItems<Canvas::Pixel>(lyrSize);
     if (!l2buf) l2buf = allocateHighWorkRamItems<Canvas::Pixel>(lyrSize);
     // buf always set to gBufStorage — no fallback needed
@@ -808,7 +771,7 @@ void initSDL()
     if (!rpbuf) rpbuf = allocateHighWorkRamItems<Canvas::Pixel>(PANEL_WIDTH * PANEL_HEIGHT);
   }
 
-  if (!pbuf || !l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
+  if (!l1buf || !l2buf || !buf || !lpbuf || !rpbuf)
   {
     SRL::Logger::LogFatal("[SCREEN] Failed to allocate frame buffers (LWRAM+HWRAM)");
     SRL::System::Exit(1);
@@ -822,7 +785,6 @@ void initSDL()
                          (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
   }
 
-  memset(pbuf,  0, lyrSize);
   memset(l1buf, 0, lyrSize);
   memset(l2buf, 0, lyrSize);
   memset(buf,   0, lyrSize);
@@ -870,8 +832,6 @@ void initSDL()
 
   initPanelLayer((int16_t)mainPaletteBank);
   SRL::Logger::LogInfo("[INIT_TRACE] initSDL: initPanelLayer done");
-  makeSmokeBuf();
-  SRL::Logger::LogInfo("[INIT_TRACE] initSDL: makeSmokeBuf done");
   clearLPanel();
   SRL::Logger::LogInfo("[INIT_TRACE] initSDL: clearLPanel done");
   clearRPanel();
@@ -937,7 +897,111 @@ void flipScreen()
   gScreenVdpPerfStats.hwLineUs += timeHwLineUs;
 
   flipCounter++;
+  // buf is cleared (or faded) for the next frame by the slave: see startPlayfieldPrep().
+}
 
+/** @brief Fades the trail layer (l1buf) one colorDfs step and copies it into buf: the
+ *  light version of the original smokeScreen()/blendScreen() afterimage, without the
+ *  smoke drift or the colorAlp blend. A word at a time; most of the layer is 0, which
+ *  colorDfs keeps at 0. */
+static void fadeTrailIntoBuf()
+{
+  uint32_t *trail = reinterpret_cast<uint32_t *>(l1buf);
+  uint32_t *dst = reinterpret_cast<uint32_t *>(buf);
+  for (int i = 0; i < lyrSize / 4; i++)
+  {
+    const uint32_t w = trail[i];
+    if (w == 0u)
+    {
+      dst[i] = 0u;
+      continue;
+    }
+    const uint32_t f = ((uint32_t)colorDfs[w >> 24] << 24) | ((uint32_t)colorDfs[(w >> 16) & 0xffu] << 16) |
+                       ((uint32_t)colorDfs[(w >> 8) & 0xffu] << 8) | (uint32_t)colorDfs[w & 0xffu];
+    trail[i] = f;
+    dst[i] = f;
+  }
+}
+
+/** @brief Gives buf its start-of-frame contents: the faded trails, or nothing. */
+static void preparePlayfield()
+{
+#if NOIZ2SA_ENABLE_SMOKE
+  fadeTrailIntoBuf();
+#else
+  memset(buf, 0, lyrSize);
+#endif
+}
+
+static void (*sPlayfieldJobPrepare)() = nullptr; ///< master, before each dispatch (slave idle)
+static void (*sPlayfieldJobRun)() = nullptr;     ///< slave, after preparePlayfield()
+
+void setPlayfieldSlaveJob(void (*prepareOnMaster)(), void (*runOnSlave)())
+{
+  sPlayfieldJobPrepare = prepareOnMaster;
+  sPlayfieldJobRun = runOnSlave;
+}
+
+class PlayfieldPrepTask : public SRL::Types::ITask
+{
+protected:
+  void Do() override
+  {
+    // SRL purges the slave cache only in DEBUG builds; the master rewrote l1buf and the
+    // star boxes since the last run, so drop any stale cached copy first.
+    *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
+    asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop" ::: "memory");
+    preparePlayfield();
+    if (sPlayfieldJobRun != nullptr)
+    {
+      sPlayfieldJobRun();
+    }
+  }
+};
+
+static PlayfieldPrepTask sPlayfieldPrepTask;
+static bool sPlayfieldPrepPending = false;
+
+void startPlayfieldPrep()
+{
+  if (sPlayfieldPrepPending || buf == nullptr || l1buf == nullptr)
+  {
+    return;
+  }
+  if (sPlayfieldJobPrepare != nullptr)
+  {
+    sPlayfieldJobPrepare();
+  }
+  SRL::Slave::ExecuteOnSlave(sPlayfieldPrepTask);
+  sPlayfieldPrepPending = true;
+}
+
+void waitPlayfieldPrep()
+{
+  if (!sPlayfieldPrepPending)
+  {
+    preparePlayfield(); // first frame, or no slave run since the last draw
+    return;
+  }
+  sPlayfieldPrepPending = false;
+  // Bounded so a slave that never answers costs a frame without trails, not a hang.
+  for (uint32_t spin = 0; !sPlayfieldPrepTask.IsDone(); spin++)
+  {
+    if (spin > 4000000u)
+    {
+      memset(buf, 0, lyrSize);
+      break;
+    }
+  }
+  // The slave wrote buf and l1buf: drop this CPU's cached copies (write-through, nothing lost).
+  *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
+}
+
+void saveTrailLayer()
+{
+#if NOIZ2SA_ENABLE_SMOKE
+  memcpy(l1buf, buf, lyrSize);
+#endif
 }
 
 /** @brief Copies the latest screen VDP performance statistics. */
@@ -983,6 +1047,30 @@ void smokeScreen()
 {
   // The previous CPU decay pass was immediately cleared before drawing each frame.
   // Keep smoke disabled here and rely on hardware compositing plus palette fades instead.
+}
+
+/** @brief Fills count pixels. Box and line spans are mostly 2-8 pixels, where
+ *  newlib memset's per-call setup cost more than the fill (profiled 2026-10-30:
+ *  ~16% of a heavy frame, mostly from the 4x4 bonus boxes). */
+static inline void fillSpan(Canvas::Pixel *dst, Canvas::Pixel color, int count)
+{
+  if (count > 8)
+  {
+    memset(dst, color, count);
+    return;
+  }
+  switch (count)
+  {
+  case 8: dst[7] = color; [[fallthrough]];
+  case 7: dst[6] = color; [[fallthrough]];
+  case 6: dst[5] = color; [[fallthrough]];
+  case 5: dst[4] = color; [[fallthrough]];
+  case 4: dst[3] = color; [[fallthrough]];
+  case 3: dst[2] = color; [[fallthrough]];
+  case 2: dst[1] = color; [[fallthrough]];
+  case 1: dst[0] = color; [[fallthrough]];
+  default: break;
+  }
 }
 
 /** @brief Draws a line into the supplied pixel buffer. */
@@ -1225,7 +1313,7 @@ void drawThickLine(int x1, int y1, int x2, int y2,
     x = x1 << 8;
     y = y1;
     ptr = y * pitch + (x >> 8) + 1;
-    memset(&(buf[ptr]), color2, width1);
+    fillSpan(&(buf[ptr]), color2, width1);
     x += ax;
     y += ay;
     for (i = ly - 1; i > 1; i--, x += ax, y += ay)
@@ -1233,12 +1321,12 @@ void drawThickLine(int x1, int y1, int x2, int y2,
       ptr = y * pitch + (x >> 8);
       buf[ptr] = color2;
       ptr++;
-      memset(&(buf[ptr]), color1, width1);
+      fillSpan(&(buf[ptr]), color1, width1);
       ptr += width1;
       buf[ptr] = color2;
     }
     ptr = y * pitch + (x >> 8) + 1;
-    memset(&(buf[ptr]), color2, width1);
+    fillSpan(&(buf[ptr]), color2, width1);
   }
   else
   {
@@ -1291,18 +1379,18 @@ void drawBox(int x, int y, int width, int height,
   if (height <= 1) return;
 
   ptr = x + y * pitch;
-  memset(&(buf[ptr]), color2, width);
+  fillSpan(&(buf[ptr]), color2, width);
   y++;
   for (i = 0; i < height - 2; i++, y++)
   {
     ptr = x + y * pitch;
     buf[ptr] = color2; ptr++;
-    memset(&(buf[ptr]), color1, width - 2);
+    fillSpan(&(buf[ptr]), color1, width - 2);
     ptr += width - 2;
     buf[ptr] = color2;
   }
   ptr = x + y * pitch;
-  memset(&(buf[ptr]), color2, width);
+  fillSpan(&(buf[ptr]), color2, width);
   SDL_SetSurfaceDirty(layer);
 }
 
@@ -1323,18 +1411,18 @@ void drawBoxPanel(int x, int y, int width, int height,
   if (height <= 1) return;
 
   ptr = x + y * PANEL_WIDTH;
-  memset(&(buf[ptr]), color2, width);
+  fillSpan(&(buf[ptr]), color2, width);
   y++;
   for (i = 0; i < height - 2; i++, y++)
   {
     ptr = x + y * PANEL_WIDTH;
     buf[ptr] = color2; ptr++;
-    memset(&(buf[ptr]), color1, width - 2);
+    fillSpan(&(buf[ptr]), color1, width - 2);
     ptr += width - 2;
     buf[ptr] = color2;
   }
   ptr = x + y * PANEL_WIDTH;
-  memset(&(buf[ptr]), color2, width);
+  fillSpan(&(buf[ptr]), color2, width);
   if (buf == lpbuf)
   {
     SDL_SetSurfaceDirty(lpanel);

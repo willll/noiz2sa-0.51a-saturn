@@ -38,13 +38,8 @@
 #define FOE_TYPE_MAX 4
 #define SHIP_HIT_WIDTH (512 * 512)
 
-// foe[] is placed in LWRAM (allocated once at startup, before any gameplay
-// tick) rather than as a plain static array. Plain statics all land in the
-// same physical HWRAM region as program code/data on this platform (there is
-// no separate ROM region and no linker-script LWRAM section), and this
-// single 86KB array was a large share of what left HWRAM too tight to load
-// real textures once sound was compiled in. LWRAM sits almost completely
-// unused by comparison, so this is pure headroom recovered for free.
+// foe[] (42KB) is allocated once at startup rather than as a static array, so
+// it can fall back to LWRAM when HWRAM is tight (see allocateFoePool()).
 static Foe* foe = nullptr;
 static int foeActiveIndices[FOE_MAX];
 static int foeActivePos[FOE_MAX];
@@ -173,6 +168,28 @@ static void removeFoeSlotActive(const Foe *fe)
   foeActiveCount = lastPos;
 }
 
+/** @brief Exactly v >> 8 (arithmetic). GCC calls a library routine (__ashiftrt_r4_8)
+ *  for that on the SH-2, which has no arithmetic shift by 8; shlr8 + sign fix is inline. */
+static inline int asr8(int v)
+{
+  const uint32_t u = (uint32_t)v;
+  return (v >= 0) ? (int)(u >> 8) : (int)~((~u) >> 8);
+}
+
+/** @brief Exactly (v / SCAN_WIDTH * LAYER_WIDTH) >> 8, the playfield pixel of a scan
+ *  coordinate; the signed division costs another library shift, so non-negative
+ *  coordinates (the usual case) take the unsigned path. */
+static inline int scanToLayerX(int v)
+{
+  return (v >= 0) ? (int)((uint32_t)v / SCAN_WIDTH * LAYER_WIDTH >> 8) : asr8(v / SCAN_WIDTH * LAYER_WIDTH);
+}
+
+/** @brief As scanToLayerX, for y. */
+static inline int scanToLayerY(int v)
+{
+  return (v >= 0) ? (int)((uint32_t)v / SCAN_HEIGHT * LAYER_HEIGHT >> 8) : asr8(v / SCAN_HEIGHT * LAYER_HEIGHT);
+}
+
 /** @brief Tests whether a bullet segment intersects the ship hit area. */
 static bool bulletHitsShip(const Foe *fe)
 {
@@ -283,22 +300,35 @@ void removeFoe(Foe *fe)
   }
 }
 
-/** @brief Allocates the foe[] pool from LWRAM. Call exactly once at startup,
- *  before the first initFoes() call - initFoes() reads fe->cmd on every
- *  slot, so this memory must be zeroed before that first call, not just
- *  allocated. */
+/** @brief Allocates the foe[] pool (HWRAM when it fits with headroom, else LWRAM).
+ *  Call exactly once at startup, before the first initFoes() call - initFoes()
+ *  reads fe->cmd on every slot, so this memory must be zeroed before that first
+ *  call, not just allocated. */
 bool allocateFoePool()
 {
   if (foe != nullptr)
   {
     return true;
   }
-  foe = allocateLowWorkRamItems<Foe>(FOE_MAX);
+  // moveFoes() and drawBullets() read every entity every tick, so HWRAM is
+  // faster. Later startup allocations need HWRAM too: with ~8KB left the boot
+  // hangs (log-enabled builds, whose larger code shrinks the heap), so keep a reserve.
+  constexpr size_t kHwramReserve = 64 * 1024;
+  if (SRL::Memory::HighWorkRam::GetFreeSpace() >= sizeof(Foe) * FOE_MAX + kHwramReserve)
+  {
+    foe = allocateHighWorkRamItems<Foe>(FOE_MAX);
+  }
   if (foe == nullptr)
   {
-    SRL::Logger::LogFatal("[FOE] Failed to allocate foe[%d] pool from LWRAM", FOE_MAX);
+    foe = allocateLowWorkRamItems<Foe>(FOE_MAX);
+  }
+  if (foe == nullptr)
+  {
+    SRL::Logger::LogFatal("[FOE] Failed to allocate foe[%d] pool", FOE_MAX);
     return false;
   }
+  SRL::Logger::LogInfo("[FOE] foe[%d] pool at %p, HWRAM free after: %lu", FOE_MAX, (void *)foe,
+                       (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
   memset(foe, 0, sizeof(Foe) * FOE_MAX);
   return true;
 }
@@ -710,8 +740,8 @@ void moveFoes()
       }
     }
     const int dir = fe->d & (DIV - 1);
-    mx = ((sctbl[dir] * fe->spd) >> 8) + fe->vel.x;
-    my = -((sctbl[(dir + 256) & (DIV - 1)] * fe->spd) >> 8) + fe->vel.y;
+    mx = asr8(sctbl[dir] * fe->spd) + fe->vel.x;
+    my = -asr8(sctbl[(dir + 256) & (DIV - 1)] * fe->spd) + fe->vel.y;
     fe->pos.x += mx;
     fe->pos.y += my;
     fe->mv.x = mx;
@@ -988,12 +1018,33 @@ static void drawBox3x3(int x, int y,
   if (height <= 1)
     return;
 
-  const int dirtyX = x;
-  const int dirtyY = y;
-  const int dirtyWidth = width;
-  const int dirtyHeight = height;
-
   ptr = x + y * LAYER_WIDTH;
+  if (width == 3 && height == 3)
+  {
+    // Unclipped: two stores per row instead of three (target is write-through RAM,
+    // every store is a bus write). The 160-byte pitch keeps the rows' alignment.
+    uint8_t *p = (uint8_t *)target + ptr;
+    if (((uintptr_t)p & 1u) == 0u)
+    {
+      storePixels2(p, color2, color2);
+      p[2] = color2;
+      storePixels2(p + LAYER_WIDTH, color2, color1);
+      p[LAYER_WIDTH + 2] = color2;
+      storePixels2(p + 2 * LAYER_WIDTH, color2, color1);
+      p[2 * LAYER_WIDTH + 2] = color2;
+    }
+    else
+    {
+      p[0] = color2;
+      storePixels2(p + 1, color2, color2);
+      p[LAYER_WIDTH] = color2;
+      storePixels2(p + LAYER_WIDTH + 1, color1, color2);
+      p[2 * LAYER_WIDTH] = color2;
+      storePixels2(p + 2 * LAYER_WIDTH + 1, color1, color2);
+    }
+    return;
+  }
+
   target[ptr] = color2;
   target[ptr + 1] = color2;
   if (width > 2)
@@ -1014,10 +1065,6 @@ static void drawBox3x3(int x, int y,
       target[ptr + 2] = color2;
   }
 
-  if (target == buf)
-  {
-    markPlayfieldDirtyRect(dirtyX, dirtyY, dirtyWidth, dirtyHeight);
-  }
 }
 
 void drawBullets()
@@ -1034,8 +1081,8 @@ void drawBullets()
     if (fe->spc == NOT_EXIST || fe->spc == FOE)
       continue;
     bc = fe->color % BULLET_COLOR_NUM;
-    x = ((fe->pos.x / SCAN_WIDTH * LAYER_WIDTH) >> 8) - (BULLET_WIDTH / 2);
-    y = ((fe->pos.y / SCAN_HEIGHT * LAYER_HEIGHT) >> 8) - (BULLET_WIDTH / 2);
+    x = scanToLayerX(fe->pos.x) - (BULLET_WIDTH / 2);
+    y = scanToLayerY(fe->pos.y) - (BULLET_WIDTH / 2);
 
     // Cull bullets whose bounding box is entirely off-screen.
     // Their simulation (position, BulletML) already ran in moveFoes(); only the draw is skipped.
@@ -1048,6 +1095,10 @@ void drawBullets()
 
     drawBox3x3(x, y, bulletColor[bc][0], bulletColor[bc][1], buf);
     drawnBulletNum++;
+  }
+  if (drawnBulletNum > 0)
+  {
+    markPlayfieldDirty(); // once, not per bullet (whole layer; the frame marks it anyway)
   }
   sFrameDrawnBullets = (uint32_t)drawnBulletNum;
   sFrameCulledBullets = (uint32_t)culledBulletNum;

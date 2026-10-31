@@ -1086,10 +1086,26 @@ private:
 
     Fxp evalNodeValue(const BulletMLNode* node) {
         if (!node) return 0.0;
+        if (node->getValueKind() == BulletMLNode::value_constant) {
+            return Fxp::BuildRaw(node->getConstantRaw());
+        }
         const char* s = node->getValue();
         if (!s || s[0] == '\0') return 0.0;
         const char* p = s;
-        return parseExpression(p);
+        const Fxp v = parseExpression(p);
+        if (node->getValueKind() == BulletMLNode::value_unchecked) {
+            // Without $rank/$rand/$n the formula always gives this result: keep it.
+            bool variable = false;
+            for (const char* q = s; *q != '\0'; ++q) {
+                if (*q == '$') {
+                    variable = true;
+                    break;
+                }
+            }
+            node->cacheValue(variable ? BulletMLNode::value_variable : BulletMLNode::value_constant,
+                             v.RawValue());
+        }
+        return v;
     }
 
     void copyParameters(const Fxp* src, uint16_t count) {

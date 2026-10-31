@@ -25,9 +25,7 @@
 static Board board[BOARD_MAX];
 static void *backgroundLayerVram = nullptr;
 static int backgroundLayerVramSize = 0;
-static uint16_t *backgroundBuffers[2] = {nullptr, nullptr};
-static uint32_t backgroundUploadedGeneration = 0;
-static uint32_t backgroundRequestedGeneration = 0;
+static uint16_t *backgroundBuffer = nullptr;
 static bool backgroundUploadLogged = false;
 static constexpr int BACKGROUND_BITMAP_WIDTH = 512;
 static constexpr int BACKGROUND_BITMAP_HEIGHT = 256;
@@ -37,11 +35,8 @@ static int bdIdx;
 static int boardMx, boardMy;
 static int boardRepx, boardRepy;
 static int boardRepXn, boardRepYn;
-// Render a new background bitmap at most every this many move ticks.
-// At 60hz tick rate this gives ~20fps background updates, freeing Slave SH2
-// and SCU DMA bandwidth for foes/bullets/ship on other ticks.
-static constexpr uint32_t kBgRenderDivisor = 6u;  // Iter F: was 3; halves bg-upload avg cost
-static uint32_t sBgMoveTick = 0u;
+// Start a new background bitmap at most every this many move ticks.
+static constexpr uint32_t kBgRenderDivisor = 6u;
 
 static constexpr uint16_t BACKGROUND_BASE_COLOR = 0xffff;
 static constexpr uint32_t BACKGROUND_HASH_OFFSET = 2166136261u;
@@ -62,15 +57,16 @@ static void fillBackgroundSpan(uint16_t *dst, int count, uint16_t color)
   }
 }
 
-/** @brief Rasterises one background board rectangle into the bitmap buffer. */
-static void rasterBackgroundRect(
-    uint16_t *dst,
-    int centerX,
-    int centerY,
-    int width,
-    int height,
-    const uint16_t fillColor,
-    const uint16_t borderColor)
+/** @brief One board rectangle, already clipped to the screen. */
+struct BackgroundRect
+{
+  int16_t x, y, width, height;
+};
+// Every board repeated boardRepXn x boardRepYn times; no stage repeats more than 4x4.
+static constexpr int kMaxBackgroundRects = BOARD_MAX * 16;
+
+/** @brief Clips one board rectangle to the screen; false if nothing is left to draw. */
+static bool clipBackgroundRect(int centerX, int centerY, int width, int height, BackgroundRect *out)
 {
   int x = centerX - (width >> 1);
   int y = centerY - (height >> 1);
@@ -84,7 +80,7 @@ static void rasterBackgroundRect(
     width = LAYER_WIDTH - x;
   }
   if (width <= 1)
-    return;
+    return false;
   if (y < 0)
   {
     height += y;
@@ -95,38 +91,22 @@ static void rasterBackgroundRect(
     height = LAYER_HEIGHT - y;
   }
   if (height <= 1)
-    return;
-
-  int ptr = x + y * LAYER_WIDTH;
-  fillBackgroundSpan(&(dst[ptr]), width, borderColor);
-  y++;
-  for (int row = 0; row < height - 2; row++, y++)
-  {
-    ptr = x + y * LAYER_WIDTH;
-    dst[ptr] = borderColor;
-    ptr++;
-    fillBackgroundSpan(&(dst[ptr]), width - 2, fillColor);
-    ptr += width - 2;
-    dst[ptr] = borderColor;
-  }
-  ptr = x + y * LAYER_WIDTH;
-  fillBackgroundSpan(&(dst[ptr]), width, borderColor);
+    return false;
+  *out = BackgroundRect{(int16_t)x, (int16_t)y, (int16_t)width, (int16_t)height};
+  return true;
 }
 
-/** @brief Renders the full background bitmap from the current board set. */
-static void renderBackgroundBitmap(
+/** @brief Positions and clips every visible board rectangle, in drawing order.
+ *  Done once per render: the divisions here used to be repeated for every band. */
+static int collectBackgroundRects(
     const Board *srcBoard,
     int srcBoardRepx,
     int srcBoardRepy,
     int srcBoardRepXn,
     int srcBoardRepYn,
-    uint16_t *dst)
+    BackgroundRect *rects)
 {
-  for (int i = 0; i < LAYER_WIDTH * LAYER_HEIGHT; i++)
-  {
-    dst[i] = BACKGROUND_BASE_COLOR;
-  }
-
+  int count = 0;
   const int osx = -srcBoardRepx * (srcBoardRepXn / 2);
   const int osy = -srcBoardRepy * (srcBoardRepYn / 2);
 
@@ -144,23 +124,104 @@ static void renderBackgroundBitmap(
       int oy = osy;
       for (int ry = 0; ry < srcBoardRepYn; ry++, oy += srcBoardRepy)
       {
-        rasterBackgroundRect(
-            dst,
-            (bd->x + ox) / bd->z + LAYER_WIDTH / 2,
-            (bd->y + oy) / bd->z + LAYER_HEIGHT / 2,
-            bd->width,
-            bd->height,
-            (uint16_t)color[1],
-            (uint16_t)color[3]);
+        if (count < kMaxBackgroundRects &&
+            clipBackgroundRect(
+                (bd->x + ox) / bd->z + LAYER_WIDTH / 2,
+                (bd->y + oy) / bd->z + LAYER_HEIGHT / 2,
+                bd->width,
+                bd->height,
+                &rects[count]))
+        {
+          count++;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+/** @brief Renders rows [y0, y1) of the background bitmap from collected rectangles. */
+static void renderBackgroundRectRows(const BackgroundRect *rects, int count, uint16_t *dst, int y0, int y1)
+{
+  for (int i = y0 * LAYER_WIDTH; i < y1 * LAYER_WIDTH; i++)
+  {
+    dst[i] = BACKGROUND_BASE_COLOR;
+  }
+
+  const uint16_t fillColor = (uint16_t)color[1];
+  const uint16_t borderColor = (uint16_t)color[3];
+  for (int r = 0; r < count; r++)
+  {
+    const BackgroundRect &rc = rects[r];
+    const int top = rc.y;
+    const int bottom = rc.y + rc.height - 1;
+    const int firstRow = (top > y0) ? top : y0;
+    const int lastRow = (bottom < y1 - 1) ? bottom : y1 - 1;
+    for (int row = firstRow; row <= lastRow; row++)
+    {
+      uint16_t *line = &(dst[rc.x + row * LAYER_WIDTH]);
+      if (row == top || row == bottom)
+      {
+        fillBackgroundSpan(line, rc.width, borderColor);
+      }
+      else
+      {
+        line[0] = borderColor;
+        fillBackgroundSpan(line + 1, rc.width - 2, fillColor);
+        line[rc.width - 1] = borderColor;
       }
     }
   }
 }
 
+// One list for both CPUs: the slave fills it at step 0 and draws the cycle's
+// bands from it; the master only renders after stopBackgroundPipeline(), when
+// the slave is idle. LWRAM (allocated with the bitmap buffer): 32KB, read once per band.
+static BackgroundRect *sBgRects = nullptr;
+static int sBgRectCount = 0;
+
+/** @brief Renders the full background bitmap from the current board set (master). */
+static void renderBackgroundBitmap(
+    const Board *srcBoard,
+    int srcBoardRepx,
+    int srcBoardRepy,
+    int srcBoardRepXn,
+    int srcBoardRepYn,
+    uint16_t *dst)
+{
+  sBgRectCount = collectBackgroundRects(srcBoard, srcBoardRepx, srcBoardRepy, srcBoardRepXn, srcBoardRepYn, sBgRects);
+  renderBackgroundRectRows(sBgRects, sBgRectCount, dst, 0, LAYER_HEIGHT);
+}
+
+/** @brief Copies a rendered background bitmap into the VDP2 bitmap container.
+ *  Row by row: the source stride (LAYER_WIDTH) differs from the container
+ *  stride (BACKGROUND_BITMAP_WIDTH). The SCU cannot read LWRAM, where the
+ *  buffer lives (DMA_ScuMemCopy silently fell back to the master's CPU DMA with
+ *  a wait per row, ~10ms of master time per upload), so the slave copies it. */
+static void copyBackgroundToVram(const uint16_t *src, void *vram)
+{
+  const uint8_t *srcRow = (const uint8_t *)src;
+  uint8_t *dstRow = (uint8_t *)vram + (BACKGROUND_SCREEN_X * (int)sizeof(uint16_t));
+  for (int row = 0; row < LAYER_HEIGHT; row++)
+  {
+    memcpy(dstRow, srcRow, LAYER_WIDTH * sizeof(uint16_t));
+    srcRow += LAYER_WIDTH * sizeof(uint16_t);
+    dstRow += BACKGROUND_BITMAP_WIDTH * sizeof(uint16_t);
+  }
+}
+
+// SGL's slSynch() waits for the slave, so a slave task longer than the rest of
+// the frame stalls that frame: a whole render took ~60ms (mednafen, 2026-10-30)
+// and made every 6th frame last 4-5 VBlanks. The slave therefore renders one
+// band per tick, then copies the finished bitmap to VRAM in a last step.
+static constexpr int kBgBands = 8;
+static constexpr int kBgCopyStep = kBgBands;
+static_assert(LAYER_HEIGHT % kBgBands == 0, "background bands must tile the layer");
+
 class BackgroundRenderTask : public SRL::Types::ITask
 {
 public:
-  /** @brief Captures the current board state for deferred background rendering. */
+  /** @brief Captures the board state for the next render cycle. */
   void Prepare(
       const Board *srcBoard,
       int srcBoardRepx,
@@ -168,8 +229,7 @@ public:
       int srcBoardRepXn,
       int srcBoardRepYn,
       uint16_t *dst,
-      uint32_t generation,
-      int bufferIndex)
+      void *vram)
   {
     memcpy(snapshotBoard, srcBoard, sizeof(snapshotBoard));
     snapshotBoardRepx = srcBoardRepx;
@@ -177,38 +237,39 @@ public:
     snapshotBoardRepXn = srcBoardRepXn;
     snapshotBoardRepYn = srcBoardRepYn;
     targetBuffer = dst;
-    targetGeneration = generation;
-    targetBufferIndex = bufferIndex;
+    targetVram = vram;
   }
 
-  /** @brief Returns the generation counter for the prepared render. */
-  uint32_t GetGeneration() const
+  /** @brief Selects what the next run does: a band index, kBgCopyStep, or -1 (none). */
+  void SetStep(int nextStep)
   {
-    return targetGeneration;
-  }
-
-  /** @brief Returns which background buffer was targeted for the prepared render. */
-  int GetBufferIndex() const
-  {
-    return targetBufferIndex;
+    step = nextStep;
   }
 
 protected:
-  /** @brief Executes the background render task. */
+  /** @brief Runs one pipeline step on the slave. */
   void Do() override
   {
-    if (targetBuffer == nullptr)
+    // SRL purges the slave cache only in DEBUG builds. The master rewrites the
+    // snapshot and step between runs, so drop any stale cached copy first.
+    *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
+    asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop" ::: "memory");
+
+    if (targetBuffer != nullptr && step >= 0 && step < kBgBands)
     {
-      return;
+      if (step == 0)
+      {
+        sBgRectCount = collectBackgroundRects(snapshotBoard, snapshotBoardRepx, snapshotBoardRepy,
+                                              snapshotBoardRepXn, snapshotBoardRepYn, sBgRects);
+      }
+      const int bandRows = LAYER_HEIGHT / kBgBands;
+      renderBackgroundRectRows(sBgRects, sBgRectCount, targetBuffer, step * bandRows, (step + 1) * bandRows);
+    }
+    else if (targetBuffer != nullptr && step == kBgCopyStep && targetVram != nullptr)
+    {
+      copyBackgroundToVram(targetBuffer, targetVram);
     }
 
-    renderBackgroundBitmap(
-        snapshotBoard,
-        snapshotBoardRepx,
-        snapshotBoardRepy,
-        snapshotBoardRepXn,
-        snapshotBoardRepYn,
-        targetBuffer);
   }
 
 private:
@@ -218,13 +279,16 @@ private:
   int snapshotBoardRepXn = 0;
   int snapshotBoardRepYn = 0;
   uint16_t *targetBuffer = nullptr;
-  uint32_t targetGeneration = 0;
-  int targetBufferIndex = 0;
+  void *targetVram = nullptr;
+  int step = 0;
 };
 
 static BackgroundRenderTask backgroundRenderTask;
+static int sBgStep = -1; ///< -1 idle, 0..kBgBands-1 render band, kBgCopyStep copy
+static bool sBgTaskInFlight = false;
+static uint32_t sBgTicksSinceStart = 0;
 
-/** @brief Uploads a rendered background bitmap into VDP2 VRAM. */
+/** @brief Uploads a rendered background bitmap into VDP2 VRAM from the master. */
 static void uploadBackgroundBitmap(const uint16_t *src)
 {
   if (backgroundLayerVram == nullptr || src == nullptr)
@@ -232,26 +296,12 @@ static void uploadBackgroundBitmap(const uint16_t *src)
     return;
   }
 
-  // Use SCU Level-0 DMA (B-Bus path to VDP2 VRAM, ~80 MB/s) instead of the
-  // SH2 on-chip DMAC (local bus, ~30 MB/s).  One dispatch per row is still
-  // needed because the source stride (LAYER_WIDTH*2 = 320 B) differs from the
-  // VDP2 bitmap container stride (BACKGROUND_BITMAP_WIDTH*2 = 1024 B).
-  const uint8_t *srcRow = (const uint8_t *)src;
-  uint8_t *dstRow = (uint8_t *)backgroundLayerVram + (BACKGROUND_SCREEN_X * (int)sizeof(uint16_t));
-  for (int row = 0; row < LAYER_HEIGHT; row++)
-  {
-    slDMAWait();  // Wait for previous SCU Level-0 DMA to complete before starting the next
-    DMA_ScuMemCopy(dstRow, (void *)srcRow, LAYER_WIDTH * sizeof(uint16_t));
-    srcRow += LAYER_WIDTH * sizeof(uint16_t);
-    dstRow += BACKGROUND_BITMAP_WIDTH * sizeof(uint16_t);
-  }
-  slDMAWait();  // Wait for the final row DMA to complete
+  copyBackgroundToVram(src, backgroundLayerVram);
 
   if (!backgroundUploadLogged)
   {
     SRL::Logger::LogInfo(
-        "[BACKGROUND] First upload complete gen=%lu px0=0x%04x px1=0x%04x px2=0x%04x px3=0x%04x",
-        (unsigned long)backgroundRequestedGeneration,
+        "[BACKGROUND] First upload complete px0=0x%04x px1=0x%04x px2=0x%04x px3=0x%04x",
         (unsigned int)src[0],
         (unsigned int)src[1],
         (unsigned int)src[2],
@@ -295,23 +345,24 @@ static void ensureBackgroundLayer()
       BACKGROUND_BITMAP_WIDTH,
       BACKGROUND_BITMAP_HEIGHT);
 
-  // CPU-side render buffers: use LWRAM (1MB, ~856KB free after screen alloc).
-  // HWRAM heap is only ~159KB total and is consumed by BulletML parse trees;
-  // these 2×76KB buffers must come from LWRAM to avoid exhausting it.
+  // CPU-side render buffer: LWRAM, since HWRAM is too tight for 76KB.
   SRL::Logger::LogInfo("[BACKGROUND] HWRAM free before bg buffers: %lu LWRAM free: %lu",
                        (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace(),
                        (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
-  for (int i = 0; i < 2; i++)
+  backgroundBuffer = allocateLowWorkRamItems<uint16_t>(LAYER_WIDTH * LAYER_HEIGHT);
+  if (backgroundBuffer == nullptr)
   {
-    const size_t bufSize = LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t);
-    backgroundBuffers[i] = allocateLowWorkRamItems<uint16_t>(LAYER_WIDTH * LAYER_HEIGHT);
-    if (backgroundBuffers[i] == nullptr)
-    {
-      SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate CPU background buffer %d (LWRAM free=%lu)",
-                            i, (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
-      SRL::System::Exit(1);
-    }
-    memset(backgroundBuffers[i], 0, bufSize);
+    SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate CPU background buffer (LWRAM free=%lu)",
+                          (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+    SRL::System::Exit(1);
+  }
+  memset(backgroundBuffer, 0, LAYER_WIDTH * LAYER_HEIGHT * sizeof(uint16_t));
+  sBgRects = allocateLowWorkRamItems<BackgroundRect>(kMaxBackgroundRects);
+  if (sBgRects == nullptr)
+  {
+    SRL::Logger::LogFatal("[BACKGROUND] Failed to allocate background rect list (LWRAM free=%lu)",
+                          (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
+    SRL::System::Exit(1);
   }
   SRL::Logger::LogInfo("[BACKGROUND] bg buffers allocated OK: LWRAM free now %lu",
                        (unsigned long)SRL::Memory::LowWorkRam::GetFreeSpace());
@@ -326,72 +377,72 @@ static void ensureBackgroundLayer()
   SRL::Logger::LogInfo("[BACKGROUND] NBG0 enabled priority=2 transparent=off base=0x%04x", (unsigned int)BACKGROUND_BASE_COLOR);
 }
 
-/** @brief Submits the current board state to the background render task. */
-static void submitBackgroundRender()
+/** @brief Dispatches one slave run per tick: at most one short background step. */
+static void stepBackgroundPipeline()
 {
   ensureBackgroundLayer();
 
-  if (backgroundBuffers[0] == nullptr || backgroundBuffers[1] == nullptr)
+  if (backgroundBuffer == nullptr)
   {
     return;
   }
 
-  if (backgroundRenderTask.IsRunning())
+  sBgTicksSinceStart++;
+  int nextStep = -1;
+  if (sBgTaskInFlight)
   {
-    return;
+    if (!backgroundRenderTask.IsDone())
+    {
+      return; // never wait: the slave is still on the previous run
+    }
+    sBgTaskInFlight = false;
+    if (sBgStep >= 0 && sBgStep < kBgCopyStep)
+    {
+      nextStep = sBgStep + 1;
+    }
   }
 
-  if (backgroundRenderTask.IsDone() && backgroundRenderTask.GetGeneration() > backgroundUploadedGeneration)
+  if (nextStep < 0 && sBgTicksSinceStart >= kBgRenderDivisor)
   {
-    return;
+    backgroundRenderTask.Prepare(board, boardRepx, boardRepy, boardRepXn, boardRepYn,
+                                 backgroundBuffer, backgroundLayerVram);
+    sBgTicksSinceStart = 0;
+    nextStep = 0;
   }
 
-  const int bufferIndex = (int)(backgroundRequestedGeneration & 1u);
-  backgroundRequestedGeneration++;
-  backgroundRenderTask.Prepare(
-      board,
-      boardRepx,
-      boardRepy,
-      boardRepXn,
-      boardRepYn,
-      backgroundBuffers[bufferIndex],
-      backgroundRequestedGeneration,
-      bufferIndex);
-
+  sBgStep = nextStep;
+  backgroundRenderTask.SetStep(sBgStep);
   SRL::Slave::ExecuteOnSlave(backgroundRenderTask);
+  sBgTaskInFlight = true;
 }
 
-/** @brief Presents any completed background render to VRAM. */
-static void presentCompletedBackground()
+/** @brief Waits for any slave step and restarts the pipeline, so the master can
+ *  use the buffer; a later step would otherwise draw the old snapshot over it. */
+static void stopBackgroundPipeline()
 {
-  if (!backgroundRenderTask.IsDone())
+  if (sBgTaskInFlight)
   {
-    return;
+    while (!backgroundRenderTask.IsDone())
+    {
+    }
+    sBgTaskInFlight = false;
   }
-
-  if (backgroundRenderTask.GetGeneration() <= backgroundUploadedGeneration)
-  {
-    return;
-  }
-
-  uploadBackgroundBitmap(backgroundBuffers[backgroundRenderTask.GetBufferIndex()]);
-  backgroundUploadedGeneration = backgroundRenderTask.GetGeneration();
+  sBgStep = -1;
 }
 
-/** @brief Refreshes the background bitmap buffer when the board state changes. */
+/** @brief Redraws the background immediately (stage start). */
 static void refreshBackgroundBitmap()
 {
   ensureBackgroundLayer();
 
-  if (backgroundBuffers[0] == nullptr)
+  if (backgroundBuffer == nullptr)
   {
     return;
   }
 
-  renderBackgroundBitmap(board, boardRepx, boardRepy, boardRepXn, boardRepYn, backgroundBuffers[0]);
-  uploadBackgroundBitmap(backgroundBuffers[0]);
-  backgroundRequestedGeneration++;
-  backgroundUploadedGeneration = backgroundRequestedGeneration;
+  stopBackgroundPipeline();
+  renderBackgroundBitmap(board, boardRepx, boardRepy, boardRepXn, boardRepYn, backgroundBuffer);
+  uploadBackgroundBitmap(backgroundBuffer);
 }
 
 /** @brief Initialises the background system. */
@@ -590,20 +641,13 @@ void moveBackground()
     bd->y &= (boardRepy - 1);
   }
 
-  // Submit a new Slave SH2 render only every kBgRenderDivisor ticks.
-  // This keeps background at low priority (~20fps at 60hz) so foes,
-  // bullets and ship always get the Slave SH2 and SCU DMA first.
-  sBgMoveTick++;
-  if ((sBgMoveTick % kBgRenderDivisor) == 0u)
-  {
-    submitBackgroundRender();
-  }
+  stepBackgroundPipeline();
 }
 
 /** @brief Draws the current background state to the screen. */
 void drawBackground()
 {
-  presentCompletedBackground();
+  // Nothing to do on the master: the slave pipeline copies finished bitmaps to VRAM.
 }
 
 /** @brief Returns a hash of the current background bitmap for debugging. */
@@ -611,17 +655,18 @@ unsigned int getBackgroundDebugBitmapHash()
 {
   ensureBackgroundLayer();
 
-  if (backgroundBuffers[0] == nullptr)
+  if (backgroundBuffer == nullptr)
   {
     return 0u;
   }
 
   // Render current board state synchronously so the hash reflects the latest
-  // board positions regardless of the render divisor or async Slave SH2 state.
-  renderBackgroundBitmap(board, boardRepx, boardRepy, boardRepXn, boardRepYn, backgroundBuffers[0]);
+  // board positions regardless of the slave pipeline's progress.
+  stopBackgroundPipeline();
+  renderBackgroundBitmap(board, boardRepx, boardRepy, boardRepXn, boardRepYn, backgroundBuffer);
 
   uint32_t hash = BACKGROUND_HASH_OFFSET;
-  const uint16_t *pixels = backgroundBuffers[0];
+  const uint16_t *pixels = backgroundBuffer;
   for (int i = 0; i < LAYER_WIDTH * LAYER_HEIGHT; i++)
   {
     const uint16_t value = pixels[i];

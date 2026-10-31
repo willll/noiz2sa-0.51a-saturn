@@ -798,7 +798,8 @@ static void draw()
                          (void*)buf, (unsigned)lyrSize,
                          (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
 #endif
-  traceDraw(gDrawPhaseTimings.memset, [&]() { memset(buf, 0, lyrSize); });
+  // The slave prepared buf (smoke trails or clear, then bonus stars) after the last sync.
+  traceDraw(gDrawPhaseTimings.memset, []() { waitPlayfieldPrep(); });
 #if HW_DEBUG
   if (gDrawPhaseFrameCount < 3) SRL::Logger::LogInfo("[DRAW] post-memset hwfree=%u", (unsigned)SRL::Memory::HighWorkRam::GetFreeSpace());
 #endif
@@ -814,7 +815,7 @@ static void draw()
     setDiagPhase(43u);
     traceDraw(gDrawPhaseTimings.bulletsWake, []() { drawBulletsWake(); });
     setDiagPhase(44u);
-    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
+    traceDraw(gDrawPhaseTimings.blend, []() { saveTrailLayer(); markPlayfieldDirty(); });
     // Draw foreground.
     setDiagPhase(45u);
     traceDraw(gDrawPhaseTimings.bullets, []() { drawBullets(); });
@@ -851,7 +852,7 @@ static void draw()
         traceDraw(gDrawPhaseTimings.frags, []() { drawFrags(); });
       }
     }
-    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
+    traceDraw(gDrawPhaseTimings.blend, []() { saveTrailLayer(); markPlayfieldDirty(); });
     // Draw forground.
     traceDraw(gDrawPhaseTimings.shots, []() { drawShots(); });
     traceDraw(gDrawPhaseTimings.ship, []() { drawShip(); });
@@ -875,7 +876,7 @@ static void draw()
       traceDraw(gDrawPhaseTimings.bulletsWake, []() { drawBulletsWake(); });
       traceDraw(gDrawPhaseTimings.frags, []() { drawFrags(); });
     }
-    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
+    traceDraw(gDrawPhaseTimings.blend, []() { saveTrailLayer(); markPlayfieldDirty(); });
     // Draw forground.
     traceDraw(gDrawPhaseTimings.shots, []() { drawShots(); });
     traceDraw(gDrawPhaseTimings.bullets, []() { drawBullets(); });
@@ -888,7 +889,7 @@ static void draw()
     traceDraw(gDrawPhaseTimings.background, []() { drawBackground(); });
     traceDraw(gDrawPhaseTimings.bonuses, []() { drawBonuses(); });
     traceDraw(gDrawPhaseTimings.frags, []() { drawFrags(); });
-    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
+    traceDraw(gDrawPhaseTimings.blend, []() { saveTrailLayer(); markPlayfieldDirty(); });
     // Draw forground.
     traceDraw(gDrawPhaseTimings.shots, []() { drawShots(); });
     traceDraw(gDrawPhaseTimings.ship, []() { drawShip(); });
@@ -906,7 +907,7 @@ static void draw()
       traceDraw(gDrawPhaseTimings.bulletsWake, []() { drawBulletsWake(); });
     }
     traceDraw(gDrawPhaseTimings.frags, []() { drawFrags(); });
-    traceDraw(gDrawPhaseTimings.blend, []() { markPlayfieldDirty(); });
+    traceDraw(gDrawPhaseTimings.blend, []() { saveTrailLayer(); markPlayfieldDirty(); });
     // Draw forground.
     traceDraw(gDrawPhaseTimings.shots, []() { drawShots(); });
     traceDraw(gDrawPhaseTimings.ship, []() { drawShip(); });
@@ -1542,6 +1543,13 @@ int main()
   SRL::Logger::LogInfo("[HW_DEBUG] Entering initGame() for stage %d", hwDebugStage);
   initGame(hwDebugStage);
   SRL::Logger::LogInfo("[HW_DEBUG] initGame() returned for stage %d", hwDebugStage);
+#elif NOIZ2SA_AUTOSTART_STAGE >= 0
+  static_assert(NOIZ2SA_AUTOSTART_STAGE < STAGE_NUM + ENDLESS_STAGE_NUM, "NOIZ2SA_AUTOSTART_STAGE out of range");
+  SRL::Logger::LogInfo("[MAIN] Autostart: skipping title, starting stage %d", NOIZ2SA_AUTOSTART_STAGE);
+  initGame(NOIZ2SA_AUTOSTART_STAGE);
+#ifdef SRL_PROFILER
+  SRL::Profiler::Reset(); // profile gameplay, not boot/loading (slave is idle here)
+#endif
 #else
   updateLoadingProgress(mainSteps[mainStepIdx], (mainStepIdx + 1) * 100 / mainNumSteps);
   initTitle();
@@ -1926,6 +1934,7 @@ int main()
       }
 #endif
       synchronizeFrame();
+      startPlayfieldPrep(); // after the sync: slSynch() waits for queued slave work
       gSyncCount++;
     #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(4u); // post-sync

@@ -132,7 +132,8 @@ option(NOIZ2SA_ENABLE_SOUND "Enable in-game sound (PCM SFX + CDDA BGM)" ON)
 option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound backend" ON)
 
 # Gameplay performance toggles
-option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" ON)
+# Off: on a real Saturn it costs ~6 fps in heavy scenes (stage 12: 34.1 -> 28.0, 2026-10-31).
+option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" OFF)
 set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=half, 4=quarter)")
 set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
 option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
@@ -143,6 +144,10 @@ option(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY "Enable startup-only BulletML runtim
 option(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK "Skip per-frame soundTick() in refresh-only sync builds" OFF)
 option(NOIZ2SA_ENABLE_INVINCIBLE "Make player invincible (debug/testing)" OFF)
 option(NOIZ2SA_ENABLE_AUTO_SHOT "Automatically fire without button input (debug/testing)" OFF)
+# Profiling/soak runs without a controller: skip the title and start this stage
+# at boot (-1 = normal title screen). Pair with INVINCIBLE and AUTO_SHOT.
+set(NOIZ2SA_AUTOSTART_STAGE "-1" CACHE STRING "Stage to start at boot, skipping the title (-1 = title)")
+add_compile_definitions(NOIZ2SA_AUTOSTART_STAGE=${NOIZ2SA_AUTOSTART_STAGE})
 set(NOIZ2SA_SPAWN_BUDGET_PER_TICK "2" CACHE STRING "Maximum new enemies spawned per tick")
 set(NOIZ2SA_FOE_UPDATE_BUDGET "160" CACHE STRING "Maximum foe updates processed per tick")
 # Cap on concurrent non-bullet (ZAKO/MIDDLE/BOSS) Foe entities. Unlike bullets
@@ -223,10 +228,14 @@ set(NOIZ2SA_POST_LOAD_BG_COLOR "BLUE" CACHE STRING "Background color after loadi
 set_property(CACHE NOIZ2SA_POST_LOAD_BG_COLOR PROPERTY STRINGS BLUE WHITE BLACK)
 
 # SGL Work Area Settings
-set(SGL_MAX_VERTICES "384" CACHE STRING "Maximum vertices")
-set(SGL_MAX_POLYGONS "256" CACHE STRING "Maximum polygons")
-set(SGL_MAX_EVENTS "64" CACHE STRING "Maximum events")
-set(SGL_MAX_WORKS "256" CACHE STRING "Maximum work units")
+# Keep these values: LIBSGL misbehaves with smaller ones although the game draws
+# under 10 VDP1 commands a frame (2026-10-30: 256/384 crashes both CPUs after
+# picking a stage in the title menu; 512/384 drops the title logo sprites).
+set(SGL_MAX_VERTICES "1800" CACHE STRING "Maximum vertices")
+set(SGL_MAX_POLYGONS "1200" CACHE STRING "Maximum polygons")
+# Neither the game nor SRL uses SGL events or works (SRL samples use 1).
+set(SGL_MAX_EVENTS "1" CACHE STRING "Maximum events")
+set(SGL_MAX_WORKS "1" CACHE STRING "Maximum work units")
 set(SGL_SLAVE_BUF_SIZE "71680" CACHE STRING "Slave buffer size")
 
 # BulletMLRunnerImpl task-buffer slab pool (see bulletmlrunner.hpp TaskBufferPool).

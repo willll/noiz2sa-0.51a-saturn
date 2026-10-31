@@ -63,7 +63,7 @@ public:
     };
     
     explicit BulletMLNode(const char* name, uint32_t child_capacity = BULLETML_MAX_CHILDREN)
-                : name_(name), type_(type_none), value_(nullptr), label_(nullptr), refID_(0xFFFFFFFF),
+                : name_(name), name_id_(nameFromString(name)), type_(type_none), value_(nullptr), label_(nullptr), refID_(0xFFFFFFFF),
           children_(nullptr), child_capacity_(0), child_count_(0), parent_(nullptr) {
         if (child_capacity > BULLETML_MAX_CHILDREN) {
             child_capacity = BULLETML_MAX_CHILDREN;
@@ -109,7 +109,10 @@ public:
         }
     }
     
-    void setValue(const char* value) { value_ = value; }
+    void setValue(const char* value) {
+        value_ = value;
+        value_kind_ = value_unchecked;
+    }
     void setLabel(const char* label) { label_ = label; }
     void setRefID(uint32_t id) { refID_ = id; }
     
@@ -134,29 +137,17 @@ public:
         }
         return *value == '\0' && *literal == '\0';
     }
-    Name getNameAsName() const {
-        if (!name_) return bulletml;
-        if (matchesLiteral(name_, "bulletml")) return bulletml;
-        if (matchesLiteral(name_, "bullet")) return bullet;
-        if (matchesLiteral(name_, "action")) return action;
-        if (matchesLiteral(name_, "fire")) return fire;
-        if (matchesLiteral(name_, "changeDirection")) return changeDirection;
-        if (matchesLiteral(name_, "changeSpeed")) return changeSpeed;
-        if (matchesLiteral(name_, "accel")) return accel;
-        if (matchesLiteral(name_, "wait")) return wait;
-        if (matchesLiteral(name_, "repeat")) return repeat;
-        if (matchesLiteral(name_, "bulletRef")) return bulletRef;
-        if (matchesLiteral(name_, "actionRef")) return actionRef;
-        if (matchesLiteral(name_, "fireRef")) return fireRef;
-        if (matchesLiteral(name_, "vanish")) return vanish;
-        if (matchesLiteral(name_, "horizontal")) return horizontal;
-        if (matchesLiteral(name_, "vertical")) return vertical;
-        if (matchesLiteral(name_, "term")) return term;
-        if (matchesLiteral(name_, "times")) return times;
-        if (matchesLiteral(name_, "direction")) return direction;
-        if (matchesLiteral(name_, "speed")) return speed;
-        if (matchesLiteral(name_, "param")) return param;
-        return bulletml;
+    /// Cached at construction: the runner asks for it on every node it visits.
+    Name getNameAsName() const { return name_id_; }
+    
+    /// What evalNodeValue() knows about value_: not looked at yet, a formula without
+    /// $ variables (its result is cached), or one that must be parsed each time.
+    enum ValueKind : uint8_t { value_unchecked = 0, value_constant, value_variable };
+    ValueKind getValueKind() const { return value_kind_; }
+    int32_t getConstantRaw() const { return constant_raw_; }
+    void cacheValue(ValueKind kind, int32_t raw) const {
+        value_kind_ = kind;
+        constant_raw_ = raw;
     }
     
     Type getType() const { return type_; }
@@ -174,7 +165,35 @@ public:
     }
     
 private:
+    static Name nameFromString(const char* name) {
+        if (!name) return bulletml;
+        if (matchesLiteral(name, "bulletml")) return bulletml;
+        if (matchesLiteral(name, "bullet")) return bullet;
+        if (matchesLiteral(name, "action")) return action;
+        if (matchesLiteral(name, "fire")) return fire;
+        if (matchesLiteral(name, "changeDirection")) return changeDirection;
+        if (matchesLiteral(name, "changeSpeed")) return changeSpeed;
+        if (matchesLiteral(name, "accel")) return accel;
+        if (matchesLiteral(name, "wait")) return wait;
+        if (matchesLiteral(name, "repeat")) return repeat;
+        if (matchesLiteral(name, "bulletRef")) return bulletRef;
+        if (matchesLiteral(name, "actionRef")) return actionRef;
+        if (matchesLiteral(name, "fireRef")) return fireRef;
+        if (matchesLiteral(name, "vanish")) return vanish;
+        if (matchesLiteral(name, "horizontal")) return horizontal;
+        if (matchesLiteral(name, "vertical")) return vertical;
+        if (matchesLiteral(name, "term")) return term;
+        if (matchesLiteral(name, "times")) return times;
+        if (matchesLiteral(name, "direction")) return direction;
+        if (matchesLiteral(name, "speed")) return speed;
+        if (matchesLiteral(name, "param")) return param;
+        return bulletml;
+    }
+
     const char* name_;
+    Name name_id_;
+    mutable ValueKind value_kind_ = value_unchecked;
+    mutable int32_t constant_raw_ = 0;
     Type type_;
     const char* value_;
     const char* label_;

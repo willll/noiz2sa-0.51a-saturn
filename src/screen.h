@@ -69,6 +69,37 @@ struct ScreenVdpPerfStats
 void initSDL();
 /** @brief Marks the entire playfield as dirty for redraw. */
 void markPlayfieldDirty();
+/** @brief Master, right after the frame sync: the slave fades the smoke trails into buf
+ *  (or clears it), then runs the job set with setPlayfieldSlaveJob(). */
+void startPlayfieldPrep();
+/** @brief Master, before drawing: waits for that slave run (or does it here if none). */
+void waitPlayfieldPrep();
+/** @brief Master, after the trail group (foes, wakes, frags, bonuses) is drawn: keeps
+ *  buf as the next frame's trail layer. Shots, ship and bullets come after, so no trails. */
+void saveTrailLayer();
+/** @brief Registers extra per-frame playfield work for the slave (bonus stars). */
+void setPlayfieldSlaveJob(void (*prepareOnMaster)(), void (*runOnSlave)());
+/** @brief Store 4 / 2 pixels in one bus write (p 4- / 2-byte aligned). The playfield
+ *  is write-through RAM, so every store costs a bus write. */
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+inline void storePixels4(uint8_t *p, uint8_t a, uint8_t b, uint8_t c, uint8_t d)
+{
+  *reinterpret_cast<uint32_t *>(p) = ((uint32_t)a << 24) | ((uint32_t)b << 16) | ((uint32_t)c << 8) | d;
+}
+inline void storePixels2(uint8_t *p, uint8_t a, uint8_t b)
+{
+  *reinterpret_cast<uint16_t *>(p) = (uint16_t)((a << 8) | b);
+}
+#else // host builds (pixel test) only: same bytes at the same addresses
+inline void storePixels4(uint8_t *p, uint8_t a, uint8_t b, uint8_t c, uint8_t d)
+{
+  p[0] = a; p[1] = b; p[2] = c; p[3] = d;
+}
+inline void storePixels2(uint8_t *p, uint8_t a, uint8_t b)
+{
+  p[0] = a; p[1] = b;
+}
+#endif
 /** @brief Marks a rectangular playfield region as dirty. */
 void markPlayfieldDirtyRect(int x, int y, int width, int height);
 /** @brief Presents the current frame to the display. */
