@@ -65,6 +65,45 @@ static void applyBulletMlRuntimeAllocPolicy(bool enabled, const char* phase)
       snapshot.stateStartupPreallocation ? 1 : 0);
 }
 
+// Gameplay must not touch the heap: BulletML takes everything from pools filled at boot
+// and only falls back to the heap when a pool runs dry. These counters see every such
+// fallback; tools/test_hardware_full.sh fails on the RUNTIME ALLOC line.
+static std::size_t bulletMlHeapAllocCalls()
+{
+  std::size_t objects = 0, arrays = 0, frees = 0;
+  getBulletMlRuntimeObjectCallCounts(objects, frees);
+  getBulletMlRuntimeArrayCallCounts(arrays, frees);
+  const auto &runner = bulletml_runner_trace::stats();
+  return objects + arrays + runner.objectAllocCalls + runner.arrayAllocCalls;
+}
+
+static bool sAllocBaselineSet = false;
+static std::size_t sAllocBaseline = 0;
+
+/** @brief Starts the gameplay allocation check (end of initGame()). */
+static void captureAllocBaseline()
+{
+  sAllocBaseline = bulletMlHeapAllocCalls();
+  sAllocBaselineSet = true;
+  SRL::Logger::LogInfo("[ALLOC_STRESS] baseline captured bulletml_heap_allocs=%lu", (unsigned long)sAllocBaseline);
+}
+
+/** @brief Once per frame: reports BulletML heap allocations since the last check. */
+static void checkRuntimeAllocs()
+{
+  if (!sAllocBaselineSet)
+  {
+    return;
+  }
+  const std::size_t now = bulletMlHeapAllocCalls();
+  if (now != sAllocBaseline)
+  {
+    SRL::Logger::LogWarning("[ALLOC_STRESS] RUNTIME ALLOC DURING GAMEPLAY: +%lu BulletML heap allocs (pool empty) status=%d tick=%d",
+                            (unsigned long)(now - sAllocBaseline), status, tick);
+    sAllocBaseline = now;
+  }
+}
+
 // Thin wrapper kept for compatibility with callers in other translation units
 // (barragemanager.cc, screen.cpp).  All logic lives in LoadingScreen.
 void updateLoadingProgress(const char *step, int percent)
@@ -286,6 +325,7 @@ void initGame(int stg)
   applyBulletMlRuntimeAllocPolicy(kEnableGameplayStartupOnlyAllocationPolicy, "INGAME_READY");
 
   SRL::Logger::LogInfo("[STATE] IN_GAME (stage %d) ready - Starting gameplay", stg);
+  captureAllocBaseline();
 }
 
 /** @brief Initialises the game-over scene. */
@@ -1471,7 +1511,8 @@ int main()
   // Pre-populate BulletML state + small-array pools during startup so gameplay
   // can run with startup-only allocation policy enabled.
   {
-    const uint16_t statePreallocCount = 32u;
+    // 64: stage 6 ran more than 32 at once and fell back to the heap (2026-10-31).
+    const uint16_t statePreallocCount = 64u;
     // Buckets are indexed by (capacity/4)-1, i.e. capacities 4,8,12,...,32.
     // Every bucket needs some coverage: a bucket left at 0 means any
     // node/parameter array landing in that size class can never be created
@@ -1479,8 +1520,8 @@ int main()
     // off for larger capacities since most BulletML fire/action nodes have
     // few children/params; total reserved LWRAM for both arrays combined is
     // only a few KB.
-    const uint16_t nodeArrayPreallocCounts[8] = {32u, 16u, 8u, 8u, 4u, 4u, 2u, 2u};
-    const uint16_t parameterArrayPreallocCounts[8] = {32u, 16u, 8u, 4u, 2u, 2u, 1u, 1u};
+    const uint16_t nodeArrayPreallocCounts[8] = {64u, 16u, 8u, 8u, 4u, 4u, 2u, 2u};
+    const uint16_t parameterArrayPreallocCounts[8] = {64u, 16u, 8u, 4u, 2u, 2u, 1u, 1u};
 
     const bool preallocOk = preallocateBulletMlStatePools(statePreallocCount,
                                                            nodeArrayPreallocCounts,
@@ -1935,6 +1976,7 @@ int main()
 #endif
       synchronizeFrame();
       startPlayfieldPrep(); // after the sync: slSynch() waits for queued slave work
+      checkRuntimeAllocs();
       gSyncCount++;
     #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(4u); // post-sync
