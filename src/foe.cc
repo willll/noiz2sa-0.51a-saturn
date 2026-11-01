@@ -572,8 +572,6 @@ static int foeScanSize[] = {
 #define SHOT_SCAN_HEIGHT (SHOT_HEIGHT * 256 * SCAN_HEIGHT / LAYER_HEIGHT / 2)
 static int enemyScore[] = {500, 1000, 5000, 50000};
 
-int processSpeedDownBulletsNum = DEFAULT_SPEED_DOWN_BULLETS_NUM;
-int nowait = 0;
 static int sFoeUpdateCursor = 0;
 
 void moveFoes()
@@ -859,17 +857,6 @@ void moveFoes()
   }
 #endif
 
-  // A game speed becomes slow as many bullets appears.
-  interval = INTERVAL_BASE;
-#if !NOIZ2SA_DISABLE_BULLET_SLOWDOWN
-  if (!insane && !nowait && foeNum > processSpeedDownBulletsNum)
-  {
-    interval += (foeNum - processSpeedDownBulletsNum) * INTERVAL_BASE /
-                processSpeedDownBulletsNum;
-    if (interval > INTERVAL_BASE * 2)
-      interval = INTERVAL_BASE * 2;
-  }
-#endif
 }
 
 void clearFoes()

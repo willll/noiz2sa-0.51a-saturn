@@ -135,12 +135,14 @@ option(NOIZ2SA_ENABLE_PCM_SFX "Enable PCM SFX loading through Ponesound backend"
 # Gameplay performance toggles
 # Off: on a real Saturn it costs ~6 fps in heavy scenes (stage 12: 34.1 -> 28.0, 2026-10-31).
 option(NOIZ2SA_ENABLE_SMOKE "Enable smoke/afterimage decay effect" OFF)
+# Test only: title_menu_smoke_test sets it to start a stage from the title menu.
+set(NOIZ2SA_TEST_MENU_AUTOSELECT "0" CACHE STRING "Press start on the title menu after N ticks (0 = off)")
+add_compile_definitions(NOIZ2SA_TEST_MENU_AUTOSELECT=${NOIZ2SA_TEST_MENU_AUTOSELECT})
 set(NOIZ2SA_SCREEN_DIVISOR "2" CACHE STRING "Screen render divisor (1=full, 2=half, 4=quarter)")
 set_property(CACHE NOIZ2SA_SCREEN_DIVISOR PROPERTY STRINGS 1 2 4)
 option(NOIZ2SA_DISABLE_DOUBLE_BUFFER "Disable frame synchronize/swap pacing" OFF)
 option(NOIZ2SA_REFRESH_ONLY_SYNC "Use input-refresh-only frame sync path (bypass slSynch/SRL sync calls)" OFF)
 option(NOIZ2SA_PERF_MODE "Enable performance mode (disables non-essential draws for benchmarking)" OFF)
-option(NOIZ2SA_DISABLE_BULLET_SLOWDOWN "Disable bullet slowdown when foe count is high" ON)
 option(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY "Enable startup-only BulletML runtime allocation policy" OFF)
 option(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK "Skip per-frame soundTick() in refresh-only sync builds" OFF)
 option(NOIZ2SA_ENABLE_INVINCIBLE "Make player invincible (debug/testing)" OFF)
@@ -173,28 +175,30 @@ set(HW_DEBUG_STARTING_SHIPS "20" CACHE STRING "Starting ships in HW_DEBUG mode (
 set_property(CACHE HW_DEBUG_ENDLESS_STAGE PROPERTY STRINGS 10 11 12 13)
 
 if(HW_DEBUG)
-    set(SRL_LOG_OUTPUT "DEV_CART" CACHE STRING "Log output method" FORCE)
+    # Plain variables, not CACHE FORCE: they apply to this configure only, so
+    # turning HW_DEBUG off in the same build folder brings the defaults back.
+    set(SRL_LOG_OUTPUT "DEV_CART")
     # INFO, not WARNING: the hardware test harness (test_hardware_full.sh)
     # detects liveness/completion purely by grepping LogInfo-level markers
     # ("[HW_DEBUG] Entering initGame()", "IN_GAME (stage N) ready", etc.) on
     # the DEV_CART console - none of its other candidate markers exist in the
     # source. HW_DEBUG is the diagnostic build, so paying LogInfo's
     # formatting cost here is expected, unlike the production default above.
-    set(SRL_LOG_LEVEL "INFO" CACHE STRING "Log level (0-4, empty = disabled)" FORCE)
-    set(NOIZ2SA_SHOW_FPS ON CACHE BOOL "Display FPS counter on screen" FORCE)
-    set(NOIZ2SA_SHOW_MEMORY_POOLS ON CACHE BOOL "Display pool free/total counters on screen" FORCE)
-    set(NOIZ2SA_SHOW_FREE_HWRAM ON CACHE BOOL "Display free High Work RAM on screen" FORCE)
-    set(NOIZ2SA_SHOW_FREE_LWRAM ON CACHE BOOL "Display free Low Work RAM on screen" FORCE)
-    set(NOIZ2SA_ENABLE_SOUND OFF CACHE BOOL "Enable in-game sound (PCM SFX + CDDA BGM)" FORCE)
-    set(NOIZ2SA_ENABLE_PCM_SFX OFF CACHE BOOL "Enable PCM SFX loading through Ponesound backend" FORCE)
-    set(NOIZ2SA_ENABLE_INVINCIBLE ON CACHE BOOL "Make player invincible (debug/testing)" FORCE)
-    set(NOIZ2SA_ENABLE_AUTO_SHOT ON CACHE BOOL "Automatically fire without button input (debug/testing)" FORCE)
+    set(SRL_LOG_LEVEL "INFO")
+    set(NOIZ2SA_SHOW_FPS ON)
+    set(NOIZ2SA_SHOW_MEMORY_POOLS ON)
+    set(NOIZ2SA_SHOW_FREE_HWRAM ON)
+    set(NOIZ2SA_SHOW_FREE_LWRAM ON)
+    set(NOIZ2SA_ENABLE_SOUND OFF)
+    set(NOIZ2SA_ENABLE_PCM_SFX OFF)
+    set(NOIZ2SA_ENABLE_INVINCIBLE ON)
+    set(NOIZ2SA_ENABLE_AUTO_SHOT ON)
     # Hardware-validated (see NOIZ2SA_MAX_NONBULLET_FOES declaration above).
-    set(NOIZ2SA_MAX_NONBULLET_FOES "18" CACHE STRING "Maximum concurrent non-bullet Foe entities" FORCE)
-    set(NOIZ2SA_EMBED_BULLETML ON CACHE BOOL "Load BulletML patterns from an embedded table instead of the CD" FORCE)
+    set(NOIZ2SA_MAX_NONBULLET_FOES "18")
+    set(NOIZ2SA_EMBED_BULLETML ON)
 endif()
 
-# After the HW_DEBUG block, so its FORCE'd HUD values apply on the first configure.
+# After the HW_DEBUG block, so its HUD values apply.
 foreach(_hud IN ITEMS FPS FREE_HWRAM FREE_LWRAM MEMORY_POOLS
                       MEMORY_POOL_FOE MEMORY_POOL_SHOT MEMORY_POOL_BONUS MEMORY_POOL_FRAG)
     if(NOIZ2SA_SHOW_${_hud})
@@ -360,12 +364,6 @@ if(NOIZ2SA_PERF_MODE)
     add_compile_definitions(NOIZ2SA_PERF_MODE=1)
 else()
     add_compile_definitions(NOIZ2SA_PERF_MODE=0)
-endif()
-
-if(NOIZ2SA_DISABLE_BULLET_SLOWDOWN)
-    add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=1)
-else()
-    add_compile_definitions(NOIZ2SA_DISABLE_BULLET_SLOWDOWN=0)
 endif()
 
 if(NOIZ2SA_BULLETML_STARTUP_ONLY_POLICY)

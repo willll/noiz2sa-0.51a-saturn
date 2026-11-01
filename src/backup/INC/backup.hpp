@@ -504,18 +504,16 @@ namespace SRL::Backup {
         }        
 
         /**
-         * @brief Retrieves directory entry information for a file on the backup device.
+         * @brief Returns the data size of a file on the backup device.
          * @param device   The backup device to query.
-         * @param filename Null-terminated file name to look up, or nullptr for all entries.
-         * @return BupStatus code with directory information populated in the internal write table.
+         * @param filename Null-terminated file name (BUP_Dir matches it as a prefix).
+         * @return Data size in bytes of the first matching file, or -1 if there is none.
          */
         static int32_t DirInfo(BupDevice device, uint8_t *filename)
         {
-            BupWriteTable WriteTable = {};
-            uint16_t tbsize; // not sure what should be in here
-
+            BupWriteTable entry = {};
             auto func = GetBupFunction<BupDir>(28);
-            return func(device, filename, tbsize, &WriteTable);
+            return (func(device, filename, 1, &entry) > 0) ? static_cast<int32_t>(entry.datasize) : -1;
         }
 
         /**

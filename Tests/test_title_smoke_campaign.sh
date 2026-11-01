@@ -5,7 +5,8 @@ usage() {
   cat <<'EOF'
 Usage: Tests/test_title_smoke_campaign.sh [options]
 
-Runs a full-game Mednafen smoke test and verifies the title/menu is reached.
+Runs a full-game Mednafen smoke test: the title/menu is reached, a stage is
+started from the menu (the path players use), and nothing crashes.
 
 Options:
   --emulator <mednafen>                  Emulator target (default: mednafen)
@@ -33,7 +34,11 @@ ensure_emulator_log_output() {
   # SRL_LOG_LEVEL=INFO is required: this harness waits for the LogInfo-level
   # "[STATE] TITLE screen ready" marker, which the production default
   # (WARNING) compiles out.
-  cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" -DSRL_LOG_OUTPUT=EMULATOR -DSRL_LOG_LEVEL=INFO
+  # NOIZ2SA_TEST_MENU_AUTOSELECT: press start on the title menu after 300 ticks;
+  # reset on exit so later builds from build/ don't keep it.
+  cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" -DSRL_LOG_OUTPUT=EMULATOR -DSRL_LOG_LEVEL=INFO \
+    -DNOIZ2SA_TEST_MENU_AUTOSELECT=300
+  trap 'cmake -S "$ROOT_DIR" -B "$ROOT_DIR/build" -DNOIZ2SA_TEST_MENU_AUTOSELECT=0 >/dev/null' EXIT
 }
 
 while [[ $# -gt 0 ]]; do
@@ -117,4 +122,18 @@ if [[ "$title_ready_count" -lt 1 ]]; then
   exit 4
 fi
 
-echo "[smoke] PASS: title/menu reached. Log: $LOG_FILE"
+game_ready_count=$(grep -c -E "IN_GAME \(stage [0-9]+\) ready" "$LOG_FILE" || true)
+crash_count=$(grep -c "CRASH DUMP BEGIN" "$LOG_FILE" || true)
+echo "[smoke] Stage started from menu: $game_ready_count, crash dumps: $crash_count"
+if [[ "$crash_count" -gt 0 ]]; then
+  echo "[smoke] CPU crash dump in the log" >&2
+  grep -m1 -A6 "CRASH DUMP BEGIN" "$LOG_FILE" >&2 || true
+  exit 5
+fi
+if [[ $SKIP_BUILD -eq 0 && "$game_ready_count" -lt 1 ]]; then
+  echo "[smoke] No stage started from the title menu" >&2
+  tail -n 60 "$LOG_FILE" >&2 || true
+  exit 6
+fi
+
+echo "[smoke] PASS: title/menu reached, stage started from the menu. Log: $LOG_FILE"

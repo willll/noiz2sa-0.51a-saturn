@@ -15,7 +15,7 @@ Full options documented in [BUILD_GUIDE.md](BUILD_GUIDE.md). Key CMake flags:
 |------|---------|-------|
 | `SRL_MODE` | `NTSC` | `PAL` for PAL consoles |
 | `NOIZ2SA_SCREEN_DIVISOR` | `1` | `2`/`4` for lower resolution |
-| `NOIZ2SA_ENABLE_SMOKE` | ON | Smoke/afterimage effects (**currently disabled at runtime**; see [doc/DRAWING_SYSTEM.md](../doc/DRAWING_SYSTEM.md)) |
+| `NOIZ2SA_ENABLE_SMOKE` | OFF | Afterimage trails on the slave CPU (~6 fps cost in heavy scenes on hardware) |
 | `DEBUG` | OFF | Debug logging |
 | `HW_DEBUG` | OFF | Hardware debug mode (no CD, embedded patterns) |
 

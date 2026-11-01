@@ -72,11 +72,10 @@ cmake -B build -DSRL_MODE=PAL
 cmake --build build
 ```
 
-#### High Performance (60fps, optimizations)
+#### Extra compiler flags
 ```bash
 cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
-    -DSRL_FRAMERATE=2 \
     -DSRL_CUSTOM_CCFLAGS="-O3 -ffast-math -funroll-loops"
 cmake --build build
 ```
@@ -88,6 +87,8 @@ cmake --build build
 ```
 
 #### Custom Texture/Polygon Limits
+Do not go below 1200 polygons / 1800 vertices: SGL breaks with smaller values
+(256 crashed after picking a stage, 512 dropped the title logo).
 ```bash
 cmake -B build \
     -DSRL_MAX_TEXTURES=4096 \
@@ -103,19 +104,19 @@ cmake --build build
 | Option | Values | Default | Description |
 |--------|--------|---------|-------------|
 | `SRL_MODE` | NTSC/PAL | NTSC | Video standard |
-| `SRL_FRAMERATE` | 0/1/2 | 0 | 0=auto, 1=30fps, 2=60fps |
+| `SRL_FRAMERATE` | N / -N / 0 | -2 | VBlanks per frame: N = exactly N (1 = 60 fps, 2 = 30 fps), -N = at least N (a slow frame is not held to the next multiple), 0 = every vblank. -2 caps the game at 30 fps; it runs one game tick per frame, so this also fixes the game speed |
 | `SRL_HIGH_RES` | ON/OFF | OFF | Enable high resolution mode |
-| `NOIZ2SA_ENABLE_SMOKE` | ON/OFF | ON | Enable smoke/afterimage distortion effect (currently **disabled** at runtime; see [doc/DRAWING_SYSTEM.md](DRAWING_SYSTEM.md#L98)) |
+| `NOIZ2SA_ENABLE_SMOKE` | ON/OFF | OFF | Afterimage trails behind enemies and bonuses, faded by the slave CPU (light version, no smoke drift). Costs ~6 fps in heavy scenes on hardware (stage 12: 34.1 → 28.0) |
 
 ### Memory Settings
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `SRL_MAX_TEXTURES` | 100 | Maximum texture count |
-| `SGL_MAX_VERTICES` | 2500 | Maximum vertices per frame |
-| `SGL_MAX_POLYGONS` | 1700 | Maximum polygons per frame |
-| `SGL_MAX_EVENTS` | 64 | Maximum SGL events |
-| `SGL_MAX_WORKS` | 256 | Maximum SGL work units |
+| `SRL_MAX_TEXTURES` | 75 | Maximum texture count |
+| `SGL_MAX_VERTICES` | 1800 | Maximum vertices per frame (keep ≥ 1800) |
+| `SGL_MAX_POLYGONS` | 1200 | Maximum polygons per frame (keep ≥ 1200: smaller values break SGL) |
+| `SGL_MAX_EVENTS` | 1 | Maximum SGL events (unused by the game and SRL) |
+| `SGL_MAX_WORKS` | 1 | Maximum SGL work units (unused by the game and SRL) |
 | `SRL_MALLOC_METHOD` | (empty) | Set to "TLSF" for TLSF allocator |
 
 ### CD Subsystem

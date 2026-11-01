@@ -30,15 +30,12 @@ extern RandomGenerator *g_random;
 #define randNS2(N) ((randNS((N)) + randNS((N))))
 //#define absN(a) ((a) < 0 ? -(a) : (a))
 
-#define INTERVAL_BASE 16
-
 #define CAPTION "Noiz2sa"
 #define VERSION_NUM 50
 
 #define NOT_EXIST -999999
 
 extern int status;
-extern int interval;
 extern int tick;
 
 #define TITLE 0

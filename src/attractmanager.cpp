@@ -36,16 +36,8 @@ static int hsScene, hsScSc, hsOfs;
 
 static HiScore hiScore;
 
-#define PREF_FILE "NOIZ2SA.PRF"
 #define DEFAULT_HISCORE 100000
 #define DEFAULT_SCENE_HISCORE 10000
-
-static bool readInt32FromCd(SRL::Cd::File &file, int *value)
-{
-  if (!value)
-    return false;
-  return file.Read((int32_t)sizeof(int), value) == (int32_t)sizeof(int);
-}
 
 static void initHiScore()
 {
@@ -65,75 +57,14 @@ static void initHiScore()
   hiScore.stage = 0;
 }
 
-// Load preference.
+// Load preference: the defaults, replaced by the backup-memory save if there is one.
 void loadPreference()
 {
-  int i, j;
-  int version;
-  SRL::Cd::File prefFile(PREF_FILE);
-
   initHiScore();
-
-#if HW_DEBUG
-  // In HW_DEBUG soak mode, avoid backup-device I/O during boot because
-  // intermittent backup bus issues can stall startup at "Loading preferences".
-  return;
-#else
-#if NOIZ2SA_ENABLE_BACKUP_PERSISTENCE
-  if (loadHiScorePersistence(&hiScore) == HiScoreLoadStatus::Loaded)
-  {
-    return;
-  }
+#if !HW_DEBUG && NOIZ2SA_ENABLE_BACKUP_PERSISTENCE
+  // Not in HW_DEBUG: intermittent backup bus issues can stall that soak build at boot.
+  loadHiScorePersistence(&hiScore); // a failed load leaves the defaults untouched
 #endif
-#endif
-
-  // Preferences are read-only on Saturn (from CD image).
-  if (!prefFile.Exists() || !prefFile.Open())
-  {
-    return;
-  }
-
-  if (!readInt32FromCd(prefFile, &version) || version != VERSION_NUM)
-  {
-    prefFile.Close();
-    initHiScore();
-    return;
-  }
-
-  for (i = 0; i < STAGE_NUM; i++)
-  {
-    if (!readInt32FromCd(prefFile, &hiScore.stageScore[i]))
-    {
-      prefFile.Close();
-      initHiScore();
-      return;
-    }
-    for (j = 0; j < SCENE_NUM; j++)
-    {
-      if (!readInt32FromCd(prefFile, &hiScore.sceneScore[i][j]))
-      {
-        prefFile.Close();
-        initHiScore();
-        return;
-      }
-    }
-  }
-  for (i = 0; i < ENDLESS_STAGE_NUM; i++)
-  {
-    if (!readInt32FromCd(prefFile, &hiScore.stageScore[i + STAGE_NUM]))
-    {
-      prefFile.Close();
-      initHiScore();
-      return;
-    }
-  }
-  if (!readInt32FromCd(prefFile, &hiScore.stage))
-  {
-    prefFile.Close();
-    initHiScore();
-    return;
-  }
-  prefFile.Close();
 }
 
 // Save preference.
@@ -407,6 +338,17 @@ void moveTitleMenu()
   int btn = getButtonState();
   int p = -1;
   int sm;
+#if NOIZ2SA_TEST_MENU_AUTOSELECT > 0
+  // Test only (title_menu_smoke_test): starts the selected stage after N title ticks.
+  {
+    static int testTicks = 0;
+    if (++testTicks == NOIZ2SA_TEST_MENU_AUTOSELECT)
+    {
+      mnp = 1;
+      btn = PAD_BUTTON1;
+    }
+  }
+#endif
   if (pad & PAD_DOWN)
   {
     p = 2;

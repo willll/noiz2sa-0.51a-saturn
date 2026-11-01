@@ -962,8 +962,6 @@ static void draw()
 
 }
 
-static int accframe = 0;
-
 // Initialize game configuration with Saturn-optimal defaults.
 // Saturn doesn't support command-line arguments, so we set optimal settings directly.
 static void initGameConfig()
@@ -982,19 +980,13 @@ static void initGameConfig()
   // Display brightness: default value
   brightness = DEFAULT_BRIGHTNESS;
 
-  // Timing: conservative default for stable presentation.
-  nowait = 0;
-  accframe = 0;
 }
 
-int interval = INTERVAL_BASE;
 int tick = 0;
 static int pPrsd = 1;
 static const uint32_t kInGameRenderDivisor = 1;
 static const uint32_t kUiRenderDivisor = 1;
 static uint32_t gInGameRenderCounter = 0;
-static uint32_t gStalledTickFrames = 0;
-static bool gUseFixedFramePacing = false;
 static uint32_t gFpsTimes100 = 0;
 static uint32_t gLastDisplayedFpsTimes100 = 0xFFFFFFFFu;
 static uint32_t gLastSerialFpsLogMs = 0;
@@ -1390,11 +1382,8 @@ int main()
   SRL::Logger::LogInfo("[MAIN_TRACE] main() entered");
 
   int done = 0;
-  long prvTickCount = 0;
   int i;
   SDL_Event event;
-  long nowTick;
-  int frame;
 
   // Initialize the SRL core (graphics/video setup?)
   // HighColor(20,10,50) likely sets background color in high-color mode (5-5-5 RGB?).
@@ -1668,92 +1657,6 @@ int main()
     }
 #endif
 
-    // Calculate frames to process based on time elapsed
-    nowTick = SDL_GetTicks();
-
-    // Some emulator paths can report a stalled SDL_GetTicks() value.
-    // Fall back to deterministic fixed-step pacing when this is detected.
-    if (nowTick <= prvTickCount)
-    {
-      gStalledTickFrames++;
-      if (gStalledTickFrames > 120u)
-      {
-        gUseFixedFramePacing = true;
-      }
-    }
-    else
-    {
-      gStalledTickFrames = 0;
-    }
-
-    if (gUseFixedFramePacing)
-    {
-      frame = 1;
-      prvTickCount = nowTick;
-    }
-    else
-    {
-      frame = (int)(nowTick - prvTickCount) / interval;
-    }
-#if HW_DEBUG
-    if (probePhase)
-    {
-      SRL::Logger::LogInfo("[PHASE] post-framecalc loop=%lu now=%ld prev=%ld frame=%d", (unsigned long)sPhaseProbeLoops, nowTick, prvTickCount, frame);
-    }
-#endif
-    
-    if (!gUseFixedFramePacing && frame <= 0)
-    {
-      frame = 1;
-
-      // In performance mode, avoid busy waiting when timer behavior is unstable.
-      if (!nowait)
-      {
-        SDL_Delay(prvTickCount + interval - nowTick);
-        if (accframe)
-        {
-          prvTickCount = SDL_GetTicks();
-        }
-        else
-        {
-          prvTickCount += interval;
-        }
-      }
-      else
-      {
-        prvTickCount = nowTick;
-      }
-    }
-    else if (frame > 1)
-    {
-      // Default behavior favors consistent responsiveness over catch-up bursts.
-      // Large catch-up steps can cause a feedback slowdown on slower emulator hosts.
-      if (accframe)
-      {
-        if (frame > 5)
-        {
-          SRL::Logger::LogWarning("[TIMING] Frame skip detected: %d frames (tick: %ld)", frame, nowTick);
-          frame = 5;
-        }
-        prvTickCount += frame * interval;
-      }
-      else
-      {
-        static uint32_t sBacklogDropCount = 0;
-        sBacklogDropCount++;
-        if ((sBacklogDropCount % 120u) == 1u)
-        {
-          SRL::Logger::LogDebug("[TIMING] Dropping backlog: frame=%d tick=%ld drops=%lu", frame, nowTick, (unsigned long)sBacklogDropCount);
-        }
-        frame = 1;
-        prvTickCount = nowTick;
-      }
-    }
-    else
-    {
-      prvTickCount += frame * interval;
-    }
-
     // Adaptive foe update budget controller.
     // Tightens the per-tick foe update cap when the previous frame was over-budget,
     // relaxes it when we have headroom. The round-robin cursor in moveFoes() ensures
@@ -1819,22 +1722,21 @@ int main()
 #if HW_DEBUG
     if (probePhase)
     {
-      SRL::Logger::LogInfo("[PHASE] pre-move loop=%lu frame=%d", (unsigned long)sPhaseProbeLoops, frame);
+      SRL::Logger::LogInfo("[PHASE] pre-move loop=%lu", (unsigned long)sPhaseProbeLoops);
     }
 #endif
-    for (i = 0; i < frame; i++)
     {
 #if HW_DEBUG
-      if (probePhase && i == 0)
+      if (probePhase)
       {
-        SRL::Logger::LogInfo("[PHASE] pre-move-call loop=%lu i=%d", (unsigned long)sPhaseProbeLoops, i);
+        SRL::Logger::LogInfo("[PHASE] pre-move-call loop=%lu", (unsigned long)sPhaseProbeLoops);
       }
 #endif
       move();
 #if HW_DEBUG
-      if (probePhase && i == 0)
+      if (probePhase)
       {
-        SRL::Logger::LogInfo("[PHASE] post-move-call loop=%lu i=%d", (unsigned long)sPhaseProbeLoops, i);
+        SRL::Logger::LogInfo("[PHASE] post-move-call loop=%lu", (unsigned long)sPhaseProbeLoops);
       }
 #endif
       tick++;
@@ -1843,7 +1745,7 @@ int main()
 #if HW_DEBUG
     if (probePhase)
     {
-      SRL::Logger::LogInfo("[PHASE] post-move loop=%lu us=%lu frame=%d", (unsigned long)sPhaseProbeLoops, (unsigned long)timeMoveUs, frame);
+      SRL::Logger::LogInfo("[PHASE] post-move loop=%lu us=%lu", (unsigned long)sPhaseProbeLoops, (unsigned long)timeMoveUs);
     }
 #endif
 
@@ -1952,9 +1854,7 @@ int main()
     // Keep input polling active so controls still update.
     SRL::Input::Management::RefreshPeripherals();
   #else
-    // Prefer synchronized presentation when timer is healthy (normal emulator/hardware path).
-    // Fall back to non-blocking refresh only when ticks are stalled to avoid hard lockups.
-    if (!gUseFixedFramePacing && nowTick > 0)
+    // One game tick per frame; SGL holds each frame to at least 2 vblanks (SRL_FRAMERATE).
     {
     #if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
       setDiagPhase(3u); // pre-sync wait
@@ -2017,39 +1917,6 @@ int main()
       soundTick(); // Pump M68K driver every frame
       SRL::Logger::LogDebug(
           "[SYNC_TRACE] after soundTick status=%d tick=%d hwfree=%lu",
-          status,
-          tick,
-          (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
-    #endif
-    }
-    else
-    {
-#if HW_DEBUG || NOIZ2SA_LOG_TO_DEV_CART
-  setDiagPhase(5u); // fixed-frame input refresh path
-#endif
-      SRL::Input::Management::RefreshPeripherals();
-    #if defined(NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK) && (NOIZ2SA_REFRESH_ONLY_SKIP_SOUND_TICK != 0)
-      static uint32_t sRefreshOnlySoundTickCallsFixed = 0u;
-      ++sRefreshOnlySoundTickCallsFixed;
-      if (sRefreshOnlySoundTickCallsFixed <= 8u || (sRefreshOnlySoundTickCallsFixed % 120u) == 0u)
-      {
-        SRL::Logger::LogDebug(
-        "[SYNC_TRACE] fixed-frame soundTick skipped call=%lu status=%d tick=%d hwfree=%lu",
-        (unsigned long)sRefreshOnlySoundTickCallsFixed,
-        status,
-        tick,
-        (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
-      }
-    #else
-      // Keep Ponesound command pump alive when synchronized vblank is bypassed.
-      SRL::Logger::LogDebug(
-          "[SYNC_TRACE] before fixed-frame soundTick status=%d tick=%d hwfree=%lu",
-          status,
-          tick,
-          (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());
-      soundTick();
-      SRL::Logger::LogDebug(
-          "[SYNC_TRACE] after fixed-frame soundTick status=%d tick=%d hwfree=%lu",
           status,
           tick,
           (unsigned long)SRL::Memory::HighWorkRam::GetFreeSpace());

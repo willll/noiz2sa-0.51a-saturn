@@ -59,6 +59,20 @@ static HiScoreLoadStatus tryLoadFromDevice(Device *device, const BupDevice bupDe
 {
   HiScoreBackupData data{};
 
+  // BUP_Read writes the whole file into data, so a save of another size (another
+  // format version) would overrun this stack buffer: check the size first.
+  const int32_t fileSize = Device::DirInfo(bupDevice, kBackupFileName);
+  if (fileSize < 0)
+  {
+    return HiScoreLoadStatus::NotFound;
+  }
+  if (fileSize != (int32_t)sizeof(data))
+  {
+    SRL::Logger::LogWarning("[HISCORE] Ignoring save of %ld bytes on device=%d (expected %u)",
+                            (long)fileSize, (int)bupDevice, (unsigned)sizeof(data));
+    return HiScoreLoadStatus::InvalidData;
+  }
+
   const int32_t readStatus = device->Read(bupDevice, kBackupFileName, (uint8_t *)&data);
   if (readStatus == NotFound)
   {

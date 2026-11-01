@@ -442,7 +442,6 @@ void initBarrages(int seed, Fxp startLevel, Fxp li) {
     }
   }
 
-  processSpeedDownBulletsNum = DEFAULT_SPEED_DOWN_BULLETS_NUM;
   if ( seed >= 0 ) {
     rnd = seed;
     endless = 0;
@@ -453,9 +452,7 @@ void initBarrages(int seed, Fxp startLevel, Fxp li) {
     endless = 1;
     if ( seed == -2 ) insane = 1;
     else insane = 0;
-    if ( seed == -3 ) processSpeedDownBulletsNum = EASY_SPEED_DOWN_BULLETS_NUM;
-    else if ( seed == -4 ) processSpeedDownBulletsNum = HARD_SPEED_DOWN_BULLETS_NUM;
-    SRL::Logger::LogDebug("[BARRAGE] Random mode: insane=%d, speedDownBullets=%d", insane, processSpeedDownBulletsNum);
+    SRL::Logger::LogDebug("[BARRAGE] Random mode: insane=%d", insane);
   }
   // Shuffle.
   for ( int i=0 ; i<BARRAGE_TYPE_NUM ; i++ ) {
