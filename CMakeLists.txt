@@ -84,9 +84,8 @@ set(SRL_LOG_OUTPUT "NONE" CACHE STRING "Log output method (EMULATOR, DEV_CART, N
 set(SRL_DEBUG_MAX_PRINT_LENGTH "45" CACHE STRING "Maximum debug print length")
 set(SRL_DEBUG_MAX_LOG_LENGTH "120" CACHE STRING "Maximum debug log length")
 
-# Real-hardware logging is opt-in for non-HW_DEBUG builds so emulator runs keep
-# their console logs unless you explicitly want DevCart output.
-option(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE "Enable Saturn backup-device hi-score persistence" OFF)
+# Hi-scores saved to the Saturn backup memory (BUP). Off means they reset at power-off.
+option(NOIZ2SA_ENABLE_BACKUP_PERSISTENCE "Enable Saturn backup-device hi-score persistence" ON)
 
 # On-screen debug HUD: off for release, on in HW_DEBUG (forced below).
 option(NOIZ2SA_SHOW_FPS "Display FPS counter on screen" OFF)

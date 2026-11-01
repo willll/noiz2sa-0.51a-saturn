@@ -45,6 +45,10 @@ static Device *getBackupDevice(bool allowInitialize)
       SRL::Logger::LogWarning("[HISCORE] Failed to allocate backup device wrapper");
       return nullptr;
     }
+    SRL::Logger::LogInfo("[HISCORE] BUP init=%d internal status=%d mounted=%d cartridge status=%d mounted=%d",
+                         Device::Initialized ? 1 : 0,
+                         Device::BupState[InternalMemoryBackup].Status, isDeviceMounted(InternalMemoryBackup) ? 1 : 0,
+                         Device::BupState[CartridgeMemoryBackup].Status, isDeviceMounted(CartridgeMemoryBackup) ? 1 : 0);
   }
 
   return gBackupDevice;
@@ -158,6 +162,14 @@ HiScoreSaveStatus saveHiScorePersistence(const HiScore *hiScore)
     return HiScoreSaveStatus::BackendUnavailable;
   }
 
+  // The BIOS leaves internal memory unformatted after its battery dies or is
+  // replaced. Unformatted memory holds no readable saves, so formatting loses nothing.
+  if (!isDeviceMounted(InternalMemoryBackup) && Device::BupState[InternalMemoryBackup].Status == Unformatted)
+  {
+    const bool formatted = device->Format(InternalMemoryBackup);
+    SRL::Logger::LogWarning("[HISCORE] Internal backup memory was unformatted: format %s", formatted ? "OK" : "FAILED");
+  }
+
   const BupDevice candidates[] = {InternalMemoryBackup, CartridgeMemoryBackup};
 
   bool hasMountedDevice = false;
@@ -175,5 +187,10 @@ HiScoreSaveStatus saveHiScorePersistence(const HiScore *hiScore)
     }
   }
 
-  return hasMountedDevice ? HiScoreSaveStatus::IoError : HiScoreSaveStatus::BackendUnavailable;
+  if (!hasMountedDevice)
+  {
+    SRL::Logger::LogWarning("[HISCORE] No backup device mounted: hi-score not saved");
+    return HiScoreSaveStatus::BackendUnavailable;
+  }
+  return HiScoreSaveStatus::IoError;
 }

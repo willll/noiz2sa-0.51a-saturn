@@ -465,6 +465,8 @@ namespace SRL::Backup {
                     }
                     else
                     {
+                        // Re-read: the status above is still the pre-format Unformatted.
+                        BupState[device].Status = Status(device, &BupState[device].StatTable);
                         BupState[device].isMounted = (BupState[device].Status == Success); // true or false
                         return BupState[device].isMounted;
                     }
