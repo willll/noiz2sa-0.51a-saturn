@@ -156,13 +156,13 @@ XML:
 ```xml
 <?xml version="1.0"?>
 <bulletml type="vertical">
-	<action label="top">
-		<fire>
-			<direction>0</direction>
-			<speed>1</speed>
-			<bullet/>
-		</fire>
-	</action>
+  <action label="top">
+    <fire>
+      <direction>0</direction>
+      <speed>1</speed>
+      <bullet/>
+    </fire>
+  </action>
 </bulletml>
 ```
 
@@ -189,21 +189,21 @@ Node Tree:
 00 00  00 00  01 00           node_type=bulletml value_type=none child_count=1
 FF FF FF FF  FF FF FF FF      ref_id=none value_string_id=none
 FF FF FF FF                   label_string_id=none
-	02 00  00 00  01 00         node_type=action value_type=none child_count=1
-	FF FF FF FF  FF FF FF FF    ref_id=none value_string_id=none
-	00 00 00 00                 label_string_id="top"(id=0)
-		03 00  00 00  03 00       node_type=fire value_type=none child_count=3
-		FF FF FF FF  FF FF FF FF  ref_id=none value_string_id=none
-		FF FF FF FF               label_string_id=none
-			11 00  00 00  00 00     node_type=direction value_type=none child_count=0
-			FF FF FF FF  01 00 00 00 ref_id=none value_string_id="0"(id=1)
-			FF FF FF FF             label_string_id=none
-			12 00  00 00  00 00     node_type=speed value_type=none child_count=0
-			FF FF FF FF  02 00 00 00 ref_id=none value_string_id="1"(id=2)
-			FF FF FF FF             label_string_id=none
-			01 00  00 00  00 00     node_type=bullet value_type=none child_count=0
-			FF FF FF FF  FF FF FF FF ref_id=none value_string_id=none
-			FF FF FF FF             label_string_id=none
+  02 00  00 00  01 00         node_type=action value_type=none child_count=1
+  FF FF FF FF  FF FF FF FF    ref_id=none value_string_id=none
+  00 00 00 00                 label_string_id="top"(id=0)
+    03 00  00 00  03 00       node_type=fire value_type=none child_count=3
+    FF FF FF FF  FF FF FF FF  ref_id=none value_string_id=none
+    FF FF FF FF                label_string_id=none
+      11 00  00 00  00 00     node_type=direction value_type=none child_count=0
+      FF FF FF FF  01 00 00 00 ref_id=none value_string_id="0"(id=1)
+      FF FF FF FF              label_string_id=none
+      12 00  00 00  00 00     node_type=speed value_type=none child_count=0
+      FF FF FF FF  02 00 00 00 ref_id=none value_string_id="1"(id=2)
+      FF FF FF FF              label_string_id=none
+      01 00  00 00  00 00     node_type=bullet value_type=none child_count=0
+      FF FF FF FF  FF FF FF FF ref_id=none value_string_id=none
+      FF FF FF FF              label_string_id=none
 ```
 
 ## Parsing Algorithm
@@ -212,10 +212,10 @@ FF FF FF FF                   label_string_id=none
 2. Load string table into memory
 3. Load reference maps
 4. Parse node tree recursively:
-	 - Read node header (16 bytes)
-	 - Create BulletMLNode object
-	 - Recursively parse `child_count` children
-	 - Build parent-child relationships
+   - Read node header (16 bytes)
+   - Create BulletMLNode object
+   - Recursively parse `child_count` children
+   - Build parent-child relationships
 
 ## Size Comparison
 
@@ -227,10 +227,10 @@ Typical size reduction compared to XML:
 ## Compatibility Notes
 
 - The binary format preserves all XML features including:
-	- Mathematical expressions in values
-	- All node types and attributes
-	- Label-based references
-	- Horizontal/vertical orientation
+  - Mathematical expressions in values
+  - All node types and attributes
+  - Label-based references
+  - Horizontal/vertical orientation
 - Node IDs are assigned during conversion in depth-first order
 - Formula strings are stored as-is and evaluated at runtime
 

@@ -252,8 +252,7 @@ protected:
   {
     // SRL purges the slave cache only in DEBUG builds. The master rewrites the
     // snapshot and step between runs, so drop any stale cached copy first.
-    *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
-    asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop" ::: "memory");
+    purgeCpuCache();
 
     if (targetBuffer != nullptr && step >= 0 && step < kBgBands)
     {

@@ -363,8 +363,8 @@ static void uploadPlayfieldBitmapRegion(const Canvas::Pixel *src, const SDL_Rect
   }
 
   // The slave draws the bonus stars into buf; drop any copy of it in this CPU's
-  // cache (write-through, so nothing is lost) so the copy below reads RAM.
-  *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
+  // cache so the copy below reads RAM.
+  purgeCpuCache();
 
 #if NOIZ2SA_PERF_MODE
   // Force VRAM clear for playfield region before every upload in perf mode
@@ -949,8 +949,7 @@ protected:
   {
     // SRL purges the slave cache only in DEBUG builds; the master rewrote l1buf and the
     // star boxes since the last run, so drop any stale cached copy first.
-    *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
-    asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop" ::: "memory");
+    purgeCpuCache();
     preparePlayfield();
     if (sPlayfieldJobRun != nullptr)
     {
@@ -993,8 +992,8 @@ void waitPlayfieldPrep()
       break;
     }
   }
-  // The slave wrote buf and l1buf: drop this CPU's cached copies (write-through, nothing lost).
-  *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
+  // The slave wrote buf and l1buf: drop this CPU's cached copies.
+  purgeCpuCache();
 }
 
 void saveTrailLayer()
@@ -1362,67 +1361,59 @@ void drawThickLine(int x1, int y1, int x2, int y2,
   }
 }
 
-/** @brief Draws a box into the supplied pixel buffer. */
+/** @brief Draws a box (border color2, inside color1) centred on x,y into a
+ *  bufWidth x bufHeight buffer, clipped to it.
+ *  @return false when the box was clipped away. */
+static bool drawClippedBox(int x, int y, int width, int height,
+                           Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf,
+                           int bufWidth, int bufHeight)
+{
+  int i;
+  int ptr;
+
+  x -= width >> 1;
+  y -= height >> 1;
+  if (x < 0) { width += x; x = 0; }
+  if (x + width >= bufWidth) { width = bufWidth - x; }
+  if (width <= 1) return false;
+  if (y < 0) { height += y; y = 0; }
+  if (y + height > bufHeight) { height = bufHeight - y; }
+  if (height <= 1) return false;
+
+  ptr = x + y * bufWidth;
+  fillSpan(&(buf[ptr]), color2, width);
+  y++;
+  for (i = 0; i < height - 2; i++, y++)
+  {
+    ptr = x + y * bufWidth;
+    buf[ptr] = color2; ptr++;
+    fillSpan(&(buf[ptr]), color1, width - 2);
+    ptr += width - 2;
+    buf[ptr] = color2;
+  }
+  ptr = x + y * bufWidth;
+  fillSpan(&(buf[ptr]), color2, width);
+  return true;
+}
+
+/** @brief Draws a box into the playfield buffer. */
 void drawBox(int x, int y, int width, int height,
              Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
-  int i;
-  int ptr;
-
-  x -= width >> 1;
-  y -= height >> 1;
-  if (x < 0) { width += x; x = 0; }
-  if (x + width >= LAYER_WIDTH) { width = LAYER_WIDTH - x; }
-  if (width <= 1) return;
-  if (y < 0) { height += y; y = 0; }
-  if (y + height > LAYER_HEIGHT) { height = LAYER_HEIGHT - y; }
-  if (height <= 1) return;
-
-  ptr = x + y * pitch;
-  fillSpan(&(buf[ptr]), color2, width);
-  y++;
-  for (i = 0; i < height - 2; i++, y++)
+  if (drawClippedBox(x, y, width, height, color1, color2, buf, LAYER_WIDTH, LAYER_HEIGHT))
   {
-    ptr = x + y * pitch;
-    buf[ptr] = color2; ptr++;
-    fillSpan(&(buf[ptr]), color1, width - 2);
-    ptr += width - 2;
-    buf[ptr] = color2;
+    SDL_SetSurfaceDirty(layer);
   }
-  ptr = x + y * pitch;
-  fillSpan(&(buf[ptr]), color2, width);
-  SDL_SetSurfaceDirty(layer);
 }
 
-/** @brief Draws a panel box into the supplied pixel buffer. */
+/** @brief Draws a box into a panel buffer (lpbuf or rpbuf). */
 void drawBoxPanel(int x, int y, int width, int height,
                   Canvas::Pixel color1, Canvas::Pixel color2, Canvas::Pixel *buf)
 {
-  int i;
-  int ptr;
-
-  x -= width >> 1;
-  y -= height >> 1;
-  if (x < 0) { width += x; x = 0; }
-  if (x + width >= PANEL_WIDTH) { width = PANEL_WIDTH - x; }
-  if (width <= 1) return;
-  if (y < 0) { height += y; y = 0; }
-  if (y + height > PANEL_HEIGHT) { height = PANEL_HEIGHT - y; }
-  if (height <= 1) return;
-
-  ptr = x + y * PANEL_WIDTH;
-  fillSpan(&(buf[ptr]), color2, width);
-  y++;
-  for (i = 0; i < height - 2; i++, y++)
+  if (!drawClippedBox(x, y, width, height, color1, color2, buf, PANEL_WIDTH, PANEL_HEIGHT))
   {
-    ptr = x + y * PANEL_WIDTH;
-    buf[ptr] = color2; ptr++;
-    fillSpan(&(buf[ptr]), color1, width - 2);
-    ptr += width - 2;
-    buf[ptr] = color2;
+    return;
   }
-  ptr = x + y * PANEL_WIDTH;
-  fillSpan(&(buf[ptr]), color2, width);
   if (buf == lpbuf)
   {
     SDL_SetSurfaceDirty(lpanel);

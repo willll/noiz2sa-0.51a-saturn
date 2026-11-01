@@ -62,7 +62,7 @@ The .blb format uses:
 - **Little-endian**: All multi-byte values
 - **Compressed**: ~33% smaller than XML
 
-See `tools/BINARY_FORMAT.md` for complete specification.
+See `doc/BINARY_FORMAT.md` for complete specification.
 
 ## Converting XML to Binary
 
@@ -127,7 +127,7 @@ void loadPattern(const char* filename) {
 - `src/bulletml_binary/bulletmlparser_blb.hpp` - Primary header-only parser implementation
 - `src/bulletml_binary/BINARY_PARSER_README.md` - This file (integration guide)
 - `tools/bulletml_converter.py` - Python converter tool
-- `tools/BINARY_FORMAT.md` - Complete format specification
+- `doc/BINARY_FORMAT.md` - Complete format specification
 - `tools/README.md` - Converter usage guide
 
 ## Conversion Summary

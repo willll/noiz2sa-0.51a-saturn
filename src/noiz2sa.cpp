@@ -983,7 +983,6 @@ static void initGameConfig()
 }
 
 int tick = 0;
-static int pPrsd = 1;
 static const uint32_t kInGameRenderDivisor = 1;
 static const uint32_t kUiRenderDivisor = 1;
 static uint32_t gInGameRenderCounter = 0;
@@ -1624,36 +1623,21 @@ int main()
       SRL::Logger::LogInfo("[PHASE] loop-start loop=%lu status=%d", (unsigned long)sPhaseProbeLoops, status);
     }
 #endif
-    // Handle pause/unpause input
-  #if HW_DEBUG
-    // Perf-campaign debug probe: bypass START polling to isolate loop-1 stall source.
-  #else
+    // Start toggles pause (WasPressed() is true only on the frame the button goes down).
+    // Not polled in HW_DEBUG soak builds.
+#if !HW_DEBUG
     if (gamepad && gamepad->IsConnected() && gamepad->WasPressed(SRL::Input::Digital::Button::START))
     {
-      if (!pPrsd)
+      if (status == IN_GAME)
       {
-        if (status == IN_GAME)
-        {
-          status = PAUSE;
-          SRL::Logger::LogDebug("[INPUT] START pressed - Game paused (frame: %d)", tick);
-        }
-        else if (status == PAUSE)
-        {
-          status = IN_GAME;
-          SRL::Logger::LogDebug("[INPUT] START pressed - Game resumed (frame: %d)", tick);
-        }
+        status = PAUSE;
+        SRL::Logger::LogDebug("[INPUT] START pressed - Game paused (frame: %d)", tick);
       }
-      pPrsd = 1;
-    }
-#if HW_DEBUG
-    if (probePhase)
-    {
-      SRL::Logger::LogInfo("[PHASE] post-input loop=%lu", (unsigned long)sPhaseProbeLoops);
-    }
-#endif
-    else
-    {
-      pPrsd = 0;
+      else if (status == PAUSE)
+      {
+        status = IN_GAME;
+        SRL::Logger::LogDebug("[INPUT] START pressed - Game resumed (frame: %d)", tick);
+      }
     }
 #endif
 

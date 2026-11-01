@@ -79,6 +79,15 @@ void waitPlayfieldPrep();
 void saveTrailLayer();
 /** @brief Registers extra per-frame playfield work for the slave (bonus stars). */
 void setPlayfieldSlaveJob(void (*prepareOnMaster)(), void (*runOnSlave)());
+/** @brief Drops every line of this CPU's cache, so the next reads see what the other
+ *  SH-2 wrote to RAM (the caches are write-through: nothing is lost). */
+inline void purgeCpuCache()
+{
+#if defined(__sh__)
+  *reinterpret_cast<volatile uint8_t *>(0xFFFFFE92) |= 0x10;
+  asm volatile("nop\nnop\nnop\nnop\nnop\nnop\nnop\nnop" ::: "memory");
+#endif
+}
 /** @brief Store 4 / 2 pixels in one bus write (p 4- / 2-byte aligned). The playfield
  *  is write-through RAM, so every store costs a bus write. */
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
