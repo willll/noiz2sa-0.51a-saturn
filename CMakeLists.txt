@@ -62,7 +62,9 @@ set(SRL_MAX_CD_RETRIES "5" CACHE STRING "Maximum CD retries" FORCE)
 
 # Display configuration
 option(SRL_HIGH_RES "Enable high resolution mode" OFF)
-set(SRL_FRAMERATE "0" CACHE STRING "Target framerate (0 = auto)")
+# -2: at least 2 vblanks per frame (30 fps cap; slower frames are not held to 20).
+# The game advances one tick per frame, so faster frames sped the game up.
+set(SRL_FRAMERATE "-2" CACHE STRING "VBlanks per frame: N fixed, -N at least N, 0 = every vblank")
 set(SRL_MODE "NTSC" CACHE STRING "Video mode: NTSC or PAL")
 
 # Memory configuration
